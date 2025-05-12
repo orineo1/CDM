@@ -61,7 +61,8 @@ class FMModel(nn.Module):
         return self.vf(val, t_emb)
 
     def train_FM(self, lr=0.001, batch_size=1024,
-                 X=None, nepochs=10, mu_list=None, Sigma_list=None, alpha=None):
+                 X=None, nepochs=10, mu_list=None, Sigma_list=None, alpha=None,
+                 guidance_dropout: float = 0.1):
         # init optimizer
         optim_FM = torch.optim.Adam(self.parameters(), lr=lr)
 
@@ -89,22 +90,50 @@ class FMModel(nn.Module):
                 if use_loader:
                     (batch_x,) = batch_idx
                 else:
-                    pass
                     # TODO when adding the dist_utils uncomment
                     # batch_x = dist_utils.generate_mog_samples(batch_size, mu_list, Sigma_list, alpha)
+                    continue
 
-                y = x_1[:, self.condition_on:].to(torch.float32).to(self.device)
-                x_cond = x_1[:, :self.condition_on].reshape(-1, 1).to(torch.float32).to(self.device)
+                y = batch_x[:, self.condition_on:].to(torch.float32).to(self.device)
+                x_cond_full = batch_x[:, :self.condition_on].to(torch.float32).to(self.device)
 
                 x_0 = torch.randn_like(y).to(self.device)
                 t = torch.rand(y.shape[0], device=self.device)
 
                 path_sample = self.path.sample(t=t, x_0=x_0, x_1=y)
-                path_sample.x_t = path_sample.x_t.to(self.device)
-                path_sample.dx_t = path_sample.dx_t.to(self.device)
-                path_sample.t = path_sample.t.to(self.device)
+                x_t = path_sample.x_t.to(self.device)
+                dx_t = path_sample.dx_t.to(self.device)
+                t = path_sample.t.to(self.device)
 
-                loss = torch.pow(self.forward(path_sample.x_t, path_sample.t, x_cond) - path_sample.dx_t, 2).mean()
+                ### Classifier-Free Guidance
+                if self.condition and self.condition_on > 0:
+                    # Create a mask for which samples keep their condition
+                    guidance_mask = torch.rand(y.shape[0], device=self.device) >= guidance_dropout
+
+                    # Allocate tensor for predicted velocity
+                    predicted_velocity = torch.zeros_like(dx_t)
+
+                    # Conditional predictions (for samples keeping conditioning)
+                    if guidance_mask.any():
+                        cond_output = self.forward(
+                            x_t[guidance_mask],
+                            t[guidance_mask],
+                            x_cond_full[guidance_mask]
+                        )
+                        predicted_velocity[guidance_mask] = cond_output
+
+                    # Unconditional predictions (drop conditioning)
+                    if (~guidance_mask).any():
+                        uncond_output = self.forward(
+                            x_t[~guidance_mask],
+                            t[~guidance_mask],
+                            None
+                        )
+                        predicted_velocity[~guidance_mask] = uncond_output
+                else:
+                    predicted_velocity = self.forward(x_t, t)
+
+                loss = torch.pow(predicted_velocity - dx_t, 2).mean()
 
                 epoch_loss += loss.item()
                 num_batches += 1
@@ -115,10 +144,9 @@ class FMModel(nn.Module):
             avg_epoch_loss = epoch_loss / num_batches if num_batches > 0 else 0
             pbar.set_description(f"loss: {avg_epoch_loss :.6f}")
 
-        # adding the option to allow grad
+        # Finalize solver with likelihood support
         self.solver = ODESolver(velocity_model=self._wrapped_forward)
         self.solver = add_compute_likelihood_allow_grad(self.solver)
-        return
 
     def sample(self, num_sample, y=None, return_intermediates=False, step_size=0.05, x_init=None):
         """
