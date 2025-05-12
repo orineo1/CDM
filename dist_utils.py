@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from scipy.optimize import fsolve
-import torch.nn.functional as F,
+import torch.nn.functional as F
 
 ########### Mixture of Gaussian's
 def sample_univariate_gaussian(mean, variance):
