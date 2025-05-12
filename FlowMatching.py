@@ -2,62 +2,44 @@ import torch
 from flow_matching.path.scheduler import CondOTScheduler
 from flow_matching.path import AffineProbPath
 from flow_matching.solver import Solver, ODESolver
-from flow_matching.utils import ModelWrapper
 from torch import nn, Tensor
 from tqdm import tqdm
-import time
 from torch.distributions import Independent, Normal
 from FM_Solver_Extension_module import add_compute_likelihood_allow_grad
-import math
-# Activation class
-
-from NN_utils import GenericNN,TimeEmbedding  # Assuming you've defined this elsewhere
+from NN_utils import GenericNN,TimeEmbedding
 
 
 class FMModel(nn.Module):
     def __init__(self,
-                 input_dim: int,
-                 time_dim: int,
-                 y_dim: int,
-                 hidden_dim: int,
-                 depth: int = 4,
-                 use_resnet: bool = True,
-                 dropout_rate: float = 0.1,
-                 use_batch_norm: bool = False,
+                 nfeatures: int,
+                 condition_on: int,
+                 nunits: int,
+                 nblocks: int = 4,
                  device: torch.device = None):
-
         super().__init__()
-        self.input_dim = input_dim
-        self.time_dim = time_dim
-        self.y_dim = y_dim
-        self.hidden_dim = hidden_dim
-        self.depth = depth
-        self.use_resnet = use_resnet
-        self.dropout_rate = dropout_rate
-        self.use_batch_norm = use_batch_norm
+        self.nfeatures = nfeatures
+        self.nunits = nunits
         self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.condition = True if y_dim>0 else False
 
+        self.condition_on = condition_on
+        self.condition = False
 
-        total_input_dim = input_dim
-        self.inblock = nn.Linear(total_input_dim, hidden_dim)
-        self.time_embed = TimeEmbedding(hidden_dim)
+        if condition_on>0:
+            self.condition=True
+            self.cond_embed = nn.Linear(condition_on, nunits)
 
-        if y_dim>0:
-            self.cond_embed = nn.Linear(y_dim, hidden_dim)
+        self.inblock = nn.Linear(nfeatures, nunits)
+        self.time_embed = TimeEmbedding(nunits)
+
         self.vf = GenericNN(
-            input_dim=hidden_dim,
-            hidden_dims=[hidden_dim] * depth,  # depth controls number of residual layers
-            output_dim=input_dim,
+            input_dim=nunits,
+            hidden_dims=[nunits] * nblocks,  # depth controls number of residual layers
+            output_dim=nfeatures,
         )
 
 
-        # Make sure vf is on the right device
-        self.vf = self.vf.to(self.device)
-
         # instantiate an affine path object - ensure it's using the right device
         self.path = AffineProbPath(scheduler=CondOTScheduler())
-        # self.solver = ODESolver(velocity_model=self.forward)
         self.solver = ODESolver(velocity_model=self._wrapped_forward)
 
         # Move the entire model to the device
@@ -78,11 +60,9 @@ class FMModel(nn.Module):
 
         return self.vf(val, t_emb)
 
-    def train_FM(self, lr=0.001, batch_size=1024, print_every=20000,
-                 X=None, nepochs=10, max_grad_norm=None, mu_list=None, Sigma_list=None, alpha=None, Flag=False,
-                 convergence_tol=1e-5, patience=3):
+    def train_FM(self, lr=0.001, batch_size=1024,
+                 X=None, nepochs=10, mu_list=None, Sigma_list=None, alpha=None):
         # init optimizer
-        # optim_FM = torch.optim.Adam(self.vf.parameters(), lr=lr)
         optim_FM = torch.optim.Adam(self.parameters(), lr=lr)
 
         use_loader = X is not None
@@ -96,13 +76,7 @@ class FMModel(nn.Module):
                 drop_last=False
             )
 
-        epoch_range = range(nepochs)
-        if Flag:
-            epoch_range = tqdm(epoch_range)
-
-        prev_loss = float('inf')
-        stable_epochs = 0
-        pbar = tqdm(epoch_range)
+        pbar = tqdm(range(nepochs))
         for epoch in pbar:
             epoch_loss = 0.0
             num_batches = 0
@@ -115,21 +89,22 @@ class FMModel(nn.Module):
                 if use_loader:
                     (batch_x,) = batch_idx
                 else:
-                    batch_x = dist_utils.generate_mog_samples(batch_size, mu_list, Sigma_list, alpha)
+                    pass
+                    # TODO when adding the dist_utils uncomment
+                    # batch_x = dist_utils.generate_mog_samples(batch_size, mu_list, Sigma_list, alpha)
 
-                x_1 = batch_x.to(self.device)
-                x_x_1 = x_1[:, self.y_dim:].to(torch.float32).to(self.device)
-                y_1 = x_1[:, :self.y_dim].reshape(-1, 1).to(torch.float32).to(self.device)
-                x_0 = torch.randn_like(x_x_1).to(self.device)
-                t = torch.rand(x_x_1.shape[0], device=self.device)
+                y = x_1[:, self.condition_on:].to(torch.float32).to(self.device)
+                x_cond = x_1[:, :self.condition_on].reshape(-1, 1).to(torch.float32).to(self.device)
 
-                path_sample = self.path.sample(t=t, x_0=x_0, x_1=x_x_1)
+                x_0 = torch.randn_like(y).to(self.device)
+                t = torch.rand(y.shape[0], device=self.device)
+
+                path_sample = self.path.sample(t=t, x_0=x_0, x_1=y)
                 path_sample.x_t = path_sample.x_t.to(self.device)
                 path_sample.dx_t = path_sample.dx_t.to(self.device)
                 path_sample.t = path_sample.t.to(self.device)
 
-                # loss = torch.pow(self.vf(path_sample.x_t, path_sample.t, y_1) - path_sample.dx_t, 2).mean()
-                loss = torch.pow(self.forward(path_sample.x_t, path_sample.t, y_1) - path_sample.dx_t, 2).mean()
+                loss = torch.pow(self.forward(path_sample.x_t, path_sample.t, x_cond) - path_sample.dx_t, 2).mean()
 
                 epoch_loss += loss.item()
                 num_batches += 1
@@ -140,22 +115,8 @@ class FMModel(nn.Module):
             avg_epoch_loss = epoch_loss / num_batches if num_batches > 0 else 0
             pbar.set_description(f"loss: {avg_epoch_loss :.6f}")
 
-
-            # Check convergence
-            if abs(prev_loss - avg_epoch_loss) < convergence_tol:
-                stable_epochs += 1
-                if stable_epochs >= patience:
-                    if Flag:
-                        print(f"Converged after {epoch + 1} epochs.")
-                    break
-            else:
-                stable_epochs = 0
-
-            prev_loss = avg_epoch_loss
-
-        # self.solver = ODESolver(velocity_model=self.vf)
+        # adding the option to allow grad
         self.solver = ODESolver(velocity_model=self._wrapped_forward)
-        from FM_Solver_Extension_module import add_compute_likelihood_allow_grad
         self.solver = add_compute_likelihood_allow_grad(self.solver)
         return
 
@@ -192,7 +153,7 @@ class FMModel(nn.Module):
 
         # Initialize x values if needed
         if x_init is None:
-            x_init = torch.randn((num_sample, self.input_dim), dtype=torch.float32, device=self.device)
+            x_init = torch.randn((num_sample, self.nfeatures), dtype=torch.float32, device=self.device)
 
         # Ensure x_init is on the correct device
         x_init = x_init.to(device=self.device)
@@ -209,7 +170,6 @@ class FMModel(nn.Module):
         )
 
     def compute_likelihood(self, Target, y, step_size=0.05, enable_grad=True,
-                           return_intermediates=False, return_log_det=False,
                            Train_consistency=False, exact_divergence=False,
                            time_grid=None):
 
