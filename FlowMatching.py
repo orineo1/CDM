@@ -144,7 +144,6 @@ class FMModel(nn.Module):
             avg_epoch_loss = epoch_loss / num_batches if num_batches > 0 else 0
             pbar.set_description(f"loss: {avg_epoch_loss :.6f}")
 
-        # Finalize solver with likelihood support
         self.solver = ODESolver(velocity_model=self._wrapped_forward)
         self.solver = add_compute_likelihood_allow_grad(self.solver)
 
