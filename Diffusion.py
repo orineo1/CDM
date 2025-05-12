@@ -27,10 +27,7 @@ class DiffusionModel(nn.Module):
         self.betas = 1 - self.baralphas / torch.cat([self.baralphas[0:1], self.baralphas[:-1]])
         self.alphas = 1 - self.betas
 
-        # Adjusted input dimension to account for t (1D) and optionally x_cond
-        total_input_dim = nfeatures  #+ (condition_on if condition else 0)
-
-        self.inblock = nn.Linear(total_input_dim, nunits)
+        self.inblock = nn.Linear(nfeatures, nunits)
         self.time_embed = TimeEmbedding(nunits)
         self.net = GenericNN(
             input_dim=nunits,
@@ -68,8 +65,7 @@ class DiffusionModel(nn.Module):
                  ((1 - self.baralphas[t]) ** 0.5).repeat(1, Xbatch.shape[1]) * eps
         return noised, eps
 
-    def train_model(self, X, nepochs=100, batch_size=2048, condition_on=1, guidance_dropout=0.2,
-                    verbose=True, device="cpu"):
+    def train_model(self, X, nepochs=100, batch_size=2048, condition_on=1, guidance_dropout=0.2, device="cpu"):
         """
         Train the diffusion model with classifier-free guidance support.
 
@@ -173,7 +169,7 @@ class DiffusionModel(nn.Module):
         # Return the loss history
         return losses
 
-    @torch.no_grad()
+    # @torch.no_grad()
     def sample_ddim(self, nsamples, condition_x=None, device="cpu", eta=0.0, t_start=None, t_end=None):
         """
         Sample from the DDIM model with optional conditioning.
@@ -252,5 +248,65 @@ class DiffusionModel(nn.Module):
 
         return x, xt
 
+    def sample_ddim_step(self, x_start, t, condition_x=None, device="cpu", eta=0.0): # TODO integrate into the sample_ddim
+        """
+        Perform a single DDIM step from x_start.
 
+        Args:
+            x_start: Input sample from which the step is taken.
+            t: Current timestep.
+            condition_x: Optional conditioning input.
+            device: Device to run the sampling on ("cpu" or "cuda").
+            eta: Controls the stochasticity (0 = deterministic DDIM, 1 = DDPM).
+
+        Returns:
+            x_next: The updated sample after one DDIM step.
+        """
+
+        # Move model to device
+        self.to(device)
+
+        # Get model dtype
+        # model_dtype = next(model.parameters()).dtype
+
+        # Convert condition_x to the model's dtype if provided
+        if condition_x is not None:
+            condition_x = (condition_x - self.mean.flatten()[:condition_x.shape[1]]) / self.std.flatten()[
+                                                                                        :condition_x.shape[1]]
+            condition_x = condition_x.to(device=device, )
+
+        # Ensure x_start is on the correct device and dtype
+        x = x_start.to(device=device, )
+        x = ((x - self.mean) / self.std).to(torch.float32)
+        # Create timestep tensor
+        t_batch = torch.full([x.shape[0], 1], t, device=device)
+
+        # Predict noise
+        predicted_noise = self(x, t_batch, condition_x)
+
+        # DDIM update rule
+        alpha_t = self.alphas[t]
+        alpha_bar_t = self.baralphas[t]
+
+        # Get alpha_bar_prev (use 1.0 for final step)
+        alpha_bar_prev = self.baralphas[t - 1] if t > 0 else torch.tensor(1.0, device=device)
+
+        # Compute sigma (η in the DDIM paper)
+        sigma_t = eta * torch.sqrt((1 - alpha_bar_prev) / (1 - alpha_bar_t)) * torch.sqrt(
+            1 - alpha_bar_t / alpha_bar_prev)
+
+        # DDIM deterministic update
+        pred_x0 = (x - torch.sqrt(1 - alpha_bar_t) * predicted_noise) / torch.sqrt(alpha_bar_t)
+        dir_xt = torch.sqrt(1 - alpha_bar_prev - sigma_t ** 2) * predicted_noise
+        x_next = torch.sqrt(alpha_bar_prev) * pred_x0 + dir_xt
+
+        # Add noise only if eta > 0
+        if eta > 0:
+            noise = torch.randn_like(x)
+            x_next = x_next + sigma_t * noise
+
+        # Un-normalize the sample
+        x_next = x_next * self.std + self.mean
+        pred_x0 = pred_x0 * self.std + self.mean
+        return x_next, pred_x0
 
