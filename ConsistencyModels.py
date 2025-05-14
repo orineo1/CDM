@@ -135,6 +135,6 @@ class ConsistencyModel(nn.Module):
                         ema_p.mul_(mu).add_(p, alpha=1 - mu)
 
             pbar.set_description(f"loss: {loss_ema:.6f}, mu: {mu:.4f}")
-        return self
+        return
 
 
