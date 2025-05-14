@@ -75,7 +75,56 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights,mu_
         # Update x manually using the computed gradient
         with torch.no_grad():
             x_t = x_t_minus_1.detach().clone() - grad
-        pbar.set_description(f"Step {t} | x_t: {x_t.item():.3f}")
+        pbar.set_description(f"Step {t} | x_t: {x_t.item():.3f}| mean_loss: {mean_loss.item():.3f}")
 
     x_t = x_t.reshape(-1, 1)
     return x_t
+
+######### FlowMatching
+
+#### DFlow
+## TODO add regulation https://arxiv.org/pdf/2402.14017
+def optimize_DFLOW(vf_y_cond_x, vf_X, device, mog_means, mog_variances, weights, max_iter=100, FLAG=False,
+                   n_sample=1_000):
+    mmd_loss = MMDLoss(kernel=RBF())
+
+    # Initialize the x vector
+    x = torch.randn((1, vf_X.nfeatures), dtype=torch.float32, device=vf_X.device)
+    x = torch.tensor(x, requires_grad=True, device=device)
+
+    # Initialize the optimizer (LBFGS)
+    optimizer = torch.optim.LBFGS([x], max_iter=max_iter,line_search_fn="strong_wolfe")
+
+    # Variables to store the best x and lowest loss
+    best_x = None
+    best_loss = float('inf')  # Start with a very high loss to ensure any loss will be lower
+
+    def closure():
+        optimizer.zero_grad()
+
+        x_1 = vf_X.sample(num_sample=1, y=None, x_init=x)
+
+
+        x_cond = x_1.reshape(-1) * torch.ones(n_sample, vf_y_cond_x.condition_on, dtype=torch.float32, device=device)
+
+        target_samples = vf_y_cond_x.sample(n_sample, x_cond)
+        samples = generate_mog_samples(n_sample, mog_means, mog_variances, weights, tau=10.0)
+
+        loss = mmd_loss(target_samples, samples)
+
+        nonlocal best_x, best_loss
+        if loss < best_loss:
+            best_loss = loss.item()
+            best_x = x.clone()
+        if FLAG:
+            print(f"x_0: {x.detach().cpu().numpy()} |x_1: {x_1} |loss: {loss}")  # print current x value
+
+        loss.backward(retain_graph=True)
+
+        return loss
+
+    # Use the closure function with optimizer.step()
+    optimizer.step(closure)
+    best_x1= vf_X.sample(num_sample=1, y=None, x_init=best_x)
+    # Return the best x and the corresponding loss
+    return best_x1, best_loss
