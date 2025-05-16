@@ -19,7 +19,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights,mu_
 
 
     # Initialize starting point
-    x_t = torch.zeros(model_uncond.nfeatures, requires_grad=True)
+    x_t= torch.randn(model_uncond.nfeatures, requires_grad=True )
 
     # Loop over diffusion steps
     pbar= tqdm(range(model_uncond.diffusion_steps - 1, 0, -1))
@@ -28,7 +28,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights,mu_
 
     for t in pbar:
         # Create a fresh tensor at each step to ensure gradient independence
-        x_t = x_t.detach().clone().requires_grad_(True)  # TODO change this into vector of the size of the condition by of the uncond
+        x_t = x_t.detach().clone().requires_grad_(True)
         # Create a new optimizer for this step's tensor
         optimizer = optim_cond.Adam([x_t], lr=0.05)
 
