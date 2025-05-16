@@ -74,14 +74,15 @@ class ConsistencyModel(nn.Module):
 
         return F.mse_loss(x1, x2)
 
-    @torch.no_grad()
-    def sample(self, x, ts: List[float], cond=None):
-        x = self(x, ts[0], cond=cond)
+
+    def sample(self, nsamples=250, condition_x=None,ts: List[float]=[150.0, 50.0, 20.0, 10.0, 5.0,1.]):
+        x = torch.randn(nsamples, self.nfeatures) * ts[0]
+        x = self(x, ts[0], cond=condition_x)
 
         for t in ts[1:]:
             z = torch.randn_like(x)
             x = x + math.sqrt(t ** 2 - self.eps ** 2) * z
-            x = self(x, t, cond=cond)
+            x = self(x, t, cond=condition_x)
 
         return x
 

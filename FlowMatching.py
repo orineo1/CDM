@@ -200,8 +200,8 @@ class FMModel(nn.Module):
                            Train_consistency=False, exact_divergence=False,
                            time_grid=None):
 
-        gaussian_log_density = Independent(Normal(torch.zeros(self.input_dim, device=self.device),
-                                                  torch.ones(self.input_dim, device=self.device)), 1).log_prob
+        gaussian_log_density = Independent(Normal(torch.zeros(self.nfeatures, device=self.device),
+                                                  torch.ones(self.nfeatures, device=self.device)), 1).log_prob
 
         # If no time grid is provided, create one with multiple points
         if time_grid is None and Train_consistency:
