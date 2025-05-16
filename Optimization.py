@@ -102,7 +102,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights,mu_
                     target_samples = target_samples[:, model_cond.condition_on:]  # Extract relevant parts
                 # Compute MMD loss for this sample
                 batch_loss = mmd_loss(target_samples, samples)
-                pbar.set_description(f"Step {t} | pred_x0_model: {pred_x0.item():.3f}| pred_x0: {x_0_cont_xt_hat.item():.3f}| mean_loss: {batch_loss.item():.3f}")
+                pbar.set_description(f"Step {t} | pred_x0_model: {pred_x0}| pred_x0: {x_0_cont_xt_hat}| mean_loss: {batch_loss.item():.3f}")
 
             sum_exp_loss += torch.exp(-batch_loss)
 
