@@ -170,7 +170,7 @@ class DiffusionModel(nn.Module):
         return losses
 
     # @torch.no_grad()
-    def sample_ddim(self, nsamples, condition_x=None, device="cpu", eta=0.0, t_start=None, t_end=None):
+    def sample(self, nsamples, condition_x=None, device="cpu", eta=0.0, t_start=None, t_end=None):
         """
         Sample from the DDIM model with optional conditioning.
 

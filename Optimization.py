@@ -52,8 +52,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights,mu_
             # Sample from Y_0 | X_0 = pred_x0
             condition = x_0_cont_xt_hat.view(1, -1).repeat(nsamples, 1)
             if loss=="MMD":
-                target_samples, _ = model_cond.sample_ddim(nsamples=nsamples, condition_x=condition, t_start=None, t_end=None)
-
+                target_samples, _ = model_cond.sample(nsamples=nsamples, condition_x=condition)
                 target_samples = target_samples[:, model_cond.condition_on:]  # Extract relevant parts
 
 
