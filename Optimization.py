@@ -12,6 +12,54 @@ import torch
 import torch.optim as optim_cond
 
 ######### Diffusion
+def optimize_DPS(model_uncond, model_cond, mog_means, mog_variances, weights,mu_list, Sigma_list, alpha, nsamples=250, num_x_t=3, loss="MMD",CM=False):
+    mmd_loss =MMDLoss(kernel=RBF())
+
+
+    # Initialize starting point
+    x_t= torch.randn(model_uncond.nfeatures, requires_grad=True )
+    # print(f"x_t: {x_t}")
+    # Loop over diffusion steps
+    pbar= tqdm(range(model_uncond.diffusion_steps - 1, 0, -1))
+    for t in pbar:
+        # Create a fresh tensor at each step to ensure gradient independence
+        x_t = x_t.detach().clone().requires_grad_(True)
+        # Create a new optimizer for this step's tensor
+        optimizer = optim_cond.Adam([x_t], lr=0.05)
+
+        # Perform one DDIM step
+        x_t_minus_1, pred_x0 = model_uncond.sample_ddim_step(x_t, t, condition_x=None, device="cpu", eta=0.0)
+
+        # Sample from Y_0 | X_0 = pred_x0
+        condition = pred_x0.view(1, -1).repeat(nsamples, 1)
+        target_samples, _ = model_cond.sample(nsamples=nsamples, condition_x=condition)
+        if not CM:
+            target_samples = target_samples[:, model_cond.condition_on:]  # Extract relevant parts
+
+        # Generate samples from Mixture of Gaussians
+        samples = generate_mog_samples(nsamples, mog_means, mog_variances, weights, tau=10.0)
+
+        # Zero gradients before computing loss
+        optimizer.zero_grad()
+
+        # Compute MMD loss
+        loss = mmd_loss(target_samples, samples)
+
+        # Compute gradients
+        loss.backward()
+
+        # Extract gradient and scale by variance (if needed)
+        current_var = model_uncond.betas[t]
+        grad = x_t.grad.clone() * current_var
+        pbar.set_description(f"Step {t} | pred_x0: {pred_x0}| mean_loss: {loss.item():.3f}")
+
+        # Update x manually using the computed gradient
+        # Instead of using the optimizer's step, we're applying our custom update
+        with torch.no_grad():
+            x_t = x_t_minus_1.detach().clone() - grad
+    x_t = x_t.reshape(-1, 1)
+    return x_t
+
 
 #### Optimize LGD
 def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights,mu_list, Sigma_list, alpha, nsamples=250, num_x_t=3, loss="MMD"):
