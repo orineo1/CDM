@@ -3,6 +3,8 @@ import numpy as np
 from scipy.optimize import fsolve
 import torch.nn.functional as F
 from scipy.stats import qmc
+from torch.distributions import Normal, MultivariateNormal
+from tqdm import tqdm
 
 ########### Mixture of Gaussian's ###########
 #### Sampling ####
@@ -120,47 +122,51 @@ def mog_pdf(x, means, variances, weights=None):
 
 def mog_multivariate_pdf(x, means, covariances, weights=None, log=False):
     """
-    Compute the Probability Density Function (PDF) of a Mixture of Gaussians (MoG)
-    using PyTorch's built-in multivariate normal distribution.
+    Compute PDF or log-PDF of a Mixture of Gaussians (1D or multivariate).
 
     Args:
-        x: Points at which to evaluate the PDF, shape [num_points, dim]
-        means: List of mean vectors, each of shape [dim]
-        covariances: List of covariance matrices, each of shape [dim, dim]
-        weights: Mixture weights, shape [num_components]. Default: equal weights
+        x: Tensor of shape [num_points, dim]
+        means: List of tensors, each shape [dim]
+        covariances: List of tensors, shape [dim] for 1D or [dim, dim] for multivariate
+        weights: Tensor of shape [num_components]
+        log: Return log-probabilities if True
 
     Returns:
-        PDF values at points x, shape [num_points]
+        Tensor of shape [num_points]
     """
-    from torch.distributions.multivariate_normal import MultivariateNormal
+    device = x.device
+    num_points, dim = x.shape
+    num_components = len(means)
 
-    device = x.device  # Get current device
-    components = len(means)
-    batch_size = x.shape[0]
-
-    # Move means and covariances to same device as x
+    # Move everything to correct device
     means = [m.to(device) for m in means]
     covariances = [c.to(device) for c in covariances]
     if weights is None:
-        weights = torch.ones(components, device=device) / components  # Equal weights
+        weights = torch.ones(num_components, device=device) / num_components
     else:
         weights = weights.to(device)
 
-    pdf = torch.zeros(batch_size, device=device)
+    total_prob = torch.zeros(num_points, device=device)
 
-    for i in range(components):
-        # Create multivariate normal distribution for this component
-        mvn = MultivariateNormal(means[i], covariances[i])
+    for i in range(num_components):
+        if dim == 1:
+            # Univariate case
+            mean = means[i].view(-1)
+            std = covariances[i].sqrt().view(-1)
+            dist = Normal(mean, std)
+            comp_log_prob = dist.log_prob(x.squeeze(-1))  # shape: [num_points]
+        else:
+            # Multivariate case
+            dist = MultivariateNormal(means[i], covariances[i])
+            comp_log_prob = dist.log_prob(x)  # shape: [num_points]
 
-        # Evaluate log_prob and convert to prob
-        component_pdf = torch.exp(mvn.log_prob(x))
+        total_prob += weights[i] * torch.exp(comp_log_prob)
 
-        # Add weighted component to mixture
-        pdf += weights[i] * component_pdf
     if log:
-        pdf = torch.log(pdf + 1e-10)  # Add epsilon to avoid log(0)
+        return torch.log(total_prob + 1e-10)  # Avoid log(0)
+    else:
+        return total_prob
 
-    return pdf
 
 
 def log_likelihood(samples, means, variances, weights):
@@ -422,7 +428,7 @@ def compute_L1_distance_dynamic(means_p_raw, variances_p_raw, weights_p_raw,
                                 scale_factor=3.0,
                                 initial_num_points=100,
                                 max_error=1e-3,
-                                max_iters=100):
+                                max_iters=7):
     """
     Compute the L1 distance between two Mixture of Gaussians distributions.
     Supports arbitrary dimensions. Uses grid integration for D <= 3, and Sobol-based QMC for D > 3.
@@ -467,8 +473,8 @@ def compute_L1_distance_dynamic(means_p_raw, variances_p_raw, weights_p_raw,
         mesh = torch.meshgrid(*grids, indexing='ij')
         points = torch.stack([m.reshape(-1) for m in mesh], dim=-1)  # [num_points**D, D]
 
-        p_vals = mog_pdf(points, means_p, variances_p, weights_p)
-        q_vals = mog_pdf(points, means_q, variances_q, weights_q)
+        p_vals = mog_multivariate_pdf(points, means_p, variances_p, weights_p)
+        q_vals = mog_multivariate_pdf(points, means_q, variances_q, weights_q)
         diff = torch.abs(p_vals - q_vals)
 
         delta = [(upper_bounds[d] - lower_bounds[d]) / (num_points - 1) for d in range(D)]
@@ -484,8 +490,8 @@ def compute_L1_distance_dynamic(means_p_raw, variances_p_raw, weights_p_raw,
         points_np = lower + samples * scale
         points = torch.tensor(points_np, dtype=means_p.dtype)
 
-        p_vals = mog_pdf(points, means_p, variances_p, weights_p)
-        q_vals = mog_pdf(points, means_q, variances_q, weights_q)
+        p_vals = mog_multivariate_pdf(points, means_p, variances_p, weights_p)
+        q_vals = mog_multivariate_pdf(points, means_q, variances_q, weights_q)
         diff = torch.abs(p_vals - q_vals)
 
         volume = torch.prod(upper_bounds - lower_bounds)
@@ -496,8 +502,8 @@ def compute_L1_distance_dynamic(means_p_raw, variances_p_raw, weights_p_raw,
     prev_result = None
     num_points = initial_num_points
 
-    for _ in range(max_iters):
-        if D <= 3:
+    for _ in tqdm(range(max_iters)):
+        if D <= 1:
             result = compute_integral_grid(num_points, lower_bounds, upper_bounds)
         else:
             result = compute_integral_qmc(num_points, lower_bounds, upper_bounds)
