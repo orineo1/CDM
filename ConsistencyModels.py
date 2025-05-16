@@ -20,6 +20,7 @@ class ConsistencyModel(nn.Module):
         self.nfeatures = nfeatures
         self.condition_on = condition_on
         self.nunits = nunits
+        self.betas=None
 
         if condition_on>0:
             self.cond_embed = nn.Linear(condition_on, nunits)
@@ -84,7 +85,7 @@ class ConsistencyModel(nn.Module):
             x = x + math.sqrt(t ** 2 - self.eps ** 2) * z
             x = self(x, t, cond=condition_x)
 
-        return x
+        return x,None
 
     def train_model(self, X: torch.Tensor = None, nepochs: int = 100,batch_size:int=2048, device: str = "cpu", condition=None,
               model_diff=None):
@@ -102,7 +103,7 @@ class ConsistencyModel(nn.Module):
         for epoch in pbar:
             N = math.ceil(math.sqrt((epoch * (150 ** 2 - 4) / nepochs) + 4) - 1) + 1
             boundaries = kerras_boundaries(7.0, 0.002, N, 80.0).to(device)
-
+            self.betas=boundaries
             loss_ema = None
 
             for (x,) in dataloader:
