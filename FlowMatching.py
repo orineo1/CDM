@@ -169,14 +169,13 @@ class FMModel(nn.Module):
 
         if y is not None:
             # Check shape and expand if needed
-            if y.numel() == 1:
-                # Single value: expand to all samples
-                y = y * torch.ones(num_sample, dtype=torch.float32, device=self.device).reshape(-1, 1)
-            elif len(y) == num_sample and (y.dim() == 1 or (y.dim() == 2 and y.shape[1] == 1)):
-                # Already has correct shape [num_sample, 1] or [num_sample]
-                y = y.reshape(num_sample, 1)
-            else:
-                raise ValueError(f"Incompatible y shape: {y.shape}. Expected scalar or tensor with shape [num_sample, 1]")
+            if y is not None:
+                if y.numel() == 1:
+                    # Case: scalar y → expand to [num_sample, 1]
+                    y = y * torch.ones(num_sample, dtype=torch.float32, device=self.device).reshape(-1, 1)
+                elif y.shape[0] == num_sample and (y.dim() == 1 or (y.dim() == 2 and y.shape[1] == 1)):
+                    # Case: [num_sample] or [num_sample, 1] → reshape to [num_sample, 1]
+                    y = y.reshape(num_sample, 1)
 
         # Initialize x values if needed
         if x_init is None:
