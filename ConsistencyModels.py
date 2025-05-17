@@ -9,17 +9,19 @@ from NN_utils import GenericNN,TimeEmbedding
 
 
 def kerras_boundaries(sigma_min, sigma_max, N, rho):
-    steps = torch.arange(N + 1, dtype=torch.float32)
+    steps = torch.arange(N + 1, dtype=torch.float32, device='cuda' if torch.cuda.is_available() else 'cpu')
     return (sigma_max ** (-1 / rho) + steps / N * (sigma_min ** (-1 / rho) - sigma_max ** (-1 / rho))) ** (-rho)
 
 
 class ConsistencyModel(nn.Module):
-    def __init__(self, nfeatures: int, condition_on: int = 0, eps: float = 0.002, nunits: int = 128, depth: int = 6):
+    def __init__(self, nfeatures: int, condition_on: int = 0, eps: float = 0.002, nunits: int = 128, depth: int = 6,device=None):
         super().__init__()
         self.eps = eps
         self.nfeatures = nfeatures
         self.condition_on = condition_on
         self.nunits = nunits
+        self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
         self.betas=None
 
         if condition_on>0:
@@ -36,7 +38,7 @@ class ConsistencyModel(nn.Module):
             input_dim=nunits,
             hidden_dims=[nunits] * depth,  # depth controls number of residual layers
             output_dim=nfeatures,
-        )
+        ).to(device)
 
     def forward(self, x, t, cond=None):
         x_ori = x

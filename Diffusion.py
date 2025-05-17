@@ -9,13 +9,15 @@ from tqdm import tqdm
 
 class DiffusionModel(nn.Module):
     def __init__(self, nfeatures: int, nunits: int = 128, condition: bool = False,
-                 condition_on: int = 1, diffusion_steps: int = 100,nblocks: int = 6):
+                 condition_on: int = 1, diffusion_steps: int = 100,nblocks: int = 6,device=None):
         super(DiffusionModel, self).__init__()
         self.condition = condition
         self.nfeatures = nfeatures
         self.nunits = nunits
         self.diffusion_steps = diffusion_steps
         self.condition_on = condition_on
+        self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
         if condition:
             self.cond_embed = nn.Linear(condition_on, nunits)
 
@@ -33,7 +35,7 @@ class DiffusionModel(nn.Module):
             input_dim=nunits,
             hidden_dims=[nunits] *nblocks,  # depth controls number of residual layers
             output_dim=nfeatures,
-        )
+        ).to(device)
 
 
     def forward(self, x: torch.Tensor, t: torch.Tensor, x_cond: torch.Tensor = None) -> torch.Tensor:
