@@ -484,8 +484,8 @@ def compute_L1_distance_dynamic(means_p_raw, variances_p_raw, weights_p_raw,
     def compute_integral_qmc(num_samples, lower_bounds, upper_bounds):
         sampler = qmc.Sobol(d=D, scramble=True)
         samples = sampler.random_base2(m=int(np.log2(num_samples)))
-        lower = lower_bounds.numpy()
-        upper = upper_bounds.numpy()
+        lower = lower_bounds.detach().numpy()
+        upper = upper_bounds.detach().numpy()
         scale = upper - lower
         points_np = lower + samples * scale
         points = torch.tensor(points_np, dtype=means_p.dtype)
