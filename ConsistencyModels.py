@@ -42,6 +42,11 @@ class ConsistencyModel(nn.Module):
         self.to(self.device)
 
     def forward(self, x, t, cond=None):
+        print(f"x device: {x.device}")
+        print(f"input_layer weight device: {self.input_layer.weight.device}")
+        if cond is not None:
+            print(f"cond device: {cond.device}")
+
         x_ori = x
         x = self.input_layer(x)
 
