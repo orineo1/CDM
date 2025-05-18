@@ -8,7 +8,8 @@ import  FlowMatching
 from ConsistencyModels import ConsistencyModel
 import dist_utils
 import torch.nn.functional as F
-from tqdm import tqdm
+# from tqdm import tqdm
+from tqdm.notebook import tqdm
 import torch
 import torch.optim as optim_cond
 
@@ -52,7 +53,9 @@ def optimize_DPS(model_uncond, model_cond, mog_means, mog_variances, weights, mu
         current_var = model_uncond.betas[t].to(device)
         grad = x_t.grad.clone() * current_var
 
-        pbar.set_description(f"Step {t} | pred_x0 loss: {loss_val.item():.3f}")
+        pbar.set_description(
+            f"Step {t} | pred_x0_model: {pred_x0} |  pred_x0 loss: {loss_val.item():.3f}"
+        )
 
         with torch.no_grad():
             x_t = x_t_minus_1.detach().clone().to(device) - grad
