@@ -8,10 +8,9 @@ import  FlowMatching
 from ConsistencyModels import ConsistencyModel
 import dist_utils
 import torch.nn.functional as F
-# from tqdm import tqdm
-from tqdm.notebook import tqdm
 import torch
 import torch.optim as optim_cond
+from tqdm.notebook import tqdm
 
 ######### Diffusion
 def optimize_DPS(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
@@ -22,9 +21,14 @@ def optimize_DPS(model_uncond, model_cond, mog_means, mog_variances, weights, mu
     x_t = torch.randn(model_uncond.nfeatures, device=device, requires_grad=True)
 
     # Move mog distribution parameters to device as well, if they are tensors
-    mog_means = mog_means.to(device)
-    mog_variances = mog_variances.to(device)
-    weights = weights.to(device)
+    if isinstance(mog_means, torch.Tensor):
+        mog_means = mog_means.to(device)
+
+    if isinstance(mog_variances, torch.Tensor):
+        mog_variances = mog_variances.to(device)
+
+    if isinstance(weights, torch.Tensor):
+        weights = weights.to(device)
 
     best_mmd_loss = float("inf")
     best_pred_x0 = None
@@ -75,10 +79,14 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
     # Initialize x_t on device with requires_grad
     x_t = torch.randn(model_uncond.nfeatures, device=device, requires_grad=True)
 
-    # Move mog parameters to device
-    mog_means = mog_means.to(device)
-    mog_variances = mog_variances.to(device)
-    weights = weights.to(device)
+    if isinstance(mog_means, torch.Tensor):
+        mog_means = mog_means.to(device)
+
+    if isinstance(mog_variances, torch.Tensor):
+        mog_variances = mog_variances.to(device)
+
+    if isinstance(weights, torch.Tensor):
+        weights = weights.to(device)
 
     best_mmd_loss = float("inf")
     best_x_0_cont_xt_hat = None
@@ -145,19 +153,23 @@ def find_samples_to_kl(numb_points, mog_means, mog_variances, weights, device="c
     if isinstance(mog_means, (list, tuple)):
         mog_means_tensor = torch.stack(mog_means, dim=0)
     elif isinstance(mog_means, torch.Tensor):
-        mog_means_tensor = mog_means
+        if mog_means.dim() == 0:
+            mog_means_tensor = mog_means.unsqueeze(0)  # Convert scalar to 1D
+        else:
+            mog_means_tensor = mog_means
     else:
         raise TypeError("mog_means must be a list, tuple, or tensor")
 
-    mog_means_tensor = mog_means_tensor.squeeze()
+    # Ensure it's 2D for concatenation with samples
     if mog_means_tensor.dim() == 1:
         mog_means_tensor = mog_means_tensor.unsqueeze(1)
+
     mog_means_tensor = mog_means_tensor.to(device)
 
     # Generate MoG samples on the correct device
     mog_samples = generate_mog_samples(numb_points, mog_means, mog_variances, weights).to(device)
 
-    # Concatenate means and samples along dim=0
+    # Now safe to concatenate
     Target = torch.cat([mog_means_tensor, mog_samples], dim=0).to(torch.float32)
 
     return Target
