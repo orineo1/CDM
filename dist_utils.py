@@ -123,51 +123,51 @@ def mog_pdf(x, means, variances, weights=None):
     return pdf
 
 def mog_multivariate_pdf(x, means, covariances, weights=None, log=False):
-    """
-    Compute PDF or log-PDF of a Mixture of Gaussians (1D or multivariate).
-
-    Args:
-        x: Tensor of shape [num_points, dim]
-        means: List of tensors, each shape [dim]
-        covariances: List of tensors, shape [dim] for 1D or [dim, dim] for multivariate
-        weights: Tensor of shape [num_components]
-        log: Return log-probabilities if True
-
-    Returns:
-        Tensor of shape [num_points]
-    """
-    device = x.device
-    num_points, dim = x.shape
-    num_components = len(means)
-
-    # Move everything to correct device
-    means = [m.to(device) for m in means]
-    covariances = [c.to(device) for c in covariances]
-    if weights is None:
-        weights = torch.ones(num_components, device=device) / num_components
-    else:
-        weights = weights.to(device)
-
-    total_prob = torch.zeros(num_points, device=device)
-
-    for i in range(num_components):
-        if dim == 1:
-            # Univariate case
-            mean = means[i].view(-1)
-            std = covariances[i].sqrt().view(-1)
-            dist = Normal(mean, std)
-            comp_log_prob = dist.log_prob(x.squeeze(-1))  # shape: [num_points]
+        """
+        Compute PDF or log-PDF of a Mixture of Gaussians (1D or multivariate).
+    
+        Args:
+            x: Tensor of shape [num_points, dim]
+            means: List of tensors, each shape [dim]
+            covariances: List of tensors, shape [dim] for 1D or [dim, dim] for multivariate
+            weights: Tensor of shape [num_components]
+            log: Return log-probabilities if True
+    
+        Returns:
+            Tensor of shape [num_points]
+        """
+        device = x.device
+        num_points, dim = x.shape
+        num_components = len(means)
+    
+        # Move everything to correct device
+        means = [m.to(device) for m in means]
+        covariances = [c.to(device) for c in covariances]
+        if weights is None:
+            weights = torch.ones(num_components, device=device) / num_components
         else:
-            # Multivariate case
-            dist = MultivariateNormal(means[i], covariances[i])
-            comp_log_prob = dist.log_prob(x)  # shape: [num_points]
-
-        total_prob += weights[i] * torch.exp(comp_log_prob)
-
-    if log:
-        return torch.log(total_prob + 1e-10)  # Avoid log(0)
-    else:
-        return total_prob
+            weights = weights.to(device)
+    
+        total_prob = torch.zeros(num_points, device=device)
+    
+        for i in range(num_components):
+            if dim == 1:
+                # Univariate case
+                mean = means[i].view(-1)
+                std = covariances[i].sqrt().view(-1)
+                dist = Normal(mean, std)
+                comp_log_prob = dist.log_prob(x.squeeze(-1))  # shape: [num_points]
+            else:
+                # Multivariate case
+                dist = MultivariateNormal(means[i], covariances[i])
+                comp_log_prob = dist.log_prob(x)  # shape: [num_points]
+    
+            total_prob += weights[i] * torch.exp(comp_log_prob)
+    
+        if log:
+            return torch.log(total_prob + 1e-10)  # Avoid log(0)
+        else:
+            return total_prob
 
 
 
