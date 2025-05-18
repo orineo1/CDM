@@ -14,7 +14,7 @@ def kerras_boundaries(sigma_min, sigma_max, N, rho):
 
 
 class ConsistencyModel(nn.Module):
-    def __init__(self, nfeatures: int, condition_on: int = 0, eps: float = 0.002, nunits: int = 128, depth: int = 6,device=None):
+    def __init__(self, nfeatures: int, condition_on: int = 0, eps: float = 0.002, nunits: int = 128, depth: int = 6, device=None):
         super().__init__()
         self.eps = eps
         self.nfeatures = nfeatures
@@ -22,24 +22,22 @@ class ConsistencyModel(nn.Module):
         self.nunits = nunits
         self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        self.betas=None
+        self.betas = None
 
-        if condition_on>0:
+        if condition_on > 0:
             self.cond_embed = nn.Linear(condition_on, nunits)
 
-
-        # Optional conditioning
-        self.input_layer = nn.Linear(nfeatures , nunits)
+        self.input_layer = nn.Linear(nfeatures, nunits)
         self.time_embed = TimeEmbedding(nunits)
 
-
-        # Residual network using GenericNN
         self.net = GenericNN(
             input_dim=nunits,
-            hidden_dims=[nunits] * depth,  # depth controls number of residual layers
+            hidden_dims=[nunits] * depth,
             output_dim=nfeatures,
-        ).to(device)
+        )
+
         self.to(self.device)
+
 
     def forward(self, x, t, cond=None):
         print(f"x device: {x.device}")
