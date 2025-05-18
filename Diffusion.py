@@ -214,8 +214,9 @@ class DiffusionModel(nn.Module):
 
         # Convert condition_x to the model's dtype if it exists
         if condition_x is not None:
-            condition_x = (condition_x - self.mean.flatten()[:condition_x.shape[1]]) / self.std.flatten()[
-                                                                                       :condition_x.shape[1]]
+            mean = self.mean.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
+            std = self.std.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
+            condition_x = (condition_x - mean) / std
             condition_x = condition_x.to(device=device, dtype=model_dtype)
 
         # Denoise step by step
@@ -277,9 +278,10 @@ class DiffusionModel(nn.Module):
 
         # Convert condition_x to the model's dtype if provided
         if condition_x is not None:
-            condition_x = (condition_x - self.mean.flatten()[:condition_x.shape[1]]) / self.std.flatten()[
-                                                                                        :condition_x.shape[1]]
-            condition_x = condition_x.to(device=device, )
+            mean = self.mean.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
+            std = self.std.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
+            condition_x = (condition_x - mean) / std
+            condition_x = condition_x.to(device=device)
 
         # Ensure x_start is on the correct device and dtype
         x = x_start.to(device=device, )
