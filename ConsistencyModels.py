@@ -39,6 +39,7 @@ class ConsistencyModel(nn.Module):
             hidden_dims=[nunits] * depth,  # depth controls number of residual layers
             output_dim=nfeatures,
         ).to(device)
+        self.to(self.device)
 
     def forward(self, x, t, cond=None):
         x_ori = x
@@ -78,9 +79,13 @@ class ConsistencyModel(nn.Module):
         return F.mse_loss(x1, x2)
 
 
-    def sample(self, nsamples=250, condition_x=None,ts: List[float]=[150.0, 50.0, 20.0, 10.0, 5.0,1.]):
-        x = torch.randn(nsamples, self.nfeatures) * ts[0]
-        x = self(x, ts[0], cond=condition_x)
+    def sample(self, nsamples=250, condition_x=None,ts: List[float]=[150.0, 50.0, 20.0, 10.0, 5.0,1.],device=None):
+        device = self.device if device is None else device
+        if condition_x is not None:
+            condition_x = condition_x.to(device)
+
+        x = torch.randn(nsamples, self.nfeatures, device=device) * ts[0]
+        x = x.to(device)
 
         for t in ts[1:]:
             z = torch.randn_like(x)
