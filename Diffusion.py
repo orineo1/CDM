@@ -25,9 +25,9 @@ class DiffusionModel(nn.Module):
         s = 0.008
         timesteps = torch.tensor(range(0, self.diffusion_steps), dtype=torch.float32)
         schedule = torch.cos((timesteps / self.diffusion_steps + s) / (1 + s) * torch.pi / 2) ** 2
-        self.baralphas = schedule / schedule[0]
-        self.betas = 1 - self.baralphas / torch.cat([self.baralphas[0:1], self.baralphas[:-1]])
-        self.alphas = 1 - self.betas
+        self.baralphas = (schedule / schedule[0]).to(self.device)
+        self.betas = (1 - self.baralphas / torch.cat([self.baralphas[0:1], self.baralphas[:-1]])).to(self.device)
+        self.alphas = (1 - self.betas)
 
         self.inblock = nn.Linear(nfeatures, nunits)
         self.time_embed = TimeEmbedding(nunits)
@@ -62,7 +62,9 @@ class DiffusionModel(nn.Module):
             noised: Noised data
             eps: The added noise
         """
-        eps = torch.randn(size=Xbatch.shape)
+        device = Xbatch.device
+        t = t.to(device=device)
+        eps = torch.randn(size=Xbatch.shape, device=device)
         noised = (self.baralphas[t] ** 0.5).repeat(1, Xbatch.shape[1]) * Xbatch + \
                  ((1 - self.baralphas[t]) ** 0.5).repeat(1, Xbatch.shape[1]) * eps
         return noised, eps
@@ -83,6 +85,7 @@ class DiffusionModel(nn.Module):
         Returns:
             losses: List of training losses
         """
+
         self.mean = X.mean(dim=0, keepdim=True)
         self.std = X.std(dim=0, keepdim=True) + 1e-8  # Avoid division by zero
         # Compute normalization statistics
@@ -190,7 +193,8 @@ class DiffusionModel(nn.Module):
         """
         # Move model to device
         self.to(device)
-
+        self.mean = self.mean.to(device)
+        self.std = self.std.to(device)
         # Get model dtype
         model_dtype = next(self.parameters()).dtype
 
