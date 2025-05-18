@@ -20,7 +20,8 @@ def sample_univariate_gaussian(mean, variance):
         sample: tensor of shape [1]
     """
     std = torch.sqrt(variance).squeeze()
-    epsilon = torch.randn(1, dtype=mean.dtype)
+    epsilon = torch.randn(1, dtype=mean.dtype, device=mean.device)  # match device
+
     return mean.squeeze() + std * epsilon
 
 def sample_multivariate_gaussian(mean, covariance):
@@ -39,7 +40,7 @@ def sample_multivariate_gaussian(mean, covariance):
     L = torch.linalg.cholesky(covariance + eps)
 
     # Generate standard normal noise
-    epsilon = torch.randn(mean.size(), dtype=mean.dtype)
+    epsilon = torch.randn(mean.size(), dtype=mean.dtype, device=mean.device)  # match device
 
     # Apply reparameterization trick
     return mean + torch.matmul(L, epsilon)
@@ -63,9 +64,10 @@ def generate_mog_samples(n_samples, xi, S, beta, tau=7.5):
 
     # Get dimensions
     is_multivariate = len(xi.shape) > 1 and xi.shape[-1] > 1
+    device = xi.device  # Assume all inputs are on same device
 
     # Compute logits from beta
-    logits = torch.log(beta)
+    logits = torch.log(beta.to(device))
 
     # Sample component assignments using Gumbel-Softmax
     component_weights = F.gumbel_softmax(logits, tau=tau, hard=False)
