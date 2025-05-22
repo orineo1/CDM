@@ -476,17 +476,19 @@ def compute_L1_distance_dynamic(means_p_raw, variances_p_raw, weights_p_raw,
         return lower_bounds, upper_bounds
 
     def compute_integral_grid(num_points, lower_bounds, upper_bounds):
-        grids = [torch.linspace(lower_bounds[d], upper_bounds[d], num_points) for d in range(D)]
-        mesh = torch.meshgrid(*grids, indexing='ij')
-        points = torch.stack([m.reshape(-1) for m in mesh], dim=-1)  # [num_points**D, D]
+        # Only works when D = 1
+        x = torch.linspace(lower_bounds[0], upper_bounds[0], num_points, dtype=means_p.dtype)
 
-        p_vals = mog_multivariate_pdf(points, means_p, variances_p, weights_p)
-        q_vals = mog_multivariate_pdf(points, means_q, variances_q, weights_q)
+        # Evaluate densities at grid points
+        p_vals = mog_multivariate_pdf(x.unsqueeze(1), means_p, variances_p, weights_p)  # [num_points]
+        q_vals = mog_multivariate_pdf(x.unsqueeze(1), means_q, variances_q, weights_q)  # [num_points]
+
+        # Difference between PDFs
         diff = torch.abs(p_vals - q_vals)
 
-        delta = [(upper_bounds[d] - lower_bounds[d]) / (num_points - 1) for d in range(D)]
-        cell_volume = torch.prod(torch.tensor(delta))
-        return diff.sum() * cell_volume
+        # Integrate using trapezoidal rule
+        result = torch.trapezoid(diff, x)
+        return result
 
     def compute_integral_qmc(num_samples, lower_bounds, upper_bounds):
         sampler = qmc.Sobol(d=D, scramble=True)
