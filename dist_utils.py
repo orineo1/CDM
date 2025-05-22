@@ -442,15 +442,20 @@ def compute_L1_distance_dynamic(means_p_raw, variances_p_raw, weights_p_raw,
         if isinstance(means, list):
             means = torch.cat([m.reshape(1, -1) for m in means], dim=0)
         elif means.ndim == 3 and means.shape[-2] == 1:
-            means = means.squeeze(-2)  # squeeze middle dim if shape is [K, 1, D] or [K, D, 1]
+            means = means.squeeze(-2)
         elif means.ndim > 2:
             means = means.squeeze()
 
         # Convert variances to shape [K, D, D]
         if isinstance(variances, list):
             variances = torch.stack([v if v.ndim == 2 else v.reshape(1, 1) for v in variances], dim=0)
+
+        elif variances.ndim == 2:
+            # Case: diagonal only [K, D] → build diagonal covariance matrix
+            variances = torch.stack([torch.diag(v) for v in variances], dim=0)
+
         elif variances.ndim == 3 and variances.shape[1] == 1 and variances.shape[2] == 1:
-            variances = variances.squeeze(1).squeeze(1).unsqueeze(-1).unsqueeze(-1)  # go to [K, 1, 1]
+            variances = variances.squeeze(1).squeeze(1).unsqueeze(-1).unsqueeze(-1)
 
         # Ensure weights is tensor
         weights = torch.tensor(weights, dtype=means.dtype) if not isinstance(weights, torch.Tensor) else weights
@@ -493,7 +498,7 @@ def compute_L1_distance_dynamic(means_p_raw, variances_p_raw, weights_p_raw,
         points = torch.tensor(points_np, dtype=means_p.dtype)
 
         p_vals = mog_multivariate_pdf(points, means_p, variances_p, weights_p)
-        q_vals = mog_multivariate_pdf(points, means_q, variances_q, weights_q)
+        q_vals =mog_multivariate_pdf(points, means_q, variances_q, weights_q)
         diff = torch.abs(p_vals - q_vals)
 
         volume = torch.prod(upper_bounds - lower_bounds)
