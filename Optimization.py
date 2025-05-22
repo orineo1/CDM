@@ -19,7 +19,8 @@ def optimize_DPS(model_uncond, model_cond, mog_means, mog_variances, weights, mu
 
     # Move initial tensor to CUDA and set requires_grad
     x_t = torch.randn(model_uncond.nfeatures, device=device, requires_grad=True)
-
+    x_t = x_t.detach().clone().to(device).requires_grad_(True)
+    optimizer = optim_cond.Adam([x_t], lr=0.05)
     # Move mog distribution parameters to device as well, if they are tensors
     if isinstance(mog_means, torch.Tensor):
         mog_means = mog_means.to(device)
@@ -35,8 +36,7 @@ def optimize_DPS(model_uncond, model_cond, mog_means, mog_variances, weights, mu
 
     pbar = tqdm(range(model_uncond.diffusion_steps - 1, 0, -1))
     for t in pbar:
-        x_t = x_t.detach().clone().to(device).requires_grad_(True)
-        optimizer = optim_cond.Adam([x_t], lr=0.05)
+
 
         # Make sure the model_uncond sampling runs on device
         x_t_minus_1, pred_x0 = model_uncond.sample_ddim_step(x_t, t, condition_x=None, device=device, eta=0.0)
@@ -63,12 +63,19 @@ def optimize_DPS(model_uncond, model_cond, mog_means, mog_variances, weights, mu
 
         with torch.no_grad():
             x_t = x_t_minus_1.detach().clone().to(device) - grad
+        x_t.requires_grad_()
+
 
         if loss_val.item() < best_mmd_loss:
             best_mmd_loss = loss_val.item()
             best_pred_x0 = pred_x0.detach().clone()
 
-    return x_t, best_pred_x0, best_mmd_loss
+    x_t_final = x_t.detach().clone()
+
+    del x_t,optimizer, grad, x_t_minus_1, pred_x0, condition, target_samples, loss_val
+    torch.cuda.empty_cache() if device == "cuda" else None
+
+    return x_t_final, best_pred_x0, best_mmd_loss
 
 
 #### Optimize LGD
@@ -78,6 +85,8 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
 
     # Initialize x_t on device with requires_grad
     x_t = torch.randn(model_uncond.nfeatures, device=device, requires_grad=True)
+    x_t = x_t.detach().clone().to(device).requires_grad_(True)
+    optimizer = optim_cond.Adam([x_t], lr=0.05)
 
     if isinstance(mog_means, torch.Tensor):
         mog_means = mog_means.to(device)
@@ -95,10 +104,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
 
     # Pre-generate samples on device once before loop
     samples = generate_mog_samples(nsamples, mog_means, mog_variances, weights, tau=10.0).to(device)
-
     for t in pbar:
-        x_t = x_t.detach().clone().to(device).requires_grad_(True)
-        optimizer = optim_cond.Adam([x_t], lr=0.05)
 
         # Sample on the correct device
         x_t_minus_1, pred_x0 = model_uncond.sample_ddim_step(x_t, t, condition_x=None, device=device, eta=0.0)
@@ -112,12 +118,12 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
             noise = torch.randn_like(x_t)
 
             x_0_cont_xt_hat = x_t_minus_1 + sigma_x_0_cond_xt * noise
-
             condition = x_0_cont_xt_hat.view(1, -1).repeat(nsamples, 1).to(device)
 
             if loss == "MMD":
                 target_samples, _ = model_cond.sample(nsamples=nsamples, condition_x=condition,device=device)
                 target_samples = target_samples.to(device)
+
                 if not CM:
                     target_samples = target_samples[:, model_cond.condition_on:]
 
@@ -134,13 +140,19 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
             sum_exp_loss += torch.exp(-batch_loss)
 
         mean_loss = -torch.log(sum_exp_loss / num_x_t)
+
         mean_loss.backward()
         grad = x_t.grad.clone()
 
         with torch.no_grad():
             x_t = x_t_minus_1.detach().clone().to(device) - grad
+        x_t.requires_grad_()
+    x_t_final = x_t.detach().clone()
 
-    return x_t, best_x_0_cont_xt_hat, best_mmd_loss
+    del x_t,optimizer, grad, x_t_minus_1, pred_x0, condition, target_samples, x_0_cont_xt_hat, mean_loss, batch_loss
+    torch.cuda.empty_cache() if device == "cuda" else None
+
+    return x_t_final, best_x_0_cont_xt_hat, best_mmd_loss
 
 
 
@@ -149,29 +161,23 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
 
 #### DFlow
 def find_samples_to_kl(numb_points, mog_means, mog_variances, weights, device="cuda"):
-    # Convert mog_means (list of tensors) into a single tensor
     if isinstance(mog_means, (list, tuple)):
         mog_means_tensor = torch.stack(mog_means, dim=0)
     elif isinstance(mog_means, torch.Tensor):
-        if mog_means.dim() == 0:
-            mog_means_tensor = mog_means.unsqueeze(0)  # Convert scalar to 1D
-        else:
-            mog_means_tensor = mog_means
+        mog_means_tensor = mog_means.unsqueeze(0) if mog_means.dim() == 0 else mog_means
     else:
         raise TypeError("mog_means must be a list, tuple, or tensor")
 
-    # Ensure it's 2D for concatenation with samples
-    if mog_means_tensor.dim() == 1:
-        mog_means_tensor = mog_means_tensor.unsqueeze(1)
+    if mog_means_tensor.dim() > 2 and mog_means_tensor.shape[-1] == 1:
+        mog_means_tensor = mog_means_tensor.squeeze(-1)
 
     mog_means_tensor = mog_means_tensor.to(device)
-
-    # Generate MoG samples on the correct device
     mog_samples = generate_mog_samples(numb_points, mog_means, mog_variances, weights).to(device)
 
-    # Now safe to concatenate
-    Target = torch.cat([mog_means_tensor, mog_samples], dim=0).to(torch.float32)
+    if mog_samples.dim() < mog_means_tensor.dim():
+        mog_means_tensor = mog_means_tensor.squeeze(-1)
 
+    Target = torch.cat([mog_means_tensor, mog_samples], dim=0).to(torch.float32)
     return Target
 
 
@@ -239,6 +245,9 @@ def optimize_DFLOW(vf_y_cond_x, vf_X, device, mog_means, mog_variances, weights,
 
     optimizer.step(closure)
     best_x1 = vf_X.sample(num_sample=1, y=None, x_init=best_x.to(device))
+    del optimizer, samples, x, best_x
+    torch.cuda.empty_cache() if device == "cuda" else None
+
     return best_x1, best_loss
 
 
