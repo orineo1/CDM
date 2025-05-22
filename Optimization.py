@@ -214,10 +214,10 @@ def compute_loss(vf_y_cond_x, vf_X, x_1, samples, loss_method, mog_means, mog_va
 
 ## TODO add regulation https://arxiv.org/pdf/2402.14017
 def optimize_DFLOW(vf_y_cond_x, vf_X, device, mog_means, mog_variances, weights,
-                   max_iter=100, FLAG=False, n_sample=50, loss_method="MMD"):
+                   max_iter=100, FLAG=False, n_sample=50, loss_method="MMD",line_search_fn=None):
     # Initialize x on the correct device with requires_grad
     x = torch.randn((1, vf_X.nfeatures), dtype=torch.float32, device=device, requires_grad=True)
-    optimizer = torch.optim.LBFGS([x], max_iter=max_iter, line_search_fn="strong_wolfe")
+    optimizer = torch.optim.LBFGS([x], max_iter=max_iter, line_search_fn=line_search_fn)
 
     # Generate MoG samples on device
     samples = generate_mog_samples(n_sample, mog_means, mog_variances, weights, tau=10.0).to(device)
