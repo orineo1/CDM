@@ -63,17 +63,18 @@ class ConsistencyModel(nn.Module):
         return c_skip_t * x_ori + c_out_t * x
 
 
-    def loss(self, x, z, t0, t1, ema_model, diffusion=None, cond=None):
+    def loss(self, x, z, t0, t1, ema_model, diffusion=None, cond=None,device="cpu"):
         x2 = x + z * t1
-        x2 = self(x2, t1, cond=cond)
+
 
         with torch.no_grad():
             if diffusion is not None:
-                x1 = diffusion.ode_step(x, t0, t1)
+                x1 = diffusion.sample_ddim_step( x2, t1, condition_x=cond, device=device, eta=0.0)
             else:
                 x1 = x + z * t0
             x1 = ema_model(x1, t0, cond=cond)
 
+        x2 = self(x2, t1, cond=cond)
         return F.mse_loss(x1, x2)
 
 
@@ -127,7 +128,7 @@ class ConsistencyModel(nn.Module):
                 t1 = boundaries[t_idx + 1]
 
                 optim.zero_grad()
-                loss = self.loss(x, z, t0, t1, ema_model=ema_model, diffusion=model_diff, cond=cond_x)
+                loss = self.loss(x, z, t0, t1, ema_model=ema_model, diffusion=model_diff, cond=cond_x,device=device)
                 loss.backward()
                 optim.step()
 
