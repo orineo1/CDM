@@ -16,17 +16,38 @@ class Swish(nn.Module):
 class MLPBlock(nn.Module):
     def __init__(self, dim_in, dim_out):
         super().__init__()
-        self.block = nn.Sequential(
-            nn.Linear(dim_in, dim_out),
-            nn.LayerNorm(dim_out),
-            Swish(),
-            nn.Linear(dim_out, dim_out),
-            nn.LayerNorm(dim_out),
-            Swish(),
-        )
+        self.linear1 = nn.Linear(dim_in, dim_out)
+        self.linear2 = nn.Linear(dim_in, dim_out)
+        self.norm1 = nn.LayerNorm(dim_in)  # LayerNorm added
+        self.norm2 = nn.LayerNorm(dim_in)  # LayerNorm added
 
-    def forward(self, x):
-        return self.block(x)
+    def swish(self, x):
+        return x * torch.sigmoid(x)
+
+    def forward(self, x: torch.Tensor):
+        residual = x
+        out = self.linear1(x)
+        out = self.norm1(out)  # Apply normalization
+        out = self.swish(out)
+        out = self.linear2(out)
+        out = self.norm2(out)  # Apply normalization
+        out = self.swish(out)
+        return out + residual
+
+# class MLPBlock(nn.Module):
+#     def __init__(self, dim_in, dim_out):
+#         super().__init__()
+#         self.block = nn.Sequential(
+#             nn.Linear(dim_in, dim_out),
+#             nn.LayerNorm(dim_out),
+#             Swish(),
+#             nn.Linear(dim_out, dim_out),
+#             nn.LayerNorm(dim_out),
+#             Swish(),
+#         )
+#
+#     def forward(self, x):
+#         return self.block(x)
 
 class GenericNN(nn.Module):
     def __init__(self, input_dim, hidden_dims, output_dim):
@@ -37,7 +58,7 @@ class GenericNN(nn.Module):
         self.input_dim = input_dim
         self.output_dim = output_dim
 
-        self.norm_input = nn.LayerNorm(input_dim)
+        # self.norm_input = nn.LayerNorm(input_dim)
         self.input_layer = nn.Linear(input_dim, D)
 
         layers = []
@@ -46,21 +67,25 @@ class GenericNN(nn.Module):
         self.res_blocks = nn.Sequential(*layers)
 
         self.output_layer = nn.Linear(D, output_dim)
-        self.denorm_output = nn.Identity()
+        # self.denorm_output = nn.Identity()
 
-    def forward(self, x, time_emb,always_time=True):
-        x = self.norm_input(x)
+    def swish(self, x):
+        return x * torch.sigmoid(x)
+
+    def forward(self, x, time_emb,always_time=False):
+        x_original = x
+        # x = self.norm_input(x)
         x = self.input_layer(x)
         x = x + time_emb
-
+        x = self.swish(x)
         for block in self.res_blocks:
             if always_time:
-                x = x + block(x + time_emb)
+                x = block(x + time_emb)
             else:
-                x = x + block(x)
-
+                x = block(x)
+        x = x + x_original
         x = self.output_layer(x)
-        x = self.denorm_output(x)
+        # x = self.denorm_output(x)
         return x
 
     def get_config(self):
