@@ -90,7 +90,7 @@ class DiffusionModel(nn.Module):
         Returns:
             losses: List of training losses
         """
-
+        X = X.to(device)
         self.mean = X.mean(dim=0, keepdim=True)
         self.std = X.std(dim=0, keepdim=True) + 1e-8  # Avoid division by zero
         # Compute normalization statistics
