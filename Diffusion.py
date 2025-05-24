@@ -292,8 +292,8 @@ class DiffusionModel(nn.Module):
         x = x_start.to(device=device, )
         x = ((x - self.mean) / self.std).to(torch.float32)
         # Create timestep tensor
-        t_batch = torch.full([x.shape[0], 1], t, device=device)
-
+        t_batch =  torch.full([x.shape[0], 1], t, device=device) # FIXME  for consistency distillation should be change into t.to(device)
+        #NOTE
         # Predict noise
         predicted_noise = self(x, t_batch, condition_x)
 
@@ -302,7 +302,7 @@ class DiffusionModel(nn.Module):
         alpha_bar_t = self.baralphas[t]
 
         # Get alpha_bar_prev (use 1.0 for final step)
-        alpha_bar_prev = self.baralphas[t - 1] if t > 0 else torch.tensor(1.0, device=device)
+        alpha_bar_prev = self.baralphas[t - 1] #if t > 0 else torch.tensor(1.0, device=device)
 
         # Compute sigma (η in the DDIM paper)
         sigma_t = eta * torch.sqrt((1 - alpha_bar_prev) / (1 - alpha_bar_t)) * torch.sqrt(
