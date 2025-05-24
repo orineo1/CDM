@@ -80,85 +80,152 @@ def optimize_DPS(model_uncond, model_cond, mog_means, mog_variances, weights, mu
 
 #### Optimize LGD
 
-## Optimize LGD
+import math
+import torch
+from torch import optim
+from tqdm import tqdm
+
+# Optimize LGD using Monte Carlo-based guidance
 def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
                  nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda"):
 
-    mmd_loss = MMDLoss(kernel=RBF())
+    mmd_loss = MMDLoss(kernel=RBF())  # Assumes MMDLoss and RBF are defined elsewhere
     best_mmd_loss = float("inf")
-    best_x_0_cont_xt_hat = None
-    # Initialize starting point
-    x_t = torch.zeros(model_uncond.nfeatures, requires_grad=True)
+    best_x0_sample = None
+
+    # Initialize starting point (change to match shape if needed)
+    x_t = torch.zeros(model_uncond.nfeatures, device=device, requires_grad=True)
 
     pbar = tqdm(range(model_uncond.diffusion_steps - 1, 0, -1))
 
-    # Loop over diffusion steps
     for t in pbar:
-        # Create a fresh tensor at each step to ensure gradient independence
-        x_t = x_t.detach().clone().requires_grad_(True)  # TODO change this into vector of the size of the condition by of the uncond
+        x_t = x_t.detach().clone().requires_grad_(True)
 
-        # Create a new optimizer for this step's tensor
-        optimizer = optim_cond.Adam([x_t], lr=0.05)
-
-        # Perform one DDIM step
-        x_t_minus_1, pred_x0 = model_uncond.sample_ddim_step(x_t, t, condition_x=None, device="cpu", eta=0.0)
-
-
-        current_var = model_uncond.betas[t].to(device)#model_cond.betas[t]
-
-        # Zero gradients before computing losses
+        optimizer = optim.Adam([x_t], lr=0.05)
         optimizer.zero_grad()
 
-        sum_exp_loss = 0
+        # DDIM step (get x_{t-1} and predicted x0)
+        x_t_minus_1, pred_x0 = model_uncond.sample_ddim_step(x_t, t, condition_x=None, device=device, eta=0.0)
+        current_var = model_uncond.betas[t].to(device)  # Use unconditional model's betas
+        r_t = current_var / torch.sqrt(1 + current_var ** 2)
+        log_mean_exp_loss=torch.tensor([0])
+        # Monte Carlo estimation of expected loss over x0 ~ N(pred_x0, r_t^2 * I)
+        losses = []
         for j in range(num_x_t):
-            # Get the dimension of x_t
-            dim = x_t.shape[-1]  # This will be 24 in your case
+            x0_sample = pred_x0 + r_t * torch.randn_like(pred_x0)
+            condition = x0_sample.view(1, -1).repeat(nsamples, 1)
 
-            # current_var of x_0_cont_xt_hat
-            sigma_x_0_cond_xt = torch.sqrt(current_var) / torch.sqrt(1 + current_var)
+            target_samples, _ = model_cond.sample(nsamples=nsamples, condition_x=condition, device=device)
+            if not CM:
+                target_samples = target_samples[:, model_cond.condition_on:]
 
-            # Sample from multivariate normal N(x_t, cov_matrix)
-            noise = torch.randn_like(x_t)  # Standard normal noise
-            x_0_cont_xt_hat = x_t + sigma_x_0_cond_xt * noise
-            # Sample from Y_0 | X_0 = pred_x0
-            condition = x_0_cont_xt_hat.view(1, -1).repeat(nsamples, 1)
-            if loss=="MMD":
-                target_samples, _ = model_cond.sample(nsamples=nsamples,  condition_x=condition,device=device)
+            mog_samples = generate_mog_samples(nsamples, mog_means, mog_variances, weights, tau=10.0)
+            loss_val = mmd_loss(target_samples, mog_samples)
+            losses.append(-loss_val)  # negative for log-mean-exp
+            pbar.set_description(f"Step {t} | x_t:{x_t}|x0_sample:{x0_sample} | loss_val:{loss_val}|log_mean_exp_loss: {log_mean_exp_loss.item():.4f}")
 
-                if not CM:
-                    target_samples = target_samples[:, model_cond.condition_on:]
+            if loss_val.item() < best_mmd_loss:
+                best_mmd_loss = loss_val.item()
+                best_x0_sample = x0_sample.detach().clone()
 
-                # Generate samples from Mixture of Gaussians
-                samples = generate_mog_samples(nsamples, mog_means, mog_variances, weights, tau=10.0)
 
-                # Compute MMD loss for this sample
-                batch_loss = mmd_loss(target_samples, samples)
-                if batch_loss.item() < best_mmd_loss:
-                    best_mmd_loss = batch_loss.item()
-                    best_x_0_cont_xt_hat = x_0_cont_xt_hat.detach().clone()
-                pbar.set_description(
-                    f"Step {t} | pred_x0_model: {pred_x0} | pred_x0: {x_0_cont_xt_hat} | batch_loss: {batch_loss.item():.3f}"
-                )
+        # Compute final log-mean-exp loss
+        log_mean_exp_loss = -torch.logsumexp(torch.stack(losses), dim=0) + math.log(num_x_t)
+        log_mean_exp_loss.backward()
 
-            sum_exp_loss += torch.exp(-batch_loss)
-
-        # Compute mean loss and backpropagate
-        mean_loss = -torch.log(sum_exp_loss/ num_x_t)
-        mean_loss.backward()
-
-        # Get the gradient from x_t
+        # Manual gradient update (avoiding optimizer.step to stay DDIM-compatible)
         grad = x_t.grad.clone()
-
-        # Update x manually using the computed gradient
         with torch.no_grad():
             x_t = x_t_minus_1.detach().clone() - grad
-    # x_t = x_t.reshape(-1, 1)
-    # return x_t, x_t, 2
+
+        # Optional: Progress bar logging
+        pbar.set_description(f"Step {t} | log_mean_exp_loss: {log_mean_exp_loss.item():.4f}")
+
+    # Final output
     x_t_final = x_t.detach().clone()
-    del x_t,optimizer, grad, x_t_minus_1, pred_x0, condition, target_samples, x_0_cont_xt_hat, mean_loss, batch_loss
     torch.cuda.empty_cache() if device == "cuda" else None
-#
     return x_t_final, x_t_final, best_mmd_loss
+
+
+## Optimize LGD
+# def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
+#                  nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda"):
+#
+#     mmd_loss = MMDLoss(kernel=RBF())
+#     best_mmd_loss = float("inf")
+#     best_x_0_cont_xt_hat = None
+#     # Initialize starting point
+#     x_t = torch.zeros(model_uncond.nfeatures, requires_grad=True)
+#
+#     pbar = tqdm(range(model_uncond.diffusion_steps - 1, 0, -1))
+#
+#     # Loop over diffusion steps
+#     for t in pbar:
+#         # Create a fresh tensor at each step to ensure gradient independence
+#         x_t = x_t.detach().clone().requires_grad_(True)  # TODO change this into vector of the size of the condition by of the uncond
+#
+#         # Create a new optimizer for this step's tensor
+#         optimizer = optim_cond.Adam([x_t], lr=0.05)
+#
+#         # Perform one DDIM step
+#         x_t_minus_1, pred_x0 = model_uncond.sample_ddim_step(x_t, t, condition_x=None, device="cpu", eta=0.0)
+#
+#
+#         current_var = model_uncond.betas[t].to(device)#model_cond.betas[t]
+#
+#         # Zero gradients before computing losses
+#         optimizer.zero_grad()
+#
+#         sum_exp_loss = 0
+#         for j in range(num_x_t):
+#             # Get the dimension of x_t
+#             dim = x_t.shape[-1]  # This will be 24 in your case
+#
+#             # current_var of x_0_cont_xt_hat
+#             sigma_x_0_cond_xt = current_var / torch.sqrt(1 + torch.pow(current_var,2))
+#
+#             # Sample from multivariate normal N(x_t, cov_matrix)
+#             noise = torch.randn_like(x_t)  # Standard normal noise
+#             x_0_cont_xt_hat = x_t + sigma_x_0_cond_xt * noise
+#             # Sample from Y_0 | X_0 = pred_x0
+#             condition = x_0_cont_xt_hat.view(1, -1).repeat(nsamples, 1)
+#             if loss=="MMD":
+#                 target_samples, _ = model_cond.sample(nsamples=nsamples,  condition_x=condition,device=device)
+#
+#                 if not CM:
+#                     target_samples = target_samples[:, model_cond.condition_on:]
+#
+#                 # Generate samples from Mixture of Gaussians
+#                 samples = generate_mog_samples(nsamples, mog_means, mog_variances, weights, tau=10.0)
+#
+#                 # Compute MMD loss for this sample
+#                 batch_loss = mmd_loss(target_samples, samples)
+#                 if batch_loss.item() < best_mmd_loss:
+#                     best_mmd_loss = batch_loss.item()
+#                     best_x_0_cont_xt_hat = x_0_cont_xt_hat.detach().clone()
+#                 pbar.set_description(
+#                     f"Step {t} | pred_x0_model: {pred_x0} | pred_x0: {x_0_cont_xt_hat} | batch_loss: {batch_loss.item():.3f}"
+#                 )
+#
+#             sum_exp_loss += torch.exp(-batch_loss)
+#
+#         # Compute mean loss and backpropagate
+#         mean_loss = -torch.log(sum_exp_loss/ num_x_t)
+#         mean_loss.backward()
+#
+#         # Get the gradient from x_t
+#         grad = x_t.grad.clone()
+#
+#         # Update x manually using the computed gradient
+#         with torch.no_grad():
+#             x_t = x_t_minus_1.detach().clone() - grad
+#     # x_t = x_t.reshape(-1, 1)
+#     # return x_t, x_t, 2
+#     x_t_final = x_t.detach().clone()
+#     del x_t,optimizer, grad, x_t_minus_1, pred_x0, condition, target_samples, x_0_cont_xt_hat, mean_loss, batch_loss
+#     torch.cuda.empty_cache() if device == "cuda" else None
+# #
+#     return x_t_final, x_t_final, best_mmd_loss
 
 
 # def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,

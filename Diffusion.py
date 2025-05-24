@@ -91,10 +91,10 @@ class DiffusionModel(nn.Module):
             losses: List of training losses
         """
 
-        self.mean = X.mean(dim=0, keepdim=True)
-        self.std = X.std(dim=0, keepdim=True) + 1e-8  # Avoid division by zero
-        # Compute normalization statistics
-        X = (X - X.mean(dim=0, keepdim=True)) / (X.std(dim=0, keepdim=True) + 1e-8)
+        # self.mean = X.mean(dim=0, keepdim=True)
+        # self.std = X.std(dim=0, keepdim=True) + 1e-8  # Avoid division by zero
+        # # Compute normalization statistics
+        # X = (X - X.mean(dim=0, keepdim=True)) / (X.std(dim=0, keepdim=True) + 1e-8)
 
         # Define loss function and optimizers
         loss_fn = nn.MSELoss()
@@ -198,8 +198,8 @@ class DiffusionModel(nn.Module):
         """
         # Move model to device
         self.to(device)
-        self.mean = self.mean.to(device)
-        self.std = self.std.to(device)
+        # self.mean = self.mean.to(device)
+        # self.std = self.std.to(device)
         # Get model dtype
         model_dtype = next(self.parameters()).dtype
 
@@ -216,12 +216,13 @@ class DiffusionModel(nn.Module):
         # Initialize random noise
         x = torch.randn(size=(nsamples, self.nfeatures), device=device, dtype=model_dtype)
         xt = [x.clone()]
+        pred_x0_l=[]
 
         # Convert condition_x to the model's dtype if it exists
         if condition_x is not None:
-            mean = self.mean.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
-            std = self.std.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
-            condition_x = (condition_x - mean) / std
+            # mean = self.mean.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
+            # std = self.std.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
+            # condition_x = (condition_x - mean) / std
             condition_x = condition_x.to(device=device, dtype=model_dtype)
 
         # Denoise step by step
@@ -256,7 +257,8 @@ class DiffusionModel(nn.Module):
                 x = x + sigma_t * noise
 
             xt.append(x.clone())
-        x = x * self.std + self.mean  # Un-normalize samples
+            pred_x0_l.append((pred_x0).clone())
+        x = x #* self.std + self.mean  # Un-normalize samples
 
         return x, xt
 
@@ -283,14 +285,14 @@ class DiffusionModel(nn.Module):
 
         # Convert condition_x to the model's dtype if provided
         if condition_x is not None:
-            mean = self.mean.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
-            std = self.std.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
-            condition_x = (condition_x - mean) / std
+            # mean = self.mean.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
+            # std = self.std.flatten()[:condition_x.shape[1]].to(device=device, dtype=condition_x.dtype)
+            # condition_x = (condition_x - mean) / std
             condition_x = condition_x.to(device=device)
 
         # Ensure x_start is on the correct device and dtype
         x = x_start.to(device=device, )
-        x = ((x - self.mean) / self.std).to(torch.float32)
+        # x = ((x - self.mean) / self.std).to(torch.float32)
         # Create timestep tensor
         t_batch = torch.full([x.shape[0], 1], t, device=device)
 
@@ -319,7 +321,7 @@ class DiffusionModel(nn.Module):
             x_next = x_next + sigma_t * noise
 
         # Un-normalize the sample
-        x_next = x_next * self.std + self.mean
-        pred_x0 = pred_x0 * self.std + self.mean
+        x_next = x_next# * self.std + self.mean
+        pred_x0 = pred_x0# * self.std + self.mean
         return x_next, pred_x0
 
