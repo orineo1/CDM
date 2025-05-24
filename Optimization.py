@@ -120,10 +120,10 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
             # Sample from multivariate normal N(x_t, cov_matrix)
             noise = torch.randn_like(x_t)  # Standard normal noise
             x_0_cont_xt_hat = x_t + sigma_x_0_cond_xt * noise
-            _, pred_x0_CM = model_uncond.sample_ddim_step(x_0_cont_xt_hat, t-1, condition_x=None, device="cpu", eta=0.0)
+            # _, pred_x0_CM = model_uncond.sample_ddim_step(x_0_cont_xt_hat, t-1, condition_x=None, device="cpu", eta=0.0)
 
             # Sample from Y_0 | X_0 = pred_x0
-            condition = pred_x0_CM.view(1, -1).repeat(nsamples, 1)
+            condition = x_0_cont_xt_hat.view(1, -1).repeat(nsamples, 1)
             if loss=="MMD":
                 target_samples, _ = model_cond.sample(nsamples=nsamples,  condition_x=condition,device=device)
 
@@ -139,7 +139,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
                     best_mmd_loss = batch_loss.item()
                     best_x_0_cont_xt_hat = x_0_cont_xt_hat.detach().clone()
                 pbar.set_description(
-                    f"Step {t} | xt :{x_t}| pred_x0_model: {pred_x0} | pred_x0_CM: {pred_x0_CM} | batch_loss: {batch_loss.item():.3f}"
+                    f"Step {t} | xt :{x_t}| pred_x0_model: {pred_x0} | pred_x0_CM: {x_0_cont_xt_hat} | batch_loss: {batch_loss.item():.3f}"
                 )
 
             sum_exp_loss += torch.exp(-batch_loss)
