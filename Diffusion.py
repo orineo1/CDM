@@ -30,15 +30,19 @@ class DiffusionModel(nn.Module):
         self.alphas = (1 - self.betas)
 
         self.inblock = nn.Linear(nfeatures, nunits)
+        self.out= nn.Linear( nunits,nfeatures)
         self.time_embed = TimeEmbedding(nunits)
         self.net = GenericNN(
             input_dim=nunits,
             hidden_dims=[nunits] *nblocks,  # depth controls number of residual layers
-            output_dim=nfeatures,
+            output_dim=nunits,
         ).to(device)
 
+    def swish(self, x):
+        return x * torch.sigmoid(x)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor, x_cond: torch.Tensor = None) -> torch.Tensor:
+        x_original = x
         x_proj = self.inblock(x)
         t_emb = self.time_embed(t)
 
@@ -47,8 +51,9 @@ class DiffusionModel(nn.Module):
             val = x_proj + cond_emb
         else:
             val = x_proj
-
-        return self.net(val, t_emb)
+        val = self.net(val, t_emb)
+        val = self.out(val)
+        return val +x_original
 
     def noise(self, Xbatch, t):
         """
