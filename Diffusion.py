@@ -27,7 +27,7 @@ class DiffusionModel(nn.Module):
         schedule = torch.cos((timesteps / self.diffusion_steps + s) / (1 + s) * torch.pi / 2) ** 2
         self.baralphas = (schedule / schedule[0]).to(self.device)
         self.betas = (1 - self.baralphas / torch.cat([self.baralphas[0:1], self.baralphas[:-1]])).to(self.device)
-        self.alphas = (1 - self.betas)
+        self.alphas = (1 - self.betas).to(self.device)
 
         self.inblock = nn.Linear(nfeatures, nunits)
         self.out= nn.Linear( nunits,nfeatures)
