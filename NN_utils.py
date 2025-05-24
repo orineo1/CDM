@@ -58,8 +58,6 @@ class GenericNN(nn.Module):
         self.input_dim = input_dim
         self.output_dim = output_dim
 
-        # self.norm_input = nn.LayerNorm(input_dim)
-        self.input_layer = nn.Linear(input_dim, D)
 
         layers = []
         for _ in hidden_dims:
@@ -75,7 +73,6 @@ class GenericNN(nn.Module):
     def forward(self, x, time_emb,always_time=False):
         x_original = x
         # x = self.norm_input(x)
-        x = self.input_layer(x)
         x = x + time_emb
         x = self.swish(x)
         for block in self.res_blocks:

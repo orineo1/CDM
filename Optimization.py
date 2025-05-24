@@ -158,7 +158,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
     del x_t,optimizer, grad, x_t_minus_1, pred_x0, condition, target_samples, x_0_cont_xt_hat, mean_loss, batch_loss
     torch.cuda.empty_cache() if device == "cuda" else None
 #
-    return x_t_final, best_x_0_cont_xt_hat, best_mmd_loss
+    return x_t_final, x_t_final, best_mmd_loss
 
 
 # def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
