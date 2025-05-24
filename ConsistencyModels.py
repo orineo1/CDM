@@ -29,11 +29,11 @@ class ConsistencyModel(nn.Module):
 
         self.input_layer = nn.Linear(nfeatures, nunits)
         self.time_embed = TimeEmbedding(nunits)
-
+        self.out = nn.Linear(nunits, nfeatures)
         self.net = GenericNN(
             input_dim=nunits,
             hidden_dims=[nunits] * depth,
-            output_dim=nfeatures,
+            output_dim=nunits,
         )
 
         self.to(self.device)
@@ -54,6 +54,7 @@ class ConsistencyModel(nn.Module):
         time_emb = self.time_embed(t)
 
         x = self.net(x, time_emb)
+        x= self.out(x)
 
         # Output skip connection with consistency weights
         t = t - self.eps
@@ -64,13 +65,14 @@ class ConsistencyModel(nn.Module):
 
 
     def loss(self, x, z, t0, t1, ema_model, diffusion=None, cond=None,device="cpu"):
-        x2 = x + z * t1
-
 
         with torch.no_grad():
             if diffusion is not None:
-                x1 = diffusion.sample_ddim_step( x2, t1, condition_x=cond, device=device, eta=0.0)
+            # TODO in order to train using CT the noise also should by kerreas and the diff using score model (t should be not integers)
+                x2,_= diffusion.noise(x, t1)
+                x1,_ = diffusion.sample_ddim_step( x2, t1, condition_x=cond, device=device, eta=0.0)
             else:
+                x2 = x + z * t1
                 x1 = x + z * t0
             x1 = ema_model(x1, t0, cond=cond)
 
