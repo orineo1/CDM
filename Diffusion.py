@@ -70,8 +70,10 @@ class DiffusionModel(nn.Module):
         device = Xbatch.device
         t = t.to(device=device)
         eps = torch.randn(size=Xbatch.shape, device=device)
-        noised = (self.baralphas[t] ** 0.5).repeat(1, Xbatch.shape[1]) * Xbatch + \
-                 ((1 - self.baralphas[t]) ** 0.5).repeat(1, Xbatch.shape[1]) * eps
+        baralphas_t = self.baralphas[t].to(device).unsqueeze(1)  # shape: [batch, 1]
+        one_minus_baralphas_t = (1 - self.baralphas[t]).to(device).unsqueeze(1)
+        noised = baralphas_t.sqrt() * Xbatch + one_minus_baralphas_t.sqrt() * eps
+
         return noised, eps
 
     def train_model(self, X, nepochs=100, batch_size=2048, condition_on=1, guidance_dropout=0.2, device="cpu"):
