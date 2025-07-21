@@ -45,7 +45,8 @@ def sample_multivariate_gaussian(mean, covariance):
     # Apply reparameterization trick
     return mean + torch.matmul(L, epsilon)
 
-def generate_mog_samples(n_samples, xi, S, beta, tau=7.5):
+
+def generate_mog_samples(n_samples, xi, S, beta, tau=7.5,device="cpu",kernel_func=None):
     """
     Generate samples from mixture of Gaussians using reparameterization trick
 
@@ -87,7 +88,58 @@ def generate_mog_samples(n_samples, xi, S, beta, tau=7.5):
         samples.append(sample)
 
     samples = torch.stack(samples)
+    samples=samples.float()
+
+    if kernel_func is not None:
+      samples=kernel_func(samples)
+
+
     return samples
+
+#
+# def generate_mog_samples(n_samples, xi, S, beta, tau=7.5):
+#     """
+#     Generate samples from mixture of Gaussians using reparameterization trick
+#
+#     Args:
+#         n_samples: number of samples to generate
+#         xi: list of means (each can be scalar or vector)
+#         S: list of variances/covariance matrices
+#         beta: mixture weights
+#         tau: temperature for Gumbel-Softmax
+#     """
+#     # Ensure xi and S are tensors
+#     if isinstance(xi, list):
+#         xi = torch.stack(xi)
+#     if isinstance(S, list):
+#         S = torch.stack(S)
+#
+#     # Get dimensions
+#     is_multivariate = len(xi.shape) > 1 and xi.shape[-1] > 1
+#     device = xi.device  # Assume all inputs are on same device
+#
+#     # Compute logits from beta
+#     logits = torch.log(beta.to(device))
+#
+#     # Sample component assignments using Gumbel-Softmax
+#     component_weights = F.gumbel_softmax(logits, tau=tau, hard=False)
+#
+#     # Sample component indices
+#     component_idx = torch.multinomial(component_weights, n_samples, replacement=True)
+#     means = xi[component_idx]
+#     vars_or_covs = S[component_idx]
+#
+#     # Generate samples using appropriate sampling function
+#     samples = []
+#     for mean, var_or_cov in zip(means, vars_or_covs):
+#         if is_multivariate:
+#             sample = sample_multivariate_gaussian(mean, var_or_cov)
+#         else:
+#             sample = sample_univariate_gaussian(mean, var_or_cov)
+#         samples.append(sample)
+#
+#     samples = torch.stack(samples)
+#     return samples
 
 
 def generate_mog_samples_not_differentiable(num_samples, means, variances, weights=None):
@@ -430,7 +482,8 @@ def compute_L1_distance_dynamic(means_p_raw, variances_p_raw, weights_p_raw,
                                 scale_factor=3.0,
                                 initial_num_points=100,
                                 max_error=1e-3,
-                                max_iters=7):
+                                max_iters=7,
+                                FLAG=False):
     """
     Compute the L1 distance between two Mixture of Gaussians distributions.
     Supports arbitrary dimensions. Uses grid integration for D <= 3, and Sobol-based QMC for D > 3.
@@ -511,7 +564,8 @@ def compute_L1_distance_dynamic(means_p_raw, variances_p_raw, weights_p_raw,
     prev_result = None
     num_points = initial_num_points
 
-    for _ in tqdm(range(max_iters)):
+    iter_range = tqdm(range(max_iters)) if FLAG else range(max_iters)
+    for _ in iter_range:
         if D <= 1:
             result = compute_integral_grid(num_points, lower_bounds, upper_bounds)
         else:
