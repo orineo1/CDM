@@ -2,11 +2,8 @@ import torch
 import torch.nn as nn
 import math
 import torch.nn.functional as F
-import torch
 import torch.nn as nn
 
-import torch
-import torch.nn as nn
 
 # Define Swish activation
 class Swish(nn.Module):
@@ -34,20 +31,6 @@ class MLPBlock(nn.Module):
         out = self.swish(out)
         return out + residual
 
-# class MLPBlock(nn.Module):
-#     def __init__(self, dim_in, dim_out):
-#         super().__init__()
-#         self.block = nn.Sequential(
-#             nn.Linear(dim_in, dim_out),
-#             nn.LayerNorm(dim_out),
-#             Swish(),
-#             nn.Linear(dim_out, dim_out),
-#             nn.LayerNorm(dim_out),
-#             Swish(),
-#         )
-#
-#     def forward(self, x):
-#         return self.block(x)
 
 class GenericNN(nn.Module):
     def __init__(self, input_dim, hidden_dims, output_dim):
@@ -92,66 +75,6 @@ class GenericNN(nn.Module):
             "model": self.res_blocks  # Fixed to reflect actual submodule
         }
 
-#
-# class GenericNN(nn.Module):
-#     def __init__(self, input_dim, hidden_dims, output_dim, activation='SiLU', final_activation=None):
-#         super(GenericNN, self).__init__()
-#         self.input_dim = input_dim
-#         self.output_dim = output_dim
-#
-#         # Define activation functions
-#         self.activation_fn = self.get_activation(activation)
-#         self.final_activation_fn = self.get_activation(final_activation) if final_activation else None
-#
-#         # Input normalization
-#         self.norm_input = nn.LayerNorm(input_dim)
-#
-#         # Create network layers
-#         layers = []
-#         last_dim = input_dim
-#         for h_dim in hidden_dims:
-#             layers.append(nn.Linear(last_dim, h_dim))
-#             layers.append(self.activation_fn)
-#             last_dim = h_dim
-#         layers.append(nn.Linear(last_dim, output_dim))
-#         if self.final_activation_fn:
-#             layers.append(self.final_activation_fn)
-#         self.layers = layers
-#         self.model = nn.Sequential(*layers)
-#
-#         # Output denormalization — optional (identity by default)
-#         self.denorm_output = nn.Identity()
-#
-#     def get_activation(self, name):
-#         if name == 'relu':
-#             return nn.ReLU()
-#         elif name == 'SiLU':
-#             return nn.SiLU()
-#         elif name == 'tanh':
-#             return nn.Tanh()
-#         elif name == 'sigmoid':
-#             return nn.Sigmoid()
-#         elif name == 'leaky_relu':
-#             return nn.LeakyReLU(0.2)
-#         elif name == 'gelu':
-#             return nn.GELU()
-#         elif name is None:
-#             return None
-#         else:
-#             raise ValueError(f"Unsupported activation: {name}")
-#
-#     def forward(self, x):
-#         x = self.norm_input(x)
-#         x = self.model(x)
-#         x = self.denorm_output(x)
-#         return x
-#
-#     def get_config(self):
-#         return {
-#             "input_dim": self.input_dim,
-#             "output_dim": self.output_dim,
-#             "model": self.model
-#         }
 
 
 class TimeEmbedding(nn.Module):
