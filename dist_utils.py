@@ -247,51 +247,6 @@ def mog_cdf(x, means, variances, weights=None):
         cdf += weight * 0.5 * (1 + torch.erf((x - mean) / torch.sqrt(2 * var + 1e-6)))
     return cdf
 
-def generate_gmm_parameters(d: int, num_components: int, seed: int = 42, epsilon: float = 1e-4):
-    """
-    Generate random parameters for a Gaussian Mixture Model (GMM).
-
-    Args:
-        d (int): Number of dimensions.
-        num_components (int): Number of Gaussian components.
-        seed (int, optional): Random seed for reproducibility. Defaults to 42.
-
-    Returns:
-        tuple: (mu_list, Sigma_list, alpha) where
-            - mu_list: List of mean vectors.
-            - Sigma_list: List of covariance matrices.
-            - alpha: Mixture weights tensor.
-    """
-    # Set random seed for reproducibility
-    torch.manual_seed(seed)
-
-    # Generate random means for each component
-    mu_list = [torch.randn(d, dtype=torch.float64) * 3 for _ in range(num_components)]
-
-    # Generate random covariance matrices (positive semi-definite)
-    Sigma_list = []
-    for _ in range(num_components):
-        A = torch.randn(d, d, dtype=torch.float64)  # Random matrix
-        Sigma = A @ A.T  # Create a symmetric positive semi-definite covariance matrix
-        # Add a small epsilon to the diagonal to make it positive-definite and improve conditioning
-        Sigma += torch.eye(d, dtype=torch.float64) * epsilon  # Regularization term
-
-        Sigma_list.append(Sigma)
-
-    # Mixture weights (equal weights)
-    alpha = torch.full((num_components,), 1 / num_components, dtype=torch.float64)
-
-    return mu_list, Sigma_list, alpha
-
-# Example usage
-# d = 5  # Number of dimensions
-# num_components = 2  # Number of Gaussian components
-# mu_list, Sigma_list, alpha = generate_gmm_parameters(d, num_components)
-#
-# # Print the generated parameters
-# print("Means:", mu_list)
-# print("Covariance Matrices:", Sigma_list)
-# print("Mixture Weights:", alpha)
 
 #### Compute conditionals of MoG ####
 
@@ -603,3 +558,90 @@ def filter_and_normalize(mog_means, mog_variances, weights, threshold=0.02):
     filtered_weights = filtered_weights / filtered_weights.sum()
 
     return filtered_means, filtered_variances, filtered_weights
+
+def generate_gmm_parameters(d: int, num_components: int, seed: int = 42, epsilon: float = 1e-4):
+    """
+    Generate random parameters for a Gaussian Mixture Model (GMM).
+
+    Args:
+        d (int): Number of dimensions.
+        num_components (int): Number of Gaussian components.
+        seed (int, optional): Random seed for reproducibility. Defaults to 42.
+
+    Returns:
+        tuple: (mu_list, Sigma_list, alpha) where
+            - mu_list: List of mean vectors.
+            - Sigma_list: List of covariance matrices.
+            - alpha: Mixture weights tensor.
+    """
+    # Set random seed for reproducibility
+    torch.manual_seed(seed)
+
+    # Generate random means for each component
+    mu_list = [torch.randn(d, dtype=torch.float64) * 3 for _ in range(num_components)]
+
+    # Generate random covariance matrices (positive semi-definite)
+    Sigma_list = []
+    for _ in range(num_components):
+        A = torch.randn(d, d, dtype=torch.float64)  # Random matrix
+        Sigma = A @ A.T  # Create a symmetric positive semi-definite covariance matrix
+        # Add a small epsilon to the diagonal to make it positive-definite and improve conditioning
+        Sigma += torch.eye(d, dtype=torch.float64) * epsilon  # Regularization term
+
+        Sigma_list.append(Sigma)
+
+    # Mixture weights (equal weights)
+    alpha = torch.full((num_components,), 1 / num_components, dtype=torch.float64)
+
+    return mu_list, Sigma_list, alpha
+
+# Example usage
+# d = 5  # Number of dimensions
+# num_components = 2  # Number of Gaussian components
+# mu_list, Sigma_list, alpha = generate_gmm_parameters(d, num_components)
+#
+# # Print the generated parameters
+# print("Means:", mu_list)
+# print("Covariance Matrices:", Sigma_list)
+# print("Mixture Weights:", alpha)
+
+def get_param_mog_with_target(dim_data=3, num_components=2, device='cpu',
+                              conditional_modes=2, condition_values=None):
+    """
+    Generate GMM parameters with multi-modal conditional distribution.
+
+    Args:
+        conditional_modes: Number of modes for the conditional distribution
+        condition_values: List of conditioning values to create modes at
+    """
+
+    # Generate base GMM parameters
+    mu_list, Sigma_list, alpha = generate_gmm_parameters(d=dim_data, num_components=num_components, seed=1)
+
+    if conditional_modes > 1:
+        # change
+        # Randomly select conditional_modes number of components from mu_list
+        selected_indices = torch.randperm(len(mu_list))[:conditional_modes]
+
+        # Get the conditioning part from the first selected component
+        conditioning_value = mu_list[selected_indices[0]][:dim_data - 1].clone()
+
+        # Set the selected conditional_modes components to have the same conditioning part
+        for i in range(conditional_modes):
+            idx = selected_indices[i]
+            mu_list[idx][:dim_data - 1] = conditioning_value
+
+        # Set x_star to be this conditioning value
+        x_star = conditioning_value.float().to(device)
+        # changed
+    else:
+        # Original behavior for conditional_modes <= 1
+        samples = generate_mog_samples(150, mu_list, Sigma_list, alpha).float().to(device)
+        idx = torch.randint(0, 150, (1,))
+        x_star = samples[idx, :dim_data - 1]
+
+    # Compute the Y|X=x^*
+    mog_means, mog_variances = compute_conditionals(mu_list, Sigma_list, x_star.reshape(-1, 1))
+    weights = compute_alpha(mu_list, Sigma_list, alpha, x_star.reshape(-1, 1))
+
+    return mu_list, Sigma_list, alpha, mog_means, mog_variances, weights, x_star
