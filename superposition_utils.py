@@ -7,6 +7,45 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm.notebook import trange
 
 
+def to_circular_fixed_radius(all_data, radius=3.0, indices_to_transform=[0], x_min_max_dict=None):
+   """
+   Transforms selected dimensions of the data into circular coordinates.
+
+   Args:
+       all_data: Tensor of shape [N, D]
+       radius: Radius of the circular base
+       indices_to_transform: List of indices to convert into circular coordinates
+       x_min_max_dict: Optional dict {index: (x_min, x_max)} for normalization
+
+   Returns:
+       Tensor of shape [N, 2 * len(indices_to_transform) + (D - len(indices_to_transform))]
+   """
+   N, D = all_data.shape
+   transformed = []
+   used_indices = set(indices_to_transform)
+
+   for idx in indices_to_transform:
+       x = all_data[:, idx]
+
+       # Get min/max if provided, else compute from data
+       if x_min_max_dict and idx in x_min_max_dict:
+           x_min, x_max = x_min_max_dict[idx]
+       else:
+           x_min, x_max = torch.min(x), torch.max(x)
+
+       # Normalize x into angle θ
+       angles = 2 * torch.pi * (x - x_min) / (x_max - x_min + 1e-8)  # avoid div by zero
+       x_circle = (radius * torch.cos(angles)).unsqueeze(1)
+       y_circle = (radius * torch.sin(angles)).unsqueeze(1)
+
+       transformed.append(x_circle)
+       transformed.append(y_circle)
+
+   # Add the rest of the dimensions not transformed
+   remaining = [all_data[:, i].unsqueeze(1) for i in range(D) if i not in used_indices]
+   return torch.cat(transformed + remaining, dim=1)
+
+
 def vector_field(model, t, x, device='cpu',cond=None):
     """
     Compute vector field and its divergence using JVP (Jacobian-Vector Product)
