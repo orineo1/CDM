@@ -163,14 +163,16 @@ def solve_linear_system(A, b):
     return kappa
 
 
-def generate_isosurface_samples(model_cond, cond_l=None,bs=512,device='cpu'):
+def generate_isosurface_samples(model_cond, cond_l=None, bs=512, device='cpu'):
     """
     Generate samples from the isosurface (equal density of both models)
     """
     dt = 1e-3
     t = 1.0
     n = int(t / dt)
-    ndim=model_cond.nfeatures
+    # change
+    ndim = model_cond.gen_features  # Use gen_features instead of nfeatures
+    # changed
 
     # Initialize
     x_gen = torch.zeros(bs, n + 1, ndim, device=device)
@@ -178,10 +180,8 @@ def generate_isosurface_samples(model_cond, cond_l=None,bs=512,device='cpu'):
 
     current_t = torch.full((bs, 1), t, device=device)
 
-
     if cond_l is not None:
-
-        cond_list = [c.unsqueeze(0).repeat(bs, 1)  for c in cond_l]
+        cond_list = [c.unsqueeze(0).repeat(bs, 1) for c in cond_l]
     else:
         cond_list = []
 
@@ -192,32 +192,39 @@ def generate_isosurface_samples(model_cond, cond_l=None,bs=512,device='cpu'):
         x_t = x_gen[:, i, :].clone()  # Clone to avoid in-place operations
 
         # Get vector fields and divergences for both models
-        sdlogdx_list = [vector_field(model_cond, current_t, x_t, device, cond=cond) for cond in cond_list]
+        sdlogdx_list = [vector_field(model_cond, current_t, x_t, device, cond=cond) for cond in
+                        cond_list]
         batch_size, _ = x_t.shape
 
-        # # Generate noise for this step
+        # Generate noise for this step
         noise = torch.randn(batch_size, ndim, device=device)
 
-        # # Compute matrix elements
+        # Compute matrix elements
         models = (model_cond,) * len(cond_l)
 
-
         # cond_vec = (cond1,cond2)
-        A, b = compute_matrix_elements(models, x_t, current_t, dt, noise, device,cond_list)
+        A, b =compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_list)
 
         # Compute kappa for interpolation
-        kappa_solutions=solve_linear_system(A, b)
+        kappa_solutions = solve_linear_system(A, b)
 
         # Compute interpolated dynamics
         with torch.no_grad():  # Only disable gradients for the update steps
-            interpolated_sdlogdx=0
+            interpolated_sdlogdx = 0
             for idx in range(0, len(sdlogdx_list)):
-              interpolated_sdlogdx += kappa_solutions[:, idx:idx+1] * (sdlogdx_list[idx] )
-            dxdt = (model_cond.dlog_alphadt(current_t) * x_t -model_cond.beta_func(current_t) * (interpolated_sdlogdx ))
+                interpolated_sdlogdx += kappa_solutions[:, idx:idx + 1] * (sdlogdx_list[idx])
+            dxdt = (model_cond.dlog_alphadt(current_t) * x_t - model_cond.beta_func(current_t) * (interpolated_sdlogdx))
 
             # Update position
             x_gen[:, i + 1, :] = x_t - dt * dxdt
             current_t -= dt
+
+    # change
+    # If conditioning is enabled, concatenate conditioning values back
+    if model_cond.condition and cond_l:
+        # Take the first conditioning value (assuming all samples use same conditioning)
+        cond_expanded = cond_list[0].unsqueeze(1).expand(-1, n + 1, -1)  # [bs, n+1, condition_on]
+        x_gen = torch.cat([cond_expanded, x_gen], dim=2)  # [bs, n+1, nfeatures]
 
     return x_gen, _
 
@@ -295,61 +302,61 @@ def solve_linear_system(A, b):
 
     return kappa
 
-
-def generate_isosurface_samples(model_cond, cond_l=None,bs=512,device='cpu'):
-    """
-    Generate samples from the isosurface (equal density of both models)
-    """
-    dt = 1e-3
-    t = 1.0
-    n = int(t / dt)
-    ndim=model_cond.nfeatures
-
-    # Initialize
-    x_gen = torch.zeros(bs, n + 1, ndim, device=device)
-    x_gen[:, 0, :] = torch.randn(bs, ndim, device=device)
-
-    current_t = torch.full((bs, 1), t, device=device)
-
-
-    if cond_l is not None:
-
-        cond_list = [c.unsqueeze(0).repeat(bs, 1)  for c in cond_l]
-    else:
-        cond_list = []
-
-    model_cond.eval()
-
-    # Don't use torch.no_grad() here because we need gradients for divergence computation
-    for i in trange(n):
-        x_t = x_gen[:, i, :].clone()  # Clone to avoid in-place operations
-
-        # Get vector fields and divergences for both models
-        sdlogdx_list = [vector_field(model_cond, current_t, x_t, device, cond=cond) for cond in cond_list]
-        batch_size, _ = x_t.shape
-
-        # # Generate noise for this step
-        noise = torch.randn(batch_size, ndim, device=device)
-
-        # # Compute matrix elements
-        models = (model_cond,) * len(cond_l)
-
-
-        # cond_vec = (cond1,cond2)
-        A, b = compute_matrix_elements(models, x_t, current_t, dt, noise, device,cond_list)
-
-        # Compute kappa for interpolation
-        kappa_solutions=solve_linear_system(A, b)
-
-        # Compute interpolated dynamics
-        with torch.no_grad():  # Only disable gradients for the update steps
-            interpolated_sdlogdx=0
-            for idx in range(0, len(sdlogdx_list)):
-              interpolated_sdlogdx += kappa_solutions[:, idx:idx+1] * (sdlogdx_list[idx] )
-            dxdt = (model_cond.dlog_alphadt(current_t) * x_t -model_cond.beta_func(current_t) * (interpolated_sdlogdx ))
-
-            # Update position
-            x_gen[:, i + 1, :] = x_t - dt * dxdt
-            current_t -= dt
-
-    return x_gen, _
+#
+# def generate_isosurface_samples(model_cond, cond_l=None,bs=512,device='cpu'):
+#     """
+#     Generate samples from the isosurface (equal density of both models)
+#     """
+#     dt = 1e-3
+#     t = 1.0
+#     n = int(t / dt)
+#     ndim=model_cond.nfeatures
+#
+#     # Initialize
+#     x_gen = torch.zeros(bs, n + 1, ndim, device=device)
+#     x_gen[:, 0, :] = torch.randn(bs, ndim, device=device)
+#
+#     current_t = torch.full((bs, 1), t, device=device)
+#
+#
+#     if cond_l is not None:
+#
+#         cond_list = [c.unsqueeze(0).repeat(bs, 1)  for c in cond_l]
+#     else:
+#         cond_list = []
+#
+#     model_cond.eval()
+#
+#     # Don't use torch.no_grad() here because we need gradients for divergence computation
+#     for i in trange(n):
+#         x_t = x_gen[:, i, :].clone()  # Clone to avoid in-place operations
+#
+#         # Get vector fields and divergences for both models
+#         sdlogdx_list = [vector_field(model_cond, current_t, x_t, device, cond=cond) for cond in cond_list]
+#         batch_size, _ = x_t.shape
+#
+#         # # Generate noise for this step
+#         noise = torch.randn(batch_size, ndim, device=device)
+#
+#         # # Compute matrix elements
+#         models = (model_cond,) * len(cond_l)
+#
+#
+#         # cond_vec = (cond1,cond2)
+#         A, b = compute_matrix_elements(models, x_t, current_t, dt, noise, device,cond_list)
+#
+#         # Compute kappa for interpolation
+#         kappa_solutions=solve_linear_system(A, b)
+#
+#         # Compute interpolated dynamics
+#         with torch.no_grad():  # Only disable gradients for the update steps
+#             interpolated_sdlogdx=0
+#             for idx in range(0, len(sdlogdx_list)):
+#               interpolated_sdlogdx += kappa_solutions[:, idx:idx+1] * (sdlogdx_list[idx] )
+#             dxdt = (model_cond.dlog_alphadt(current_t) * x_t -model_cond.beta_func(current_t) * (interpolated_sdlogdx ))
+#
+#             # Update position
+#             x_gen[:, i + 1, :] = x_t - dt * dxdt
+#             current_t -= dt
+#
+#     return x_gen, _
