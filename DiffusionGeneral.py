@@ -4,8 +4,7 @@
 # from tqdm import trange
 # from NN_utils import GenericNN,TimeEmbedding  # Assuming you've defined this elsewhere
 #
-#
-# class DiffusionModel(nn.Module):
+# class DiffusionModelIncludingCond(nn.Module):
 #     def __init__(self, nfeatures: int, nunits: int = 128, condition: bool = False,
 #                  condition_on: int = 1, diffusion_steps: int = 100, nblocks: int = 6, device=None):
 #         super(DiffusionModel, self).__init__()
