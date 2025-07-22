@@ -86,7 +86,7 @@ from torch import optim
 from tqdm import tqdm
 # Optimize LGD using Monte Carlo-based guidance
 def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
-                 nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda"):
+                 nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda",FLAG=False):
 
     mmd_loss = MMDLoss(kernel=RBF())  # Assumes MMDLoss and RBF are defined elsewhere
     best_mmd_loss = float("inf")
@@ -95,7 +95,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
     # Initialize starting point (change to match shape if needed)
     x_t = torch.zeros(model_uncond.nfeatures, device=device, requires_grad=True)
 
-    pbar = tqdm(range(model_uncond.diffusion_steps - 1, 0, -1))
+    pbar = tqdm(range(model_uncond.diffusion_steps - 1, 0, -1)) if FLAG else range(model_uncond.diffusion_steps - 1, 0, -1)
 
     for t in pbar:
         x_t = x_t.detach().clone().requires_grad_(True)
@@ -121,7 +121,8 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
             mog_samples = generate_mog_samples(nsamples, mog_means, mog_variances, weights, tau=10.0)
             loss_val = mmd_loss(target_samples, mog_samples)
             losses.append(-loss_val)  # negative for log-mean-exp
-            pbar.set_description(f"Step {t} | x_t:{x_t}|x0_sample:{x0_sample} | loss_val:{loss_val}|log_mean_exp_loss: {log_mean_exp_loss.item():.4f}")
+            if FLAG:
+                pbar.set_description(f"Step {t} | x_t:{x_t}|x0_sample:{x0_sample} | loss_val:{loss_val}|log_mean_exp_loss: {log_mean_exp_loss.item():.4f}")
 
             if loss_val.item() < best_mmd_loss:
                 best_mmd_loss = loss_val.item()
@@ -136,9 +137,6 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
         grad = x_t.grad.clone()
         with torch.no_grad():
             x_t = x_t_minus_1.detach().clone() - grad
-
-        # Optional: Progress bar logging
-        pbar.set_description(f"Step {t} | log_mean_exp_loss: {log_mean_exp_loss.item():.4f}")
 
     # Final output
     x_t_final = x_t.detach().clone()
