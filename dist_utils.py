@@ -590,3 +590,16 @@ def warpper_L1_distance(x_optim,mu_list, Sigma_list, alpha, mog_means, mog_varia
     return l1_distance
 
 
+def filter_and_normalize(mog_means, mog_variances, weights, threshold=0.02):
+    # Step 1: Masking weights that are under the threshold
+    mask = weights >= threshold
+
+    # Filter means, variances, and weights based on the mask
+    filtered_means = mog_means[mask]
+    filtered_variances = mog_variances[mask]
+    filtered_weights = weights[mask]
+
+    # Step 2: Normalize the weights
+    filtered_weights = filtered_weights / filtered_weights.sum()
+
+    return filtered_means, filtered_variances, filtered_weights
