@@ -314,11 +314,10 @@ class DiffusionModel(nn.Module):
 
         return x_gen
 
-    def train_model(self, data_generator=None, dataloader=None, num_iterations=5000):
+    def train_model(self, data_generator=None, dataloader=None, num_iterations=5000,batch_size=512):
         assert data_generator or dataloader, "Need either data_generator or dataloader"
 
         optimizer = optim.Adam(self.parameters(), lr=2e-4)
-        bs = 512
         progress_bar = trange(num_iterations)
         dataloader_iter = iter(dataloader) if dataloader else None
 
@@ -337,7 +336,7 @@ class DiffusionModel(nn.Module):
                 cond = batch[1].to(self.device).float() if self.condition and len(batch) > 1 else x[:,
                                                                                                   :self.condition_on]
             else:
-                x = data_generator(bs, device=self.device)
+                x = data_generator(batch_size, device=self.device)
                 cond = x[:, :self.condition_on] if self.condition else None
 
             t = torch.rand(x.shape[0], 1, device=self.device)
@@ -347,7 +346,7 @@ class DiffusionModel(nn.Module):
             optimizer.step()
             progress_bar.set_postfix(loss=loss.item())
 
-        return self
+        return
 
     def sample_ddim_step(self, x_t, t, cond=None, dt=1e-2):
 
