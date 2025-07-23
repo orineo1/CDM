@@ -94,7 +94,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
 
     # Initialize starting point (change to match shape if needed)
     x_t = torch.zeros(model_uncond.nfeatures, device=device, requires_grad=True)
-
+    x_t = x_t.unsqueeze(0)
     pbar = tqdm(range(model_uncond.diffusion_steps - 1, 0, -1)) if FLAG else range(model_uncond.diffusion_steps - 1, 0, -1)
 
     for t in pbar:
