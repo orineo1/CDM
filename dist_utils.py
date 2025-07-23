@@ -559,7 +559,7 @@ def filter_and_normalize(mog_means, mog_variances, weights, threshold=0.02):
 
     return filtered_means, filtered_variances, filtered_weights
 
-def generate_gmm_parameters(d: int, num_components: int, seed: int = 42, epsilon: float = 1e-4):
+def generate_gmm_parameters(d: int, num_components: int, seed: int = 42, epsilon: float = 1e-4,mean_scale: float = 5.0):
     """
     Generate random parameters for a Gaussian Mixture Model (GMM).
 
@@ -578,7 +578,44 @@ def generate_gmm_parameters(d: int, num_components: int, seed: int = 42, epsilon
     torch.manual_seed(seed)
 
     # Generate random means for each component
-    mu_list = [torch.randn(d, dtype=torch.float64) * 3 for _ in range(num_components)]
+    mu_list = [torch.randn(d, dtype=torch.float64) * mean_scale for _ in range(num_components)]
+
+    # Generate random covariance matrices (positive semi-definite)
+    Sigma_list = []
+    for _ in range(num_components):
+        A = torch.randn(d, d, dtype=torch.float64)  # Random matrix
+        Sigma = A @ A.T  # Create a symmetric positive semi-definite covariance matrix
+        # Add a small epsilon to the diagonal to make it positive-definite and improve conditioning
+        Sigma += torch.eye(d, dtype=torch.float64) * epsilon  # Regularization term
+
+        Sigma_list.append(Sigma)
+
+    # Mixture weights (equal weights)
+    alpha = torch.full((num_components,), 1 / num_components, dtype=torch.float64)
+
+    return mu_list, Sigma_list, alpha
+def generate_gmm_parameters_Distance(d: int, num_components: int, seed: int = 42, epsilon: float = 1e-4,
+                                min_distance: float = 5.0):
+    torch.manual_seed(seed)
+
+    mu_list = []
+    for i in range(num_components):
+        max_attempts = 1000
+        for attempt in range(max_attempts):
+            # Generate a candidate mean
+            candidate_mu = torch.randn(d, dtype=torch.float64) * 5
+
+            # Check if it's far enough from existing means
+            valid = True
+            for existing_mu in mu_list:
+                distance = torch.norm(candidate_mu - existing_mu).item()
+                if distance < min_distance:
+                    valid = False
+                    break
+
+            if valid or attempt == max_attempts - 1:
+                mu_list.append(candidate_mu)
+                break
 
     # Generate random covariance matrices (positive semi-definite)
     Sigma_list = []
@@ -606,7 +643,7 @@ def generate_gmm_parameters(d: int, num_components: int, seed: int = 42, epsilon
 # print("Mixture Weights:", alpha)
 
 def get_param_mog_with_target(dim_data=3, num_components=2, device='cpu',
-                              conditional_modes=2, condition_values=None):
+                              conditional_modes=2, condition_values=None,distanceOrScale="Distance"):
     """
     Generate GMM parameters with multi-modal conditional distribution.
 
@@ -614,9 +651,10 @@ def get_param_mog_with_target(dim_data=3, num_components=2, device='cpu',
         conditional_modes: Number of modes for the conditional distribution
         condition_values: List of conditioning values to create modes at
     """
-
-    # Generate base GMM parameters
-    mu_list, Sigma_list, alpha = generate_gmm_parameters(d=dim_data, num_components=num_components, seed=1)
+    if distanceOrScale=="Distance":
+        mu_list, Sigma_list, alpha=generate_gmm_parameters_Distance(d=dim_data, num_components=num_components, seed=1)
+    else:
+        mu_list, Sigma_list, alpha = generate_gmm_parameters(d=dim_data, num_components=num_components, seed=1)
 
     if conditional_modes > 1:
         # change
