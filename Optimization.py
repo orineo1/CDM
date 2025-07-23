@@ -113,7 +113,6 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
         for j in range(num_x_t):
             x0_sample = pred_x0 + r_t * torch.randn_like(pred_x0)
             condition = x0_sample.view(1, -1).repeat(nsamples, 1)
-
             target_samples, _,_ = model_cond.sample(nsamples=nsamples, condition_x=condition, device=device)
             if not CM:
                 target_samples = target_samples[:, model_cond.condition_on:]
