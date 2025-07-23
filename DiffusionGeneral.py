@@ -267,9 +267,9 @@ class DiffusionModel(nn.Module):
             dxdt = self.dlog_alphadt(t) * x - 2 * self.beta_func(t) * out
         return dxdt
 
-    def sample(self, nsamples=512, cond_val=None, track_gradients=False):
+    def sample(self, nsamples=512, cond_val=None, track_gradients=False,diffusion_steps=1e-2):
         self.eval()
-        dt = 1e-2
+        dt = diffusion_steps
         t = 1.0
         n = int(t / dt)
 

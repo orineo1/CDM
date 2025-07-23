@@ -163,11 +163,11 @@ def solve_linear_system(A, b):
     return kappa
 
 
-def generate_isosurface_samples(model_cond, cond_l=None, bs=512, device='cpu'):
+def generate_isosurface_samples(model_cond, cond_l=None, bs=512, device='cpu',diffusion_steps=1e-3):
     """
     Generate samples from the isosurface (equal density of both models)
     """
-    dt = 1e-3
+    dt = diffusion_steps
     t = 1.0
     n = int(t / dt)
     # change
