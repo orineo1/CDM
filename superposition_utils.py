@@ -83,7 +83,9 @@ def get_score_vector_field(model, t, x,cond):
     with torch.no_grad():
         score = model(t, x,cond=cond)  # ∇log q_t
         f_t = model.dlog_alphadt(t) * x  # drift of forward process
-        g_sq = 2 * torch.exp(model.log_sigma(t)) * model.beta_func(t)
+        # g_sq = 2 * torch.exp(model.log_sigma(t)) * model.beta_func(t)
+        g_sq = torch.pow(torch.exp(model.log_sigma(t)), 2) # ORI
+
         return -f_t + (g_sq / 2) * score
 
 
@@ -136,7 +138,9 @@ def compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_vec,
     # Compute b vector
     div_f = model.dlog_alphadt(current_t) * ndim  # scalar (batch_size, 1)
     f_t = model.dlog_alphadt(current_t) * x_t
-    g_sq = 2 * torch.exp(model.log_sigma(current_t)) * model.beta_func(current_t)
+    # g_sq = 2 * torch.exp(model.log_sigma(current_t)) * model.beta_func(current_t)
+    g_sq = torch.pow(torch.exp(model.log_sigma(current_t)), 2) # ORI
+
     g = torch.sqrt(g_sq)
 
     b = torch.zeros(batch_size, N + 1, device=device)
@@ -232,7 +236,8 @@ def generate_isosurface_samples_new(model_cond, cond_l=None, bs=512, device='cpu
                 # Compute common terms once
                 f_t = model_cond.dlog_alphadt(current_t) * x_t
                 div_f = model_cond.dlog_alphadt(current_t) * ndim
-                g_sq = 2 * torch.exp(model_cond.log_sigma(current_t)) * model_cond.beta_func(current_t)
+                # g_sq = 2 * torch.exp(model_cond.log_sigma(current_t)) * model_cond.beta_func(current_t)
+                g_sq = torch.pow(torch.exp(model_cond.log_sigma(current_t)), 2) # ORI
 
                 # Compute interpolated score (same as used for dynamics)
                 interpolated_sdlogdx = sum(
