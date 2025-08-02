@@ -297,7 +297,8 @@ class DiffusionModel(nn.Module):
 
                 dx = (
                         -dt * self.vector_field_SDE(current_t, samples[-1], cond)
-                        + torch.sqrt(2 * torch.exp(self.log_sigma(current_t)) * self.beta_func(current_t) * dt) * noise
+                        # + torch.sqrt(2 * torch.exp(self.log_sigma(current_t)) * self.beta_func(current_t) * dt) * noise
+                        + torch.exp(self.log_sigma(current_t)) * torch.sqrt(dt) * noise
                 )
                 x_next = samples[-1] + dx  # Not in-place
                 samples.append(x_next)
