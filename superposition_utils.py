@@ -88,7 +88,7 @@ def get_score_vector_field(model, t, x,cond):
 
 
 
-def compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_vec):
+def compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_vec,ratios_control_vec):
     """
     Generalized compute_matrix_elements for N models.
 
@@ -107,6 +107,9 @@ def compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_vec)
     """
     N = len(models)
     batch_size, ndim = x_t.shape
+    if ratios_control_vec is None:
+        ratios_control_vec=torch.zeros(batch_size).flatten().to(device)
+
 
     scores = []
     u_ts = []
@@ -124,8 +127,9 @@ def compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_vec)
         for j in range(N):
             A[:, i, j] = dt * torch.sum(u_ts[j] * scores[i], dim=1)
         A[:, i, N] = -1  # last column: -d_log
+        # A[:, i, N] = -1 + ratios_control_vec[i].item()
 
-    # Last row for constraint: sum(κ_i) = 1
+        # Last row for constraint: sum(κ_i) = 1
     A[:, N, :N] = 1
     A[:, N, N] = 0
 
@@ -140,7 +144,8 @@ def compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_vec)
         score = scores[i]
         term2 = torch.sum((f_t - (g_sq / 2) * score) * score, dim=1)
         noise_term = 0  # Can be re-enabled if needed: torch.sum(g * noise * score, dim=1)
-        b[:, i] = -(div_f.squeeze(-1) + term2 * dt + noise_term)
+        # b[:, i] = -(div_f.squeeze(-1) + term2 * dt + noise_term)
+        b[:, i] = -(div_f.squeeze(-1) + term2 * dt + noise_term)+ ratios_control_vec[i].item()
 
     b[:, N] = 1  # constraint: sum(κ_i) = 1
 
@@ -163,7 +168,107 @@ def solve_linear_system(A, b):
     return kappa
 
 
-def generate_isosurface_samples(model_cond, cond_l=None, bs=512, device='cpu',diffusion_steps=1e-3):
+def generate_isosurface_samples_new(model_cond, cond_l=None, bs=512, device='cpu', save_every=10,ratios_control_vec=None):
+    """
+    Generate samples from the isosurface (equal density of both models)
+    """
+    dt = 1e-3
+    t = 1.0
+    n = int(t / dt)
+    ndim = model_cond.gen_features
+
+    # Initialize
+    x_gen = torch.zeros(bs, n + 1, ndim, device=device)
+    x_gen[:, 0, :] = torch.randn(bs, ndim, device=device)
+
+    # NEW: Store log-likelihoods on CPU with checkpointing
+    n_checkpoints = n // save_every + 1
+    log_likelihoods = torch.zeros(bs, n_checkpoints, len(cond_l), device='cpu')
+    checkpoint_steps = []
+
+    current_t = torch.full((bs, 1), t, device=device)
+
+    # FIX: Properly format conditioning for batch processing
+    if cond_l is not None:
+        cond_list = []
+        for cond in cond_l:
+            if cond.dim() == 1 and cond.shape[0] == 2:
+                batch_cond = cond.unsqueeze(0).repeat(bs, 1).float().to(device)
+            elif cond.dim() == 1 and cond.shape[0] == 1:
+                batch_cond = cond.unsqueeze(-1).repeat(bs, 1).float().to(device)
+            elif cond.dim() == 0:
+                batch_cond = cond.unsqueeze(0).unsqueeze(-1).repeat(bs, 1).float().to(device)
+            else:
+                batch_cond = cond.to(device)
+            cond_list.append(batch_cond)
+    else:
+        cond_list = []
+
+    model_cond.eval()
+
+    # Track current log-likelihood on GPU (only current step)
+    current_log_ll = torch.zeros(bs, len(cond_l), device=device)
+    checkpoint_idx = 0
+
+    for i in trange(n):
+        x_t = x_gen[:, i, :].clone()
+
+        # Get vector fields for each model
+        with torch.no_grad():  # Reduce memory for vector field computation
+            sdlogdx_list = [vector_field(model_cond, current_t, x_t, device, cond=cond) for cond in cond_list]
+
+        batch_size, _ = x_t.shape
+        noise = torch.randn(batch_size, ndim, device=device)
+
+        # Compute matrix elements
+        models = (model_cond,) * len(cond_l)
+        A, b = compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_list,ratios_control_vec)
+        kappa_solutions = solve_linear_system(A, b)
+
+        # Update log-likelihoods (compute on GPU, store checkpoints on CPU)
+        # Update log-likelihoods (compute on GPU, store checkpoints on CPU)
+        if i % save_every == 0 or i == n - 1:
+            with torch.no_grad():
+                # Compute common terms once
+                f_t = model_cond.dlog_alphadt(current_t) * x_t
+                div_f = model_cond.dlog_alphadt(current_t) * ndim
+                g_sq = 2 * torch.exp(model_cond.log_sigma(current_t)) * model_cond.beta_func(current_t)
+
+                # Compute interpolated score (same as used for dynamics)
+                interpolated_sdlogdx = sum(
+                    kappa_solutions[:, idx:idx + 1] * sdlogdx_list[idx] for idx in range(len(sdlogdx_list)))
+                dxdt = (model_cond.dlog_alphadt(current_t) * x_t - model_cond.beta_func(
+                    current_t) * interpolated_sdlogdx)
+                dx = -dt * dxdt
+
+                for model_idx, cond in enumerate(cond_list):
+                    score = model_cond(current_t, x_t, cond=cond)
+                    term1 = torch.sum(dx * score, dim=1)
+                    term2 = div_f.squeeze(-1)
+                    term3 = torch.sum((f_t - (g_sq / 2) * score) * score, dim=1)
+                    d_log_q = term1 + term2 + term3 * dt
+                    current_log_ll[:, model_idx] += d_log_q
+
+                # Store checkpoint on CPU
+                log_likelihoods[:, checkpoint_idx, :] = current_log_ll.cpu()
+                checkpoint_steps.append(i)
+                checkpoint_idx += 1
+
+        # Update position
+        with torch.no_grad():
+            interpolated_sdlogdx = 0
+            for idx in range(len(sdlogdx_list)):
+                interpolated_sdlogdx += kappa_solutions[:, idx:idx+1] * sdlogdx_list[idx]
+            dxdt = (model_cond.dlog_alphadt(current_t) * x_t - model_cond.beta_func(current_t) * interpolated_sdlogdx)
+            x_gen[:, i + 1, :] = x_t - dt * dxdt
+            current_t -= dt
+
+        # Clear cache periodically
+        if i % 100 == 0:
+            torch.cuda.empty_cache()
+
+    return x_gen, log_likelihoods
+def generate_isosurface_samples(model_cond, cond_l=None, bs=512, device='cpu',diffusion_steps=1e-3,ratios_control_vec=None):
     """
     Generate samples from the isosurface (equal density of both models)
     """
@@ -203,7 +308,7 @@ def generate_isosurface_samples(model_cond, cond_l=None, bs=512, device='cpu',di
         models = (model_cond,) * len(cond_l)
 
         # cond_vec = (cond1,cond2)
-        A, b =compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_list)
+        A, b =compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_list,ratios_control_vec)
 
         # Compute kappa for interpolation
         kappa_solutions = solve_linear_system(A, b)
@@ -228,63 +333,63 @@ def generate_isosurface_samples(model_cond, cond_l=None, bs=512, device='cpu',di
 
     return x_gen, _
 
-def compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_vec):
-    """
-    Generalized compute_matrix_elements for N models.
-
-    Args:
-        models: list of trained models
-        x_t: current state (batch_size, ndim)
-        current_t: current time (batch_size, 1)
-        dt: time step
-        noise: Brownian motion increment (batch_size, ndim)
-        device: torch device
-        cond_vec: list of conditioning vectors (same length as models)
-
-    Returns:
-        A: coefficient matrix (batch_size, N+1, N+1)
-        b: right-hand side vector (batch_size, N+1)
-    """
-    N = len(models)
-    batch_size, ndim = x_t.shape
-
-    scores = []
-    u_ts = []
-
-    # Get scores and vector fields
-    with torch.no_grad():
-        for model, cond in zip(models, cond_vec):
-            scores.append(model(current_t, x_t, cond=cond))
-            u_ts.append(get_score_vector_field(model, current_t, x_t, cond=cond))
-
-    # Build coefficient matrix A
-    A = torch.zeros(batch_size, N + 1, N + 1, device=device)
-
-    for i in range(N):
-        for j in range(N):
-            A[:, i, j] = dt * torch.sum(u_ts[j] * scores[i], dim=1)
-        A[:, i, N] = -1  # last column: -d_log
-
-    # Last row for constraint: sum(κ_i) = 1
-    A[:, N, :N] = 1
-    A[:, N, N] = 0
-
-    # Compute b vector
-    div_f = model.dlog_alphadt(current_t) * ndim  # scalar (batch_size, 1)
-    f_t = model.dlog_alphadt(current_t) * x_t
-    g_sq = 2 * torch.exp(model.log_sigma(current_t)) * model.beta_func(current_t)
-    g = torch.sqrt(g_sq)
-
-    b = torch.zeros(batch_size, N + 1, device=device)
-    for i in range(N):
-        score = scores[i]
-        term2 = torch.sum((f_t - (g_sq / 2) * score) * score, dim=1)
-        noise_term = 0  # Can be re-enabled if needed: torch.sum(g * noise * score, dim=1)
-        b[:, i] = -(div_f.squeeze(-1) + term2 * dt + noise_term)
-
-    b[:, N] = 1  # constraint: sum(κ_i) = 1
-
-    return A, b
+# def compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_vec):
+#     """
+#     Generalized compute_matrix_elements for N models.
+#
+#     Args:
+#         models: list of trained models
+#         x_t: current state (batch_size, ndim)
+#         current_t: current time (batch_size, 1)
+#         dt: time step
+#         noise: Brownian motion increment (batch_size, ndim)
+#         device: torch device
+#         cond_vec: list of conditioning vectors (same length as models)
+#
+#     Returns:
+#         A: coefficient matrix (batch_size, N+1, N+1)
+#         b: right-hand side vector (batch_size, N+1)
+#     """
+#     N = len(models)
+#     batch_size, ndim = x_t.shape
+#
+#     scores = []
+#     u_ts = []
+#
+#     # Get scores and vector fields
+#     with torch.no_grad():
+#         for model, cond in zip(models, cond_vec):
+#             scores.append(model(current_t, x_t, cond=cond))
+#             u_ts.append(get_score_vector_field(model, current_t, x_t, cond=cond))
+#
+#     # Build coefficient matrix A
+#     A = torch.zeros(batch_size, N + 1, N + 1, device=device)
+#
+#     for i in range(N):
+#         for j in range(N):
+#             A[:, i, j] = dt * torch.sum(u_ts[j] * scores[i], dim=1)
+#         A[:, i, N] = -1  # last column: -d_log
+#
+#     # Last row for constraint: sum(κ_i) = 1
+#     A[:, N, :N] = 1
+#     A[:, N, N] = 0
+#
+#     # Compute b vector
+#     div_f = model.dlog_alphadt(current_t) * ndim  # scalar (batch_size, 1)
+#     f_t = model.dlog_alphadt(current_t) * x_t
+#     g_sq = 2 * torch.exp(model.log_sigma(current_t)) * model.beta_func(current_t)
+#     g = torch.sqrt(g_sq)
+#
+#     b = torch.zeros(batch_size, N + 1, device=device)
+#     for i in range(N):
+#         score = scores[i]
+#         term2 = torch.sum((f_t - (g_sq / 2) * score) * score, dim=1)
+#         noise_term = 0  # Can be re-enabled if needed: torch.sum(g * noise * score, dim=1)
+#         b[:, i] = -(div_f.squeeze(-1) + term2 * dt + noise_term)
+#
+#     b[:, N] = 1  # constraint: sum(κ_i) = 1
+#
+#     return A, b
 
 
 def solve_linear_system(A, b):
