@@ -176,6 +176,8 @@ def generate_mog_samples_not_differentiable(num_samples, means, variances, weigh
 
     # Sample all at once
     samples = mixture.sample((num_samples,))
+    if kernel_func is not None:
+      samples=kernel_func(samples)
 
     return samples  # [num_samples, dim]
 
