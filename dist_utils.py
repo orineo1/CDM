@@ -142,7 +142,7 @@ def generate_mog_samples(n_samples, xi, S, beta, tau=7.5,device="cpu",kernel_fun
 #     return samples
 
 
-def generate_mog_samples_not_differentiable(num_samples, means, variances, weights=None, device="cpu"):
+def generate_mog_samples_not_differentiable(num_samples, means, variances, weights=None, device="cpu",kernel_func=None):
     """
     Generate samples from a Mixture of Gaussians using torch.distributions - most efficient.
     """
