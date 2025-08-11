@@ -142,24 +142,42 @@ def generate_mog_samples(n_samples, xi, S, beta, tau=7.5,device="cpu",kernel_fun
 #     return samples
 
 
-def generate_mog_samples_not_differentiable(num_samples, means, variances, weights=None):
+def generate_mog_samples_not_differentiable(num_samples, means, variances, weights=None, device="cpu"):
     """
-    Generate samples from a Mixture of Gaussians (MoG).
+    Generate samples from a Mixture of Gaussians using torch.distributions - most efficient.
     """
+    from torch.distributions import Categorical, MultivariateNormal, MixtureSameFamily
+
     components = len(means)
     if weights is None:
-        weights = torch.ones(components) / components
+        weights = torch.ones(components, device=device) / components
+    else:
+        weights = weights.to(device)
 
     # Ensure weights sum to 1
     weights = weights / weights.sum()
 
-    samples = []
-    for _ in range(num_samples):
-        component = torch.multinomial(weights, 1).item()
-        sample = torch.normal(means[component], variances[component]**0.5, size=(1,))
-        samples.append(sample)
-    return torch.cat(samples, dim=0).unsqueeze(1)
+    # Stack means and covariances for multivariate case
+    flattened_means = [m.flatten() for m in means]
+    dim = flattened_means[0].shape[0]  # Get actual dimensionality
 
+    means_tensor = torch.stack(flattened_means).to(device)  # [components, dim]
+
+    # Handle covariances based on input format
+    if variances[0].numel() == dim * dim:  # Full covariance matrix
+        covs_tensor = torch.stack([var.reshape(dim, dim) for var in variances]).to(device)
+    else:  # Diagonal variances
+        covs_tensor = torch.stack([torch.diag(var.flatten()) for var in variances]).to(device)
+
+    # Create mixture distribution
+    mix = Categorical(weights)
+    comp = MultivariateNormal(means_tensor, covs_tensor)
+    mixture = MixtureSameFamily(mix, comp)
+
+    # Sample all at once
+    samples = mixture.sample((num_samples,))
+
+    return samples  # [num_samples, dim]
 
 def mog_pdf(x, means, variances, weights=None):
     """
