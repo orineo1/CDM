@@ -68,6 +68,7 @@ class DiffusionModel(nn.Module):
         """
         device = Xbatch.device
         t = t.to(device=device)
+        self.baralphas = self.baralphas.to(device)
         eps = torch.randn(size=Xbatch.shape, device=device)
         noised = (self.baralphas[t] ** 0.5).repeat(1, Xbatch.shape[1]) * Xbatch + \
                  ((1 - self.baralphas[t]) ** 0.5).repeat(1, Xbatch.shape[1]) * eps
