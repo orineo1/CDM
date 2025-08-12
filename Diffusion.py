@@ -431,7 +431,7 @@ class DiffusionModel(nn.Module):
         self.to(device)
 
         # Get model dtype
-        model_dtype = next(model.parameters()).dtype
+        model_dtype = next(self.parameters()).dtype
 
         # Convert condition_x to the model's dtype if provided
         if condition_x is not None:
