@@ -703,3 +703,94 @@ def get_param_mog_with_target(dim_data=3, num_components=2, device='cpu',
     weights = compute_alpha(mu_list, Sigma_list, alpha, x_star.reshape(-1, 1))
 
     return mu_list, Sigma_list, alpha, mog_means, mog_variances, weights, x_star
+
+
+def compute_mixture_wasserstein_distance_1D(mu_list, Sigma_list, alpha, x_star, x_optimized,
+                                       x_range=(-10, 10), n_points=1000):
+    """
+    Complete pipeline to compute Wasserstein distance between two conditional mixture distributions
+
+    Args:
+        mu_list: List of means for each Gaussian component
+        Sigma_list: List of covariance matrices for each component
+        alpha: Mixture weights
+        x_star: Conditioning point 1
+        x_optimized: Conditioning point 2
+        x_range: Tuple (min, max) for evaluation range
+        n_points: Number of points for discretization
+
+    Returns:
+        wasserstein_distance: Float value of the computed distance
+        x_tensor: The x values used for evaluation
+        pdf1_np, pdf2_np: The normalized PDFs as numpy arrays
+    """
+
+    # Compute theoretical distributions conditioned on x_star
+    mu_temp, Sigma_temp =compute_conditionals(mu_list, Sigma_list, x_star)
+    temp_alpha =compute_alpha(mu_list, Sigma_list, alpha, x_star)
+
+    # Compute theoretical distributions conditioned on x_optimized
+    mu_temp_optimized, Sigma_temp_optimized = compute_conditionals(mu_list, Sigma_list, x_optimized)
+    temp_alpha_optimized = compute_alpha(mu_list, Sigma_list, alpha, x_optimized)
+
+    # Create x_tensor for PDF evaluation
+    x_range_tensor = torch.linspace(x_range[0], x_range[1], n_points)
+    x_tensor = x_range_tensor.unsqueeze(1)  # Shape: [n_points, 1]
+
+    # Get theoretical PDFs
+    theoretical_pdf = mog_multivariate_pdf(x_tensor, mu_temp, Sigma_temp, temp_alpha)
+    theoretical_pdf_optimized = mog_multivariate_pdf(x_tensor, mu_temp_optimized, Sigma_temp_optimized, temp_alpha_optimized)
+
+    # Compute Wasserstein distance
+    wasserstein_dist = wasserstein_1d_torch(x_range_tensor, theoretical_pdf, theoretical_pdf_optimized)
+
+    # Convert to numpy for potential plotting/analysis
+    theoretical_pdf_np = theoretical_pdf.detach().cpu().numpy()
+    theoretical_pdf_optimized_np = theoretical_pdf_optimized.detach().cpu().numpy()
+
+    return {
+        'wasserstein_distance': wasserstein_dist.item(),
+        'x_values': x_range_tensor.detach().cpu().numpy(),
+        'pdf_star': theoretical_pdf_np,
+        'pdf_optimized': theoretical_pdf_optimized_np,
+        'x_tensor': x_tensor
+    }
+
+
+def wasserstein_1d_torch(x_vals, pdf1, pdf2):
+    """Compute 1D Wasserstein distance using torch tensors - NaN safe version"""
+    # Ensure uniform spacing
+    dx = x_vals[1] - x_vals[0]
+
+    # Add small epsilon to avoid division by zero
+    eps = 1e-10
+    pdf1 = pdf1 + eps
+    pdf2 = pdf2 + eps
+
+    # Normalize PDFs to ensure they integrate to 1
+    integral1 = torch.trapz(pdf1, x_vals)
+    integral2 = torch.trapz(pdf2, x_vals)
+
+    # Check for valid integrals
+    if integral1 <= eps or integral2 <= eps:
+        return torch.tensor(float('inf'))  # Return infinity for degenerate cases
+
+    pdf1_norm = pdf1 / integral1
+    pdf2_norm = pdf2 / integral2
+
+    # Compute CDFs using cumulative sum
+    cdf1 = torch.cumsum(pdf1_norm * dx, dim=0)
+    cdf2 = torch.cumsum(pdf2_norm * dx, dim=0)
+
+    # Clamp CDFs to [0,1] to avoid numerical issues
+    cdf1 = torch.clamp(cdf1, 0, 1)
+    cdf2 = torch.clamp(cdf2, 0, 1)
+
+    # Wasserstein distance
+    result = torch.trapz(torch.abs(cdf1 - cdf2), x_vals)
+
+    # Check for NaN and return a large value instead
+    if torch.isnan(result):
+        return torch.tensor(99.0)  # Return large distance instead of NaN
+
+    return result
