@@ -212,6 +212,9 @@ class DiffusionModel(nn.Module):
     def dlog_alphadt(self, t):
         return -0.5 * self.beta_0 - 0.5 * t * (self.beta_1 - self.beta_0)
 
+    def sigma(self,t):
+        return t
+
     def log_sigma(self, t):
         return torch.log(t)
 
@@ -220,6 +223,9 @@ class DiffusionModel(nn.Module):
 
     def beta_func(self, t):
         return 1 + 0.5 * t * self.beta_0 + 0.5 * t ** 2 * (self.beta_1 - self.beta_0)
+
+    def xai_func(self,t):
+        return self.beta_func(t)* self.sigma(t)
 
     def q_t(self, data, t):
         data = data.to(self.device)
@@ -264,20 +270,66 @@ class DiffusionModel(nn.Module):
         context = torch.no_grad() if not track_gradients else torch.enable_grad()
         with context:
             out = self(t, x, cond)
-            dxdt = self.dlog_alphadt(t) * x - 2 * self.beta_func(t) * out
+            score_coefficient = self.beta_func(t) + self.xai_func(t)
+            dxdt = self.dlog_alphadt(t) * x - score_coefficient * out
         return dxdt
 
-    def sample(self, nsamples=512, cond_val=None, track_gradients=False,diffusion_steps=1e-2):
+    def compute_log_likelihood_step(self, x_current, dx, current_t, cond=None, dt=1e-2):
+        """
+        Compute log likelihood change for a single step using Theorem 1
+
+        Args:
+            x_current: [nsamples, nfeatures] - current position
+            dx: [nsamples, nfeatures] - step increment
+            current_t: [nsamples, 1] - current time
+            cond: conditioning values (optional)
+            dt: time step size
+
+        Returns:
+            d_log_q: [nsamples] - log likelihood change for this step
+        """
+        # Get score function
+        score = self(current_t, x_current, cond)
+
+        # Compute terms from Theorem 1
+        # f_{1-τ}(x_τ) = (d/dt log α_t) * x
+        f_t = self.dlog_alphadt(current_t) * x_current
+
+        # ∇ · f_{1-τ}(x_τ) = (d/dt log α_t) * ndim
+        div_f = self.dlog_alphadt(current_t) * self.gen_features
+
+        # g²_{1-τ} = 2 * β_t
+        g_sq = 2 * self.beta_func(current_t)
+
+        # Three terms from Theorem 1
+        term1 = torch.sum(dx * score, dim=1)  # ⟨dx_τ, ∇log q_{1-τ}(x_τ)⟩
+        term2 = div_f.squeeze(-1)  # ⟨∇, f_{1-τ}(x_τ)⟩
+        term3 = (torch.sum(f_t * score, dim=1) -
+                 (g_sq.squeeze(-1) / 2) * torch.sum(score * score, dim=1))
+
+        # Apply dτ correctly
+        d_log_q = term1 + (term2 + term3) * dt
+
+        return d_log_q
+
+
+    def sample(self, nsamples=512, cond_val=None, track_gradients=False, diffusion_steps=1e-2,
+               compute_log_likelihood=True):
         self.eval()
         dt = diffusion_steps
         t = 1.0
         n = int(t / dt)
 
-        # change
+        # Initialize samples
         x = torch.randn(nsamples, self.gen_features, device=self.device, requires_grad=track_gradients)
-        # changed
         samples = [x]
 
+        # Initialize log likelihood tracking
+        if compute_log_likelihood:
+            log_likelihoods = torch.zeros(nsamples, device=self.device)
+            all_log_ll = [log_likelihoods.clone()]
+
+        # Handle conditioning
         if self.condition and cond_val is not None:
             if cond_val.dim() == 1:
                 cond = cond_val.unsqueeze(0).repeat(nsamples, 1)
@@ -285,34 +337,57 @@ class DiffusionModel(nn.Module):
                 cond = cond_val
             else:
                 raise ValueError(f"cond_val shape invalid: {cond_val.shape}")
+        else:
+            cond = None
 
         current_t = torch.full((nsamples, 1), t, device=self.device)
 
         context = torch.enable_grad() if track_gradients else torch.no_grad()
         with context:
             for _ in range(n):
-                # change
-                noise = torch.randn(nsamples, self.gen_features, device=self.device)
-                # changed
+                x_current = samples[-1]
 
+                # Generate noise
+                noise = torch.randn(nsamples, self.gen_features, device=self.device)
+
+                # Compute dx
                 dx = (
-                        -dt * self.vector_field_SDE(current_t, samples[-1], cond)
-                        + torch.sqrt(2 * torch.exp(self.log_sigma(current_t)) * self.beta_func(current_t) * dt) * noise
+                        -dt * self.vector_field_SDE(current_t, x_current, cond)
+                        + torch.sqrt(2 * self.xai_func(current_t) * dt) * noise
                 )
-                x_next = samples[-1] + dx  # Not in-place
+
+                # Compute log likelihood change for this step
+                if compute_log_likelihood:
+                    d_log_q = self.compute_log_likelihood_step(
+                        x_current=x_current,
+                        dx=dx,
+                        current_t=current_t,
+                        cond=cond,
+                        dt=dt
+                    )
+
+                    # Update cumulative log likelihood
+                    log_likelihoods += d_log_q
+                    all_log_ll.append(log_likelihoods.clone())
+
+                # Update trajectory
+                x_next = x_current + dx
                 samples.append(x_next)
                 current_t -= dt
 
         x_gen = torch.stack(samples, dim=1)  # [nsamples, n+1, nfeatures]
 
-        # change
+        # Handle conditioning output
         if self.condition and cond_val is not None:
-            # Concatenate conditioning values to the generated samples
-            cond_expanded = cond.unsqueeze(1).expand(-1, x_gen.shape[1], -1)  # [nsamples, n+1, condition_on]
-            x_gen = torch.cat([cond_expanded, x_gen], dim=2)  # [nsamples, n+1, nfeatures]
-        # changed
+            cond_expanded = cond.unsqueeze(1).expand(-1, x_gen.shape[1], -1)
+            x_gen = torch.cat([cond_expanded, x_gen], dim=2)
 
-        return x_gen
+        # Return samples and optionally log likelihoods
+        if compute_log_likelihood:
+            log_ll_tensor = torch.stack(all_log_ll, dim=1)  # [nsamples, n+1]
+            return x_gen, log_ll_tensor
+        else:
+            return x_gen
 
     def train_model(self, data_generator=None, dataloader=None, num_iterations=5000,batch_size=512):
         assert data_generator or dataloader, "Need either data_generator or dataloader"
