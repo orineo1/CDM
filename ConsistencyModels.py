@@ -417,7 +417,7 @@ class ConsistencyModeliCT(nn.Module):
         return weighted_loss.mean()
 
 
-    def sample(self, nsamples=250, condition_x=None,ts: List[float]=[150.0, 50.0, 20.0, 10.0, 5.0,1.],device=None):
+    def sample(self, nsamples=250, condition_x=None,ts: List[float]=[80, 40, 20, 10, 5, 2, 1, 0.5, 0.25, 0.125, 0.062, 0.031, 0.015, 0.007, 0.002],device=None):
         device = self.device if device is None else device
         if condition_x is not None:
             condition_x = condition_x.to(device)
