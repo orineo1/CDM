@@ -2,7 +2,7 @@
 import importlib
 import Diffusion
 from LossFunctions import MMDLoss,RBF
-from dist_utils import generate_mog_samples
+from dist_utils import generate_mog_samples,generate_mog_samples_not_differentiable
 import ConsistencyModels
 import  FlowMatching
 from ConsistencyModels import ConsistencyModel
@@ -117,7 +117,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
             if not CM:
                 target_samples = target_samples[:, model_cond.condition_on:]
 
-            mog_samples = generate_mog_samples(nsamples, mog_means, mog_variances, weights, tau=10.0)
+            mog_samples = generate_mog_samples_not_differentiable(nsamples, mog_means, mog_variances, weights)
             loss_val = mmd_loss(target_samples, mog_samples)
             losses.append(-loss_val)  # negative for log-mean-exp
             if FLAG:

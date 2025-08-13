@@ -27,8 +27,7 @@ class DiffusionModel(nn.Module):
         schedule = torch.cos((timesteps / self.diffusion_steps + s) / (1 + s) * torch.pi / 2) ** 2
         self.baralphas = (schedule / schedule[0]).to(self.device)
         self.betas = (1 - self.baralphas / torch.cat([self.baralphas[0:1], self.baralphas[:-1]])).to(self.device)
-        self.alphas = (1 - self.betas)
-
+        self.alphas = (1 - self.betas).to(self.device)
         self.inblock = nn.Linear(nfeatures, nunits)
         self.out= nn.Linear( nunits,nfeatures)
         self.time_embed = TimeEmbedding(nunits)
@@ -69,6 +68,7 @@ class DiffusionModel(nn.Module):
         """
         device = Xbatch.device
         t = t.to(device=device)
+        self.baralphas = self.baralphas.to(device)
         eps = torch.randn(size=Xbatch.shape, device=device)
         noised = (self.baralphas[t] ** 0.5).repeat(1, Xbatch.shape[1]) * Xbatch + \
                  ((1 - self.baralphas[t]) ** 0.5).repeat(1, Xbatch.shape[1]) * eps
@@ -431,7 +431,7 @@ class DiffusionModel(nn.Module):
         self.to(device)
 
         # Get model dtype
-        # model_dtype = next(model.parameters()).dtype
+        model_dtype = next(self.parameters()).dtype
 
         # Convert condition_x to the model's dtype if provided
         if condition_x is not None:
@@ -441,7 +441,7 @@ class DiffusionModel(nn.Module):
             condition_x = condition_x.to(device=device)
 
         # Ensure x_start is on the correct device and dtype
-        x = x_start.to(device=device, )
+        x = x_start.to(device=device, dtype=model_dtype)
         # x = ((x - self.mean) / self.std).to(torch.float32)
         # Create timestep tensor
         t_batch = torch.full([x.shape[0], 1], t, device=device)
