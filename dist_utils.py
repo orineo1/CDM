@@ -643,8 +643,9 @@ def generate_gmm_parameters_Distance(d: int, num_components: int, seed: int = 42
         A = torch.randn(d, d, dtype=torch.float64)  # Random matrix
         Sigma = A @ A.T  # Create a symmetric positive semi-definite covariance matrix
         # Add a small epsilon to the diagonal to make it positive-definite and improve conditioning
-        Sigma += torch.eye(d, dtype=torch.float64) * epsilon  # Regularization term
-
+        # Sigma += torch.eye(d, dtype=torch.float64) * epsilon  # Regularization term
+        reg_strength = max(epsilon, 1e-3)  # Ensure minimum regularization
+        Sigma += torch.eye(d, dtype=torch.float64) * reg_strength
         Sigma_list.append(Sigma)
 
     # Mixture weights (equal weights)
@@ -794,3 +795,30 @@ def wasserstein_1d_torch(x_vals, pdf1, pdf2):
         return torch.tensor(99.0)  # Return large distance instead of NaN
 
     return result
+
+
+def sliced_wasserstein_distance(samples1, samples2, n_projections=1000):
+    """Compute Sliced Wasserstein distance for high-dimensional data"""
+    device = samples1.device
+    d = samples1.shape[1]  # dimension
+
+    total_distance = 0.0
+
+    for _ in range(n_projections):
+        # Random projection direction
+        theta = torch.randn(d, device=device)
+        theta = theta / torch.norm(theta)
+
+        # Project samples onto this direction
+        proj1 = samples1 @ theta
+        proj2 = samples2 @ theta
+
+        # Sort projections
+        proj1_sorted, _ = torch.sort(proj1)
+        proj2_sorted, _ = torch.sort(proj2)
+
+        # 1D Wasserstein distance (simpler for sorted samples)
+        wd_1d = torch.mean(torch.abs(proj1_sorted - proj2_sorted))
+        total_distance += wd_1d
+
+    return total_distance / n_projections
