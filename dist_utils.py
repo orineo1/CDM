@@ -715,9 +715,9 @@ def get_param_mog_with_target_latent(dim_data=9, num_components=2, device='cpu',
         manifold_dim = max(2, dim_data // 2)
 
     if distanceOrScale == "Distance":
-        mu_list_base, Sigma_list_base, alpha = dist_utils.generate_gmm_parameters_Distance(d=manifold_dim, num_components=num_components, seed=1)
+        mu_list_base, Sigma_list_base, alpha = generate_gmm_parameters_Distance(d=manifold_dim, num_components=num_components, seed=1)
     else:
-        mu_list_base, Sigma_list_base, alpha = dist_utils.generate_gmm_parameters(d=manifold_dim, num_components=num_components, seed=1)
+        mu_list_base, Sigma_list_base, alpha = generate_gmm_parameters(d=manifold_dim, num_components=num_components, seed=1)
 
     # Create manifold embedding: manifold_dim -> dim_data
     torch.manual_seed(42)  # For reproducible manifold
@@ -760,13 +760,13 @@ def get_param_mog_with_target_latent(dim_data=9, num_components=2, device='cpu',
 
         x_star = conditioning_value.float().to(device)
     else:
-        samples = dist_utils.generate_mog_samples(150, mu_list, Sigma_list, alpha).float().to(device)
+        samples = generate_mog_samples_not_differentiable(150, mu_list, Sigma_list, alpha).float().to(device)
         idx = torch.randint(0, 150, (1,))
         x_star = samples[idx, :dim_data - uncond_dim]
 
     # Compute the Y|X=x^*
-    mog_means, mog_variances = dist_utils.compute_conditionals(mu_list, Sigma_list, x_star.reshape(-1, 1))
-    weights = dist_utils.compute_alpha(mu_list, Sigma_list, alpha, x_star.reshape(-1, 1))
+    mog_means, mog_variances = compute_conditionals(mu_list, Sigma_list, x_star.reshape(-1, 1))
+    weights = compute_alpha(mu_list, Sigma_list, alpha, x_star.reshape(-1, 1))
 
     return mu_list, Sigma_list, alpha, mog_means, mog_variances, weights, x_star
 
