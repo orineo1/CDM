@@ -663,7 +663,7 @@ def generate_gmm_parameters_Distance(d: int, num_components: int, seed: int = 42
 # print("Mixture Weights:", alpha)
 
 def get_param_mog_with_target(dim_data=3, num_components=2, device='cpu',
-                              conditional_modes=2, condition_values=None,distanceOrScale="Distance"):
+                              conditional_modes=2, uncond_dim=1,distanceOrScale="Distance"):
     """
     Generate GMM parameters with multi-modal conditional distribution.
 
@@ -682,21 +682,21 @@ def get_param_mog_with_target(dim_data=3, num_components=2, device='cpu',
         selected_indices = torch.randperm(len(mu_list))[:conditional_modes]
 
         # Get the conditioning part from the first selected component
-        conditioning_value = mu_list[selected_indices[0]][:dim_data - 1].clone()
+        conditioning_value = mu_list[selected_indices[0]][:dim_data - uncond_dim].clone()
 
         # Set the selected conditional_modes components to have the same conditioning part
         for i in range(conditional_modes):
             idx = selected_indices[i]
-            mu_list[idx][:dim_data - 1] = conditioning_value
+            mu_list[idx][:dim_data - uncond_dim] = conditioning_value
 
         # Set x_star to be this conditioning value
         x_star = conditioning_value.float().to(device)
         # changed
     else:
         # Original behavior for conditional_modes <= 1
-        samples = generate_mog_samples(150, mu_list, Sigma_list, alpha).float().to(device)
+        samples = generate_mog_samples_not_differentiable(150, mu_list, Sigma_list, alpha).float().to(device)
         idx = torch.randint(0, 150, (1,))
-        x_star = samples[idx, :dim_data - 1]
+        x_star = samples[idx, :dim_data - uncond_dim]
 
     # Compute the Y|X=x^*
     mog_means, mog_variances = compute_conditionals(mu_list, Sigma_list, x_star.reshape(-1, 1))
