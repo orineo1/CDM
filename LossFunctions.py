@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-
+import ot
 #### MMD Loss #####
 
 class RBF(nn.Module):
@@ -59,39 +59,116 @@ class MMDLoss(nn.Module):
 
 
 # Compute distance
+# def sliced_wasserstein_distance(X, Y, num_projections=100, p=2):
+#         n, d = X.shape
+#         X,Y = X.to(torch.float32), Y.to(torch.float32)
+#
+#         projections = torch.randn(num_projections, d, device=X.device)
+#         projections = projections / torch.norm(projections, dim=1, keepdim=True)  # normalize
+#
+#
+#         swd = 0.0
+#         for proj in projections:
+#             X_proj = (X @ proj).cpu().numpy()
+#             Y_proj = (Y @ proj).cpu().numpy()
+#
+#             X_proj.sort()
+#             Y_proj.sort()
+#
+#             swd += ot.wasserstein_1d(X_proj, Y_proj, p=p)
+#
+#         return swd / num_projections
+#
+# def compute_swd_distance_optimization(mu_list, Sigma_list, alpha,x_star,x_optim,n_samples,num_projections=100, p=2):
+#     #param for target
+#     mog_means, mog_variances = compute_conditionals(mu_list, Sigma_list, x_star.reshape(-1, 1))
+#     weights = compute_alpha(mu_list, Sigma_list, alpha, x_star.reshape(-1, 1))
+#
+#     # param for optimized
+#     mog_means_optim, mog_variances_optim = compute_conditionals(mu_list, Sigma_list, x_optim.reshape(-1, 1))
+#     weights_optim = compute_alpha(mu_list, Sigma_list, alpha, x_optim.reshape(-1, 1))
+#
+#     # sample theo and optim
+#     samples_tehoretical = generate_mog_samples_not_differentiable(n_samples, mog_means, mog_variances, weights)
+#     samples_optimized = generate_mog_samples_not_differentiable(n_samples,mog_means_optim, mog_variances_optim, weights_optim)
+#
+#     dist = sliced_wasserstein_distance(samples_tehoretical, samples_optimized, num_projections=100, p=2)
+#
+#     return dist
+
+
+
+
+
+# --- Compute Sliced Wasserstein Distance ---
 def sliced_wasserstein_distance(X, Y, num_projections=100, p=2):
-        n, d = X.shape
-        X,Y = X.to(torch.float32), Y.to(torch.float32)
+    n, d = X.shape
+    projections = torch.randn(num_projections, d, device=X.device)
+    projections = projections / torch.norm(projections, dim=1, keepdim=True)  # normalize
 
-        projections = torch.randn(num_projections, d, device=X.device)
-        projections = projections / torch.norm(projections, dim=1, keepdim=True)  # normalize
+    swd = 0.0
+    for proj in projections:
+        X_proj = (X @ proj).cpu().numpy()
+        Y_proj = (Y @ proj).cpu().numpy()
+
+        X_proj.sort()
+        Y_proj.sort()
+
+        swd += ot.wasserstein_1d(X_proj, Y_proj, p=p)
+
+    return swd / num_projections
 
 
-        swd = 0.0
-        for proj in projections:
-            X_proj = (X @ proj).cpu().numpy()
-            Y_proj = (Y @ proj).cpu().numpy()
+def compute_swd_from_latent(
+    best_x0_sample,
+    decoder,
+    scaler,
+    device,
+    mu_list,
+    Sigma_list,
+    alpha,
+    mog_means,
+    mog_variances,
+    weights,
+    dist_utils,
+    generate_mog_samples_not_differentiable,
+    nsamples=2_500,
+    num_projections=200,
+    p=2,
+    Flag=False
+):
+    """
+    Full pipeline:
+    latent -> decode -> denormalize -> conditionals -> MoG samples -> SWD
+    """
 
-            X_proj.sort()
-            Y_proj.sort()
+    with torch.no_grad():
+        # Decode from latent
+        decoded_scaled = decoder(best_x0_sample)
 
-            swd += ot.wasserstein_1d(X_proj, Y_proj, p=p)
+        # Denormalize
+        decoded_numpy = scaler.inverse_transform(decoded_scaled.cpu().numpy())
+        decoded_original = torch.tensor(decoded_numpy, device=device, dtype=torch.float32)
+        if Flag:
+          print("decoded_x_star",decoded_original)
+        # Conditionals
+        mu_temp_optim, Sigma_temp_optim = dist_utils.compute_conditionals(
+            mu_list, Sigma_list, decoded_original.reshape(-1, 1)
+        )
 
-        return swd / num_projections
+        # Mixture weights
+        temp_alpha_optim = dist_utils.compute_alpha(mu_list, Sigma_list, alpha, decoded_original)
 
-def compute_swd_distance_optimization(mu_list, Sigma_list, alpha,x_star,x_optim,n_samples,num_projections=100, p=2):
-    #param for target
-    mog_means, mog_variances = compute_conditionals(mu_list, Sigma_list, x_star.reshape(-1, 1))
-    weights = compute_alpha(mu_list, Sigma_list, alpha, x_star.reshape(-1, 1))
+        # Optimized samples
+        mog_samples_optim = generate_mog_samples_not_differentiable(
+            nsamples, mu_temp_optim, Sigma_temp_optim, temp_alpha_optim
+        )
 
-    # param for optimized
-    mog_means_optim, mog_variances_optim = compute_conditionals(mu_list, Sigma_list, x_optim.reshape(-1, 1))
-    weights_optim = compute_alpha(mu_list, Sigma_list, alpha, x_optim.reshape(-1, 1))
+        # Raw samples
+        mog_samples_raw = generate_mog_samples_not_differentiable(
+            nsamples, mog_means, mog_variances, weights
+        )
 
-    # sample theo and optim
-    samples_tehoretical = generate_mog_samples_not_differentiable(n_samples, mog_means, mog_variances, weights)
-    samples_optimized = generate_mog_samples_not_differentiable(n_samples,mog_means_optim, mog_variances_optim, weights_optim)
+    swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw, num_projections, p)
 
-    dist = sliced_wasserstein_distance(samples_tehoretical, samples_optimized, num_projections=100, p=2)
-
-    return dist
+    return swd
