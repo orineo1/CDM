@@ -60,188 +60,76 @@ class FMModel(nn.Module):
 
         return self.vf(val, t_emb)
 
-    # def train_FM(self, lr=0.001, batch_size=1024,
-    #              X=None, nepochs=10, mu_list=None, Sigma_list=None, alpha=None,
-    #              guidance_dropout: float = 0.1):
-    #     # init optimizer
-    #     optim_FM = torch.optim.Adam(self.parameters(), lr=lr)
-    #
-    #     use_loader = X is not None
-    #     if use_loader:
-    #         X = X.to(self.device)
-    #         dataset = torch.utils.data.TensorDataset(X)
-    #         dataloader = torch.utils.data.DataLoader(
-    #             dataset,
-    #             batch_size=batch_size,
-    #             shuffle=True,
-    #             drop_last=False
-    #         )
-    #
-    #     pbar = tqdm(range(nepochs))
-    #     for epoch in pbar:
-    #         epoch_loss = 0.0
-    #         num_batches = 0
-    #
-    #         data_iter = dataloader if use_loader else range(1)
-    #
-    #         for batch_idx in data_iter:
-    #             optim_FM.zero_grad()
-    #
-    #             if use_loader:
-    #                 (batch_x,) = batch_idx
-    #             else:
-    #                 # TODO when adding the dist_utils uncomment
-    #                 # batch_x = dist_utils.generate_mog_samples(batch_size, mu_list, Sigma_list, alpha)
-    #                 continue
-    #
-    #             y = batch_x[:, self.condition_on:].to(torch.float32).to(self.device)
-    #             x_cond_full = batch_x[:, :self.condition_on].to(torch.float32).to(self.device)
-    #
-    #             x_0 = torch.randn_like(y).to(self.device)
-    #             t = torch.rand(y.shape[0], device=self.device)
-    #
-    #             path_sample = self.path.sample(t=t, x_0=x_0, x_1=y)
-    #             x_t = path_sample.x_t.to(self.device)
-    #             dx_t = path_sample.dx_t.to(self.device)
-    #             t = path_sample.t.to(self.device)
-    #
-    #             ### Classifier-Free Guidance
-    #             if self.condition and self.condition_on > 0:
-    #                 # Create a mask for which samples keep their condition
-    #                 guidance_mask = torch.rand(y.shape[0], device=self.device) >= guidance_dropout
-    #
-    #                 # Allocate tensor for predicted velocity
-    #                 predicted_velocity = torch.zeros_like(dx_t)
-    #
-    #                 # Conditional predictions (for samples keeping conditioning)
-    #                 if guidance_mask.any():
-    #                     cond_output = self.forward(
-    #                         x_t[guidance_mask],
-    #                         t[guidance_mask],
-    #                         x_cond_full[guidance_mask]
-    #                     )
-    #                     predicted_velocity[guidance_mask] = cond_output
-    #
-    #                 # Unconditional predictions (drop conditioning)
-    #                 if (~guidance_mask).any():
-    #                     uncond_output = self.forward(
-    #                         x_t[~guidance_mask],
-    #                         t[~guidance_mask],
-    #                         None
-    #                     )
-    #                     predicted_velocity[~guidance_mask] = uncond_output
-    #             else:
-    #                 predicted_velocity = self.forward(x_t, t)
-    #
-    #             loss = torch.pow(predicted_velocity - dx_t, 2).mean()
-    #
-    #             epoch_loss += loss.item()
-    #             num_batches += 1
-    #
-    #             loss.backward()
-    #             optim_FM.step()
-    #
-    #         avg_epoch_loss = epoch_loss / num_batches if num_batches > 0 else 0
-    #         pbar.set_description(f"loss: {avg_epoch_loss :.6f}")
-    #
-    #     self.solver = ODESolver(velocity_model=self._wrapped_forward)
-    #     self.solver = add_compute_likelihood_allow_grad(self.solver)
 
-    def train_FM(self, lr=0.001, batch_size=1024,
-                 X=None, data_generator=None, nepochs=10, mu_list=None, Sigma_list=None, alpha=None,
-                 guidance_dropout: float = 0.1):
-        # change
-        assert X is not None or data_generator is not None, "Need either X or data_generator"
-        # changed
+    def train_FM(
+    self,
+    lr=0.001,
+    batch_size=1024,
+    data_generator=None,
+    nepochs=10000,   # total number of iterations
+    guidance_dropout: float = 0.1,):
+      assert data_generator is not None, "Need data_generator for training"
 
-        # init optimizer
-        optim_FM = torch.optim.Adam(self.parameters(), lr=lr)
+      optim_FM = torch.optim.Adam(self.parameters(), lr=lr)
 
-        # change
-        use_loader = X is not None
-        if use_loader:
-            X = X.to(self.device)
-            dataset = torch.utils.data.TensorDataset(X)
-            dataloader = torch.utils.data.DataLoader(
-                dataset,
-                batch_size=batch_size,
-                shuffle=True,
-                drop_last=False
-            )
-        # changed
+      pbar = tqdm(range(nepochs))
+      epoch_loss = 0.0
+      num_batches = 0
 
-        pbar = tqdm(range(nepochs))
-        for epoch in pbar:
-            epoch_loss = 0.0
-            num_batches = 0
+      for step in pbar:
+          optim_FM.zero_grad()
 
-            # change
-            if use_loader:
-                data_iter = dataloader
+          # one fresh batch per iteration
+          batch_x = data_generator(batch_size, device=self.device)
 
-            for batch_idx in data_iter:
-                optim_FM.zero_grad()
 
-                # change
-                if use_loader:
-                    (batch_x,) = batch_idx
-                else:
-                    # Generate batch using data_generator
-                    batch_x = data_generator(batch_size, device=self.device)
-                # changed
+          y = batch_x[:, self.condition_on:].to(torch.float32).to(self.device)
+          x_cond_full = batch_x[:, :self.condition_on].to(torch.float32).to(self.device)
 
-                y = batch_x[:, self.condition_on:].to(torch.float32).to(self.device)
-                x_cond_full = batch_x[:, :self.condition_on].to(torch.float32).to(self.device)
+          x_0 = torch.randn_like(y).to(self.device)
+          t = torch.rand(y.shape[0], device=self.device)
 
-                x_0 = torch.randn_like(y).to(self.device)
-                t = torch.rand(y.shape[0], device=self.device)
+          path_sample = self.path.sample(t=t, x_0=x_0, x_1=y)
+          x_t = path_sample.x_t.to(self.device)
+          dx_t = path_sample.dx_t.to(self.device)
+          t = path_sample.t.to(self.device)
 
-                path_sample = self.path.sample(t=t, x_0=x_0, x_1=y)
-                x_t = path_sample.x_t.to(self.device)
-                dx_t = path_sample.dx_t.to(self.device)
-                t = path_sample.t.to(self.device)
+          ### Classifier-Free Guidance
+          if self.condition and self.condition_on > 0:
+              guidance_mask = torch.rand(y.shape[0], device=self.device) >= guidance_dropout
+              predicted_velocity = torch.zeros_like(dx_t)
 
-                ### Classifier-Free Guidance
-                if self.condition and self.condition_on > 0:
-                    # Create a mask for which samples keep their condition
-                    guidance_mask = torch.rand(y.shape[0], device=self.device) >= guidance_dropout
+              if guidance_mask.any():
+                  cond_output = self.forward(
+                      x_t[guidance_mask],
+                      t[guidance_mask],
+                      x_cond_full[guidance_mask]
+                  )
+                  predicted_velocity[guidance_mask] = cond_output
 
-                    # Allocate tensor for predicted velocity
-                    predicted_velocity = torch.zeros_like(dx_t)
+              if (~guidance_mask).any():
+                  uncond_output = self.forward(
+                      x_t[~guidance_mask],
+                      t[~guidance_mask],
+                      None
+                  )
+                  predicted_velocity[~guidance_mask] = uncond_output
+          else:
+              predicted_velocity = self.forward(x_t, t)
 
-                    # Conditional predictions (for samples keeping conditioning)
-                    if guidance_mask.any():
-                        cond_output = self.forward(
-                            x_t[guidance_mask],
-                            t[guidance_mask],
-                            x_cond_full[guidance_mask]
-                        )
-                        predicted_velocity[guidance_mask] = cond_output
+          loss = torch.pow(predicted_velocity - dx_t, 2).mean()
 
-                    # Unconditional predictions (drop conditioning)
-                    if (~guidance_mask).any():
-                        uncond_output = self.forward(
-                            x_t[~guidance_mask],
-                            t[~guidance_mask],
-                            None
-                        )
-                        predicted_velocity[~guidance_mask] = uncond_output
-                else:
-                    predicted_velocity = self.forward(x_t, t)
+          epoch_loss += loss.item()
+          num_batches += 1
 
-                loss = torch.pow(predicted_velocity - dx_t, 2).mean()
+          loss.backward()
+          optim_FM.step()
 
-                epoch_loss += loss.item()
-                num_batches += 1
+          avg_loss = epoch_loss / num_batches
+          pbar.set_description(f"loss: {avg_loss :.6f}")
 
-                loss.backward()
-                optim_FM.step()
-
-            avg_epoch_loss = epoch_loss / num_batches if num_batches > 0 else 0
-            pbar.set_description(f"loss: {avg_epoch_loss :.6f}")
-
-        self.solver = ODESolver(velocity_model=self._wrapped_forward)
-        self.solver = add_compute_likelihood_allow_grad(self.solver)
+      self.solver = ODESolver(velocity_model=self._wrapped_forward)
+      self.solver = add_compute_likelihood_allow_grad(self.solver)
     def sample(self, num_sample, y=None, return_intermediates=False, step_size=0.05, x_init=None):
         """
         Sample from the vector field model with conditioning.
