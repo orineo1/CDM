@@ -704,6 +704,72 @@ def get_param_mog_with_target(dim_data=3, num_components=2, device='cpu',
 
     return mu_list, Sigma_list, alpha, mog_means, mog_variances, weights, x_star
 
+def get_param_mog_with_target_latent(dim_data=9, num_components=2, device='cpu',
+                              conditional_modes=2, condition_values=None, distanceOrScale="Distance",
+                              manifold_dim=None, manifold_noise=0.01,uncond_dim=1,reg=1e-1):
+    """
+    Generate GMM parameters with multi-modal conditional distribution and manifold structure.
+    """
+    # Set manifold dimension
+    if manifold_dim is None:
+        manifold_dim = max(2, dim_data // 2)
+
+    if distanceOrScale == "Distance":
+        mu_list_base, Sigma_list_base, alpha = dist_utils.generate_gmm_parameters_Distance(d=manifold_dim, num_components=num_components, seed=1)
+    else:
+        mu_list_base, Sigma_list_base, alpha = dist_utils.generate_gmm_parameters(d=manifold_dim, num_components=num_components, seed=1)
+
+    # Create manifold embedding: manifold_dim -> dim_data
+    torch.manual_seed(42)  # For reproducible manifold
+    embedding_matrix = torch.randn(dim_data, manifold_dim, dtype=torch.float32)
+    embedding_matrix = torch.linalg.qr(embedding_matrix, mode='reduced')[0]  # Fixed QR
+
+    # Transform to high-dimensional manifold
+    mu_list = []
+    Sigma_list = []
+
+    for i in range(num_components):
+        # Embed mean in high-dimensional space (convert to float32)
+        manifold_mean = mu_list_base[i].float()
+        full_mean = embedding_matrix @ manifold_mean
+        mu_list.append(full_mean)
+
+        # Embed covariance with manifold structure
+        manifold_cov = Sigma_list_base[i].float()
+
+        # Project to full space: only variance along manifold directions
+        full_cov = embedding_matrix @ manifold_cov @ embedding_matrix.T
+
+        # Add small noise in orthogonal directions (off-manifold)
+        full_cov += torch.eye(dim_data, dtype=torch.float32) * manifold_noise
+
+        full_cov += torch.eye(dim_data, dtype=torch.float32) * reg  # Extra regularization for conditioning
+
+        Sigma_list.append(full_cov)
+
+    # Convert alpha to float32
+    alpha = alpha.float()
+
+    if conditional_modes > 1:
+        selected_indices = torch.randperm(len(mu_list))[:conditional_modes]
+        conditioning_value = mu_list[selected_indices[0]][:dim_data - uncond_dim].clone()
+
+        for i in range(conditional_modes):
+            idx = selected_indices[i]
+            mu_list[idx][:dim_data - uncond_dim] = conditioning_value
+
+        x_star = conditioning_value.float().to(device)
+    else:
+        samples = dist_utils.generate_mog_samples(150, mu_list, Sigma_list, alpha).float().to(device)
+        idx = torch.randint(0, 150, (1,))
+        x_star = samples[idx, :dim_data - uncond_dim]
+
+    # Compute the Y|X=x^*
+    mog_means, mog_variances = dist_utils.compute_conditionals(mu_list, Sigma_list, x_star.reshape(-1, 1))
+    weights = dist_utils.compute_alpha(mu_list, Sigma_list, alpha, x_star.reshape(-1, 1))
+
+    return mu_list, Sigma_list, alpha, mog_means, mog_variances, weights, x_star
+
 
 def compute_mixture_wasserstein_distance_1D(mu_list, Sigma_list, alpha, x_star, x_optimized,
                                        x_range=(-10, 10), n_points=1000):
