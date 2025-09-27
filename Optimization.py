@@ -143,8 +143,8 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
     return x_t_final, x_t_final, best_mmd_loss
 
 
-def optimize_LGD_latent(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
-               nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda", FLAG=False):
+def optimize_LGD_latent(model_uncond, model_cond, mog_means, mog_variances, weights,scaler2,encoder2, mu_list, Sigma_list, alpha,
+               nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda", FLAG=False,):
 
   mmd_loss = MMDLoss(kernel=RBF())
   best_mmd_loss = float("inf")
