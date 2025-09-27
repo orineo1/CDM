@@ -56,3 +56,42 @@ class MMDLoss(nn.Module):
 #     samples = generate_mog_samples(numb_sample, xi, S, beta, tau=10.0)
 #     # Use the MMD loss implementation
 #     loss = mmd_loss(target_samples, samples)
+
+
+# Compute distance
+def sliced_wasserstein_distance(X, Y, num_projections=100, p=2):
+        n, d = X.shape
+        X,Y = X.to(torch.float32), Y.to(torch.float32)
+
+        projections = torch.randn(num_projections, d, device=X.device)
+        projections = projections / torch.norm(projections, dim=1, keepdim=True)  # normalize
+
+
+        swd = 0.0
+        for proj in projections:
+            X_proj = (X @ proj).cpu().numpy()
+            Y_proj = (Y @ proj).cpu().numpy()
+
+            X_proj.sort()
+            Y_proj.sort()
+
+            swd += ot.wasserstein_1d(X_proj, Y_proj, p=p)
+
+        return swd / num_projections
+
+def compute_swd_distance_optimization(mu_list, Sigma_list, alpha,x_star,x_optim,n_samples,num_projections=100, p=2):
+    #param for target
+    mog_means, mog_variances = compute_conditionals(mu_list, Sigma_list, x_star.reshape(-1, 1))
+    weights = compute_alpha(mu_list, Sigma_list, alpha, x_star.reshape(-1, 1))
+
+    # param for optimized
+    mog_means_optim, mog_variances_optim = compute_conditionals(mu_list, Sigma_list, x_optim.reshape(-1, 1))
+    weights_optim = compute_alpha(mu_list, Sigma_list, alpha, x_optim.reshape(-1, 1))
+
+    # sample theo and optim
+    samples_tehoretical = generate_mog_samples_not_differentiable(n_samples, mog_means, mog_variances, weights)
+    samples_optimized = generate_mog_samples_not_differentiable(n_samples,mog_means_optim, mog_variances_optim, weights_optim)
+
+    dist = sliced_wasserstein_distance(samples_tehoretical, samples_optimized, num_projections=100, p=2)
+
+    return dist
