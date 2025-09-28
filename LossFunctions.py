@@ -141,7 +141,6 @@ def compute_swd_from_latent(
     Full pipeline:
     latent -> decode -> denormalize -> conditionals -> MoG samples -> SWD
     """
-
     with torch.no_grad():
         # Decode from latent
         decoded_scaled = decoder(best_x0_sample)
@@ -150,7 +149,8 @@ def compute_swd_from_latent(
         decoded_numpy = scaler.inverse_transform(decoded_scaled.cpu().numpy())
         decoded_original = torch.tensor(decoded_numpy, device=device, dtype=torch.float32)
         if Flag:
-          print("decoded_x_star",decoded_original)
+            print("decoded_x_star", decoded_original)
+
         # Conditionals
         mu_temp_optim, Sigma_temp_optim = dist_utils.compute_conditionals(
             mu_list, Sigma_list, decoded_original.reshape(-1, 1)
@@ -158,6 +158,14 @@ def compute_swd_from_latent(
 
         # Mixture weights
         temp_alpha_optim = dist_utils.compute_alpha(mu_list, Sigma_list, alpha, decoded_original)
+
+        # --- Ensure covariances are symmetric ---
+        for i in range(Sigma_temp_optim.shape[0]):
+            original = Sigma_temp_optim[i].clone()
+            Sigma_temp_optim[i] = (Sigma_temp_optim[i] + Sigma_temp_optim[i].T) / 2
+            diff_norm = torch.norm(Sigma_temp_optim[i] - original).item()
+            if diff_norm > 1e-8:  # change threshold for printing
+                print(f"Covariance matrix {i} symmetrized. Frobenius norm of change: {diff_norm:.6f}")
 
         # Optimized samples
         mog_samples_optim = generate_mog_samples_not_differentiable(
@@ -170,5 +178,4 @@ def compute_swd_from_latent(
         )
 
     swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw, num_projections, p)
-
     return swd
