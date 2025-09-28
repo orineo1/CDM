@@ -144,7 +144,7 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
 
 
 def optimize_LGD_latent(model_uncond, model_cond, mog_means, mog_variances, weights,scaler2,encoder2, mu_list, Sigma_list, alpha,
-               nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda", FLAG=False,):
+               nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda", FLAG=False,factor_for_final_loss_calc=4):
 
   mmd_loss = MMDLoss(kernel=RBF())
   best_mmd_loss = float("inf")
@@ -204,8 +204,8 @@ def optimize_LGD_latent(model_uncond, model_cond, mog_means, mog_variances, weig
           pbar.set_description(f"Step {t}| grad_norm:{grad_norm:.6f} | x_t:{x_t}|x0_sample:{x0_sample} | loss_val:{loss_val:.6f}|log_mean_exp_loss: {log_mean_exp_loss.item():.4f}")
 
   condition = x_t.view(1, -1).repeat(nsamples, 1)
-  target_samples, _, _ = model_cond.sample(nsamples=nsamples*4, condition_x=condition, device=device)
-  mog_samples_raw = generate_mog_samples_not_differentiable(nsamples*4, mog_means, mog_variances, weights)
+  target_samples, _, _ = model_cond.sample(nsamples=nsamples*factor_for_final_loss_calc, condition_x=condition, device=device)
+  mog_samples_raw = generate_mog_samples_not_differentiable(nsamples*factor_for_final_loss_calc, mog_means, mog_variances, weights)
   mog_samples_scaled = torch.tensor(scaler2.transform(mog_samples_raw.cpu().numpy()), device=device, dtype=torch.float32)
   mog_samples = encoder2(mog_samples_scaled)
   final_loss =  mmd_loss(target_samples, mog_samples)
