@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import ot
+import dist_utils
 #### MMD Loss #####
 
 class RBF(nn.Module):
@@ -100,8 +101,8 @@ class MMDLoss(nn.Module):
 
 
 
-# --- Compute Sliced Wasserstein Distance ---
-def sliced_wasserstein_distance(X, Y, num_projections=100, p=2):
+def sliced_wasserstein_distance(X, Y, num_projections=100, p=2,
+                                mog_means=None, mog_variances=None, mog_weights=None):
     n, d = X.shape
     projections = torch.randn(num_projections, d, device=X.device)
     projections = projections / torch.norm(projections, dim=1, keepdim=True)  # normalize
@@ -113,10 +114,18 @@ def sliced_wasserstein_distance(X, Y, num_projections=100, p=2):
 
         X_proj.sort()
         Y_proj.sort()
-
         swd += ot.wasserstein_1d(X_proj, Y_proj, p=p)
 
-    return swd / num_projections
+    swd = swd / num_projections
+
+    # Optional normalization by sqrt(trace(cov)/d)
+    if mog_means is not None and mog_variances is not None and mog_weights is not None:
+        cov = dist_utils.mog_covariance(mog_means, mog_variances, mog_weights)
+        norm_coef = torch.sqrt(torch.trace(cov) / d).item()
+        swd = swd / norm_coef
+
+    return swd
+
 
 
 def compute_swd_from_latent(
