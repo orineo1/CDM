@@ -143,6 +143,76 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
     return x_t_final, x_t_final, best_mmd_loss
 
 
+def optimize_LGD_latent(model_uncond, model_cond, mog_means, mog_variances, weights,scaler2,encoder2, mu_list, Sigma_list, alpha,
+               nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda", FLAG=False,factor_for_final_loss_calc=4):
+
+  mmd_loss = MMDLoss(kernel=RBF())
+  best_mmd_loss = float("inf")
+  best_x0_sample = None
+
+  # Initialize starting point
+  # x_t = torch.zeros(model_uncond.nfeatures, device=device, requires_grad=True)
+  x_t = torch.randn(model_uncond.nfeatures, device=device, requires_grad=True)
+
+  x_t = x_t.unsqueeze(0)
+  pbar = tqdm(range(model_uncond.diffusion_steps - 1, 0, -1)) if FLAG else range(model_uncond.diffusion_steps - 1, 0, -1)
+
+  for t in pbar:
+      x_t = x_t.detach().clone().requires_grad_(True)
+
+      # optimizer = optim.AdamW([x_t], lr=.05, weight_decay=0.01)
+      optimizer = optim.Adam([x_t], lr=0.1, betas=(0.5, 0.999), eps=1e-4)
+
+      optimizer.zero_grad()
+
+      # DDIM step (get x_{t-1} and predicted x0)
+      x_t_minus_1, pred_x0 = model_uncond.sample_ddim_step(x_t, t, condition_x=None, device=device, eta=0.0)
+      current_var = model_uncond.betas[t].to(device)
+      r_t = current_var / torch.sqrt(1 + current_var ** 2)
+
+      log_mean_exp_loss = torch.tensor([0])
+      # Monte Carlo estimation of expected loss over x0 ~ N(pred_x0, r_t^2 * I)
+      losses = []
+      for j in range(num_x_t):
+          x0_sample = pred_x0 + r_t * torch.randn_like(pred_x0)
+          condition = x0_sample.view(1, -1).repeat(nsamples, 1)
+          target_samples, _, _ = model_cond.sample(nsamples=nsamples, condition_x=condition, device=device)
+          if not CM:
+              target_samples = target_samples[:, model_cond.condition_on:]
+
+          # Generate MoG samples in encoded space
+          mog_samples_raw = generate_mog_samples_not_differentiable(nsamples, mog_means, mog_variances, weights)
+          mog_samples_scaled = torch.tensor(scaler2.transform(mog_samples_raw.cpu().numpy()), device=device, dtype=torch.float32)
+          mog_samples = encoder2(mog_samples_scaled)
+
+          loss_val = mmd_loss(target_samples, mog_samples)
+          losses.append(-loss_val)  # negative for log-mean-exp
+
+          if loss_val.item() < best_mmd_loss:
+              best_mmd_loss = loss_val.item()
+              best_x0_sample = x0_sample.detach().clone()
+
+      # Compute final log-mean-exp loss
+      log_mean_exp_loss = -torch.logsumexp(torch.stack(losses), dim=0) + math.log(num_x_t)
+      log_mean_exp_loss.backward()
+
+      # Optimizer step
+      optimizer.step()
+
+      if FLAG:
+          grad_norm = torch.norm(x_t.grad).item() if x_t.grad is not None else 0
+          pbar.set_description(f"Step {t}| grad_norm:{grad_norm:.6f} | x_t:{x_t}|x0_sample:{x0_sample} | loss_val:{loss_val:.6f}|log_mean_exp_loss: {log_mean_exp_loss.item():.4f}")
+
+  condition = x_t.view(1, -1).repeat(nsamples, 1)
+  target_samples, _, _ = model_cond.sample(nsamples=nsamples, condition_x=condition, device=device)
+  mog_samples_raw = generate_mog_samples_not_differentiable(nsamples, mog_means, mog_variances, weights)
+  mog_samples_scaled = torch.tensor(scaler2.transform(mog_samples_raw.cpu().numpy()), device=device, dtype=torch.float32)
+  mog_samples = encoder2(mog_samples_scaled)
+  final_loss =  mmd_loss(target_samples, mog_samples)
+  # Final output
+  x_t_final = x_t.detach().clone()
+  torch.cuda.empty_cache() if device == "cuda" else None
+  return x_t_final, x_t_final, best_mmd_loss, best_x0_sample,final_loss
 
 ######### FlowMatching
 
