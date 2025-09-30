@@ -46,6 +46,34 @@ def sample_multivariate_gaussian(mean, covariance):
     return mean + torch.matmul(L, epsilon)
 
 
+def mog_covariance(means, variances, weights):
+    """
+    Compute covariance matrix of a mixture of Gaussians.
+
+    means: list of (d,) tensors
+    variances: list of (d,) tensors (diagonal variances)
+    weights: list or tensor of scalars, length K
+    """
+    means = torch.stack(means)  # (K, d)
+    variances = torch.stack(variances)  # (K, d)
+    weights = torch.tensor(weights, dtype=means.dtype, device=means.device)
+    weights = weights / weights.sum()
+
+    d = means.shape[1]
+
+    # mixture mean
+    mu = torch.sum(weights[:, None] * means, dim=0)
+
+    # mixture covariance
+    cov = torch.zeros(d, d, device=means.device, dtype=means.dtype)
+    for k in range(len(weights)):
+        Sigma_k = torch.diag(variances[k])
+        diff = (means[k] - mu).unsqueeze(1)
+        cov += weights[k] * (Sigma_k + diff @ diff.T)
+
+    return cov
+
+
 def generate_mog_samples(n_samples, xi, S, beta, tau=7.5,device="cpu",kernel_func=None):
     """
     Generate samples from mixture of Gaussians using reparameterization trick
