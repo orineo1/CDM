@@ -128,19 +128,17 @@ def sliced_wasserstein_distance(X, Y, num_projections=100, p=2,
 
 
 
-def compute_swd_from_latent(
+def compute_swd(
     best_x0_sample,
-    decoder,
-    scaler,
-    device,
     mu_list,
     Sigma_list,
     alpha,
     mog_means,
     mog_variances,
     weights,
-    dist_utils,
-    generate_mog_samples_not_differentiable,
+    decoder=None,
+    scaler=None,
+    device="cpu",
     nsamples=2_500,
     num_projections=200,
     p=2,
@@ -148,17 +146,25 @@ def compute_swd_from_latent(
 ):
     """
     Full pipeline:
-    latent -> decode -> denormalize -> conditionals -> MoG samples -> SWD
+    latent -> (optional decode/denormalize) -> conditionals -> MoG samples -> SWD
+
+    If `decoder` and `scaler` are None, the function skips decoding and uses best_x0_sample directly.
     """
     with torch.no_grad():
-        # Decode from latent
-        decoded_scaled = decoder(best_x0_sample)
+        if decoder is not None and scaler is not None:
+            # Decode from latent
+            decoded_scaled = decoder(best_x0_sample)
 
-        # Denormalize
-        decoded_numpy = scaler.inverse_transform(decoded_scaled.cpu().numpy())
-        decoded_original = torch.tensor(decoded_numpy, device=device, dtype=torch.float32)
-        if Flag:
-            print("decoded_x_star", decoded_original)
+            # Denormalize
+            decoded_numpy = scaler.inverse_transform(decoded_scaled.cpu().numpy())
+            decoded_original = torch.tensor(decoded_numpy, device=device, dtype=torch.float32)
+            if Flag:
+                print("decoded_x_star", decoded_original)
+        else:
+            # Use latent directly
+            decoded_original = best_x0_sample.to(device).float()
+            if Flag:
+                print("Using raw latent (no decoding):", decoded_original)
 
         # Conditionals
         mu_temp_optim, Sigma_temp_optim = dist_utils.compute_conditionals(
@@ -173,18 +179,19 @@ def compute_swd_from_latent(
             original = Sigma_temp_optim[i].clone()
             Sigma_temp_optim[i] = (Sigma_temp_optim[i] + Sigma_temp_optim[i].T) / 2
             diff_norm = torch.norm(Sigma_temp_optim[i] - original).item()
-            if diff_norm > 1e-8:  # change threshold for printing
+            if diff_norm > 1e-8:
                 print(f"Covariance matrix {i} symmetrized. Frobenius norm of change: {diff_norm:.6f}")
 
         # Optimized samples
-        mog_samples_optim = generate_mog_samples_not_differentiable(
+        mog_samples_optim = dist_utils.generate_mog_samples_not_differentiable(
             nsamples, mu_temp_optim, Sigma_temp_optim, temp_alpha_optim
         )
 
         # Raw samples
-        mog_samples_raw = generate_mog_samples_not_differentiable(
+        mog_samples_raw = dist_utils.generate_mog_samples_not_differentiable(
             nsamples, mog_means, mog_variances, weights
         )
 
     swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw, num_projections, p)
     return swd
+
