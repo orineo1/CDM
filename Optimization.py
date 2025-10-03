@@ -137,10 +137,17 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
         with torch.no_grad():
             x_t = x_t_minus_1.detach().clone() - grad
 
+    # compute the final loss - proxy for the real loss
+    condition = x_t.view(1, -1).repeat(nsamples, 1)
+    target_samples, _, _ = model_cond.sample(nsamples=nsamples, condition_x=condition, device=device)
+    mog_samples = generate_mog_samples_not_differentiable(nsamples, mog_means, mog_variances, weights)
+    final_loss = mmd_loss(target_samples, mog_samples)
+
+
     # Final output
     x_t_final = x_t.detach().clone()
     torch.cuda.empty_cache() if device == "cuda" else None
-    return x_t_final, x_t_final, best_mmd_loss
+    return x_t_final, x_t_final, final_loss
 
 
 def optimize_LGD_latent(model_uncond, model_cond, mog_means, mog_variances, weights,scaler2,encoder2, mu_list, Sigma_list, alpha,
@@ -203,12 +210,14 @@ def optimize_LGD_latent(model_uncond, model_cond, mog_means, mog_variances, weig
           grad_norm = torch.norm(x_t.grad).item() if x_t.grad is not None else 0
           pbar.set_description(f"Step {t}| grad_norm:{grad_norm:.6f} | x_t:{x_t}|x0_sample:{x0_sample} | loss_val:{loss_val:.6f}|log_mean_exp_loss: {log_mean_exp_loss.item():.4f}")
 
+  # compute the final loss - proxy for the real loss
   condition = x_t.view(1, -1).repeat(nsamples, 1)
   target_samples, _, _ = model_cond.sample(nsamples=nsamples, condition_x=condition, device=device)
   mog_samples_raw = generate_mog_samples_not_differentiable(nsamples, mog_means, mog_variances, weights)
   mog_samples_scaled = torch.tensor(scaler2.transform(mog_samples_raw.cpu().numpy()), device=device, dtype=torch.float32)
   mog_samples = encoder2(mog_samples_scaled)
   final_loss =  mmd_loss(target_samples, mog_samples)
+
   # Final output
   x_t_final = x_t.detach().clone()
   torch.cuda.empty_cache() if device == "cuda" else None
