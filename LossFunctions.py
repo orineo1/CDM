@@ -191,7 +191,19 @@ def compute_swd(
         mog_samples_raw = dist_utils.generate_mog_samples_not_differentiable(
             nsamples, mog_means, mog_variances, weights
         )
+    if mog_samples_optim.shape[1] == 1:
+        # 1D case - use direct Wasserstein (no projections needed)
+        X_sorted = torch.sort(mog_samples_optim.squeeze())[0].cpu().numpy()
+        Y_sorted = torch.sort(mog_samples_raw.squeeze())[0].cpu().numpy()
+        swd = ot.wasserstein_1d(X_sorted, Y_sorted, p=p)
 
-    swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw, num_projections, p)
+        if Flag:
+            print("Using direct 1D Wasserstein (no projections)")
+    else:
+        # Multi-dimensional - use SWD with fixed seed
+        swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw,
+                                          num_projections, p,
+                                          mog_means, mog_variances, weights)
+    # swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw, num_projections, p)
     return swd
 
