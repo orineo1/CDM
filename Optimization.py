@@ -140,6 +140,8 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
     # compute the final loss - proxy for the real loss
     condition = x_t.view(1, -1).repeat(nsamples, 1)
     target_samples, _, _ = model_cond.sample(nsamples=nsamples, condition_x=condition, device=device)
+    if not CM:
+        target_samples = target_samples[:, model_cond.condition_on:]
     mog_samples = generate_mog_samples_not_differentiable(nsamples, mog_means, mog_variances, weights)
     final_loss = mmd_loss(target_samples, mog_samples)
 
