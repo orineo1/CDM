@@ -308,10 +308,15 @@ def optimize_DFLOW(vf_y_cond_x, vf_X, device, mog_means, mog_variances, weights,
 
     optimizer.step(closure)
     best_x1 = vf_X.sample(num_sample=1, y=None, x_init=best_x.to(device))
+    # compute the final loss - proxy for the real loss
+    with torch.no_grad():
+        final_loss = compute_loss(vf_y_cond_x, vf_X, best_x1, samples, loss_method,
+                                  mog_means, mog_variances, weights, device)
+
     del optimizer, samples, x, best_x
     torch.cuda.empty_cache() if device == "cuda" else None
 
-    return best_x1, best_loss
+    return best_x1, final_loss
 
 
 #
