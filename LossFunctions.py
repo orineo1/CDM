@@ -102,8 +102,7 @@ class MMDLoss(nn.Module):
 def sliced_wasserstein_distance(X, Y, num_projections=100, p=2,
                                 mu_list_sliced=None, Sigma_list_sliced=None, alpha=None,Flag=False):
     n, d = X.shape
-
-    projections = torch.randn(num_projections, d, device=X.device)
+    projections = torch.randn(num_projections, d, device=X.device, dtype=X.dtype)
     projections = projections / torch.norm(projections, dim=1, keepdim=True)  # normalize
 
     swd = 0.0
