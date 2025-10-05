@@ -202,13 +202,15 @@ def compute_swd(
         )
 
         # Slice means and civ to conditioned dimension only
-        sample_dim = decoded_original.shape[0]  # Get dimension of best_x0_sample
-        mu_list_sliced = [mu[:sample_dim] for mu in mu_list]
-        Sigma_list_sliced = [Sigma[:sample_dim, :sample_dim] for Sigma in Sigma_list]
+        # sample_dim = decoded_original.shape[0]  # Get dimension of best_x0_sample
+        # mu_list_sliced = [mu[:sample_dim] for mu in mu_list]
+        # Sigma_list_sliced = [Sigma[:sample_dim, :sample_dim] for Sigma in Sigma_list]
 
         swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw,
                                           num_projections, p,
-                                          mu_list_sliced, Sigma_list_sliced, alpha)
+                                          mog_means, mog_variances, weights
+                                          # mu_list_sliced, Sigma_list_sliced, alpha
+        )
 
     return swd
 
