@@ -50,25 +50,34 @@ def mog_covariance(means, variances, weights):
     """
     Compute covariance matrix of a mixture of Gaussians.
 
-    means: list of (d,) tensors
-    variances: list of (d,) tensors (diagonal variances)
+    means: list of (d,) tensors OR already stacked (K, d) tensor
+    variances: list of (d,) tensors OR already stacked (K, d) tensor
     weights: list or tensor of scalars, length K
     """
-    means = torch.stack(means)  # (K, d)
-    variances = torch.stack(variances)  # (K, d)
-    weights = torch.tensor(weights, dtype=means.dtype, device=means.device)
+    if isinstance(means, list):
+        means = torch.stack(means)  # (K, d)
+    if isinstance(variances, list):
+        variances = torch.stack(variances)  # (K, d)
+
+    if isinstance(weights, torch.Tensor):
+        weights = weights.clone().to(dtype=means.dtype, device=means.device)
+    else:
+        weights = torch.tensor(weights, dtype=means.dtype, device=means.device)
     weights = weights / weights.sum()
 
-    d = means.shape[1]
+    d = means[0].flatten().shape[0]
 
     # mixture mean
-    mu = torch.sum(weights[:, None] * means, dim=0)
+    means_flat = torch.stack([m.flatten() for m in means])  # (K, d)
+    mu = torch.sum(weights[:, None] * means_flat, dim=0)
 
     # mixture covariance
     cov = torch.zeros(d, d, device=means.device, dtype=means.dtype)
     for k in range(len(weights)):
-        Sigma_k = torch.diag(variances[k])
-        diff = (means[k] - mu).unsqueeze(1)
+        var_k = variances[k].flatten()
+        Sigma_k = torch.diag(var_k)
+
+        diff = (means_flat[k] - mu).unsqueeze(1)
         cov += weights[k] * (Sigma_k + diff @ diff.T)
 
     return cov
