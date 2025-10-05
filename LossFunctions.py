@@ -194,11 +194,13 @@ def compute_swd(
         mog_samples_optim = dist_utils.generate_mog_samples_not_differentiable(
             nsamples, mu_temp_optim, Sigma_temp_optim, temp_alpha_optim
         )
+        mog_samples_optim = mog_samples_optim.float()
 
         # Raw samples
         mog_samples_raw = dist_utils.generate_mog_samples_not_differentiable(
             nsamples, mog_means, mog_variances, weights
         )
+        mog_samples_raw = mog_samples_raw.float()
 
         # Slice means and civ to conditioned dimension only
         # sample_dim = decoded_original.shape[0]  # Get dimension of best_x0_sample
