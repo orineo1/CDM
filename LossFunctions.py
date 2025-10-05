@@ -99,11 +99,10 @@ class MMDLoss(nn.Module):
 
 
 
-
-
 def sliced_wasserstein_distance(X, Y, num_projections=100, p=2,
-                                mog_means=None, mog_variances=None, mog_weights=None):
+                                mu_list_sliced=None, Sigma_list_sliced=None, alpha=None,Flag=False):
     n, d = X.shape
+
     projections = torch.randn(num_projections, d, device=X.device)
     projections = projections / torch.norm(projections, dim=1, keepdim=True)  # normalize
 
@@ -114,35 +113,41 @@ def sliced_wasserstein_distance(X, Y, num_projections=100, p=2,
 
         X_proj.sort()
         Y_proj.sort()
-        swd += ot.wasserstein_1d(X_proj, Y_proj, p=p)
+        swd += ot.wasserstein_1d(X_proj, Y_proj)
 
     swd = swd / num_projections
 
     # Optional normalization by sqrt(trace(cov)/d)
-    if mog_means is not None and mog_variances is not None and mog_weights is not None:
-        cov = dist_utils.mog_covariance(mog_means, mog_variances, mog_weights)
+    if mu_list_sliced is not None and Sigma_list_sliced is not None and alpha is not None:
+        cov = dist_utils.mog_covariance(mu_list_sliced, Sigma_list_sliced, alpha)
         norm_coef = torch.sqrt(torch.trace(cov) / d).item()
         swd = swd / norm_coef
+
+    if Flag:
+      print(f"Raw SWD (before normalization): {swd:.6f}")
+      print(f"Covariance trace: {torch.trace(cov):.6f}")
+      print(f"Dimensionality d: {d}")
+      print(f"Normalization coefficient: {norm_coef:.6f}")
+      print(f"Normalized SWD: {swd:.6f}")
 
     return swd
 
 
-
 def compute_swd(
-    best_x0_sample,
-    mu_list,
-    Sigma_list,
-    alpha,
-    mog_means,
-    mog_variances,
-    weights,
-    decoder=None,
-    scaler=None,
-    device="cpu",
-    nsamples=2_500,
-    num_projections=200,
-    p=2,
-    Flag=False
+        best_x0_sample,
+        mu_list,
+        Sigma_list,
+        alpha,
+        mog_means,
+        mog_variances,
+        weights,
+        decoder=None,
+        scaler=None,
+        device="cpu",
+        nsamples=2_500,
+        num_projections=200,
+        p=2,
+        Flag=False
 ):
     """
     Full pipeline:
@@ -173,6 +178,10 @@ def compute_swd(
 
         # Mixture weights
         temp_alpha_optim = dist_utils.compute_alpha(mu_list, Sigma_list, alpha, decoded_original)
+        # mu_temp_optim, Sigma_temp_optim, temp_alpha_optim = dist_utils.filter_and_normalize(mu_temp_optim,
+        #                                                                                     Sigma_temp_optim,
+        #                                                                                     temp_alpha_optim,
+        #                                                                                     threshold=0.02)
 
         # --- Ensure covariances are symmetric ---
         for i in range(Sigma_temp_optim.shape[0]):
@@ -191,19 +200,15 @@ def compute_swd(
         mog_samples_raw = dist_utils.generate_mog_samples_not_differentiable(
             nsamples, mog_means, mog_variances, weights
         )
-    if mog_samples_optim.shape[1] == 1:
-        # 1D case - use direct Wasserstein (no projections needed)
-        X_sorted = torch.sort(mog_samples_optim.squeeze())[0].cpu().numpy()
-        Y_sorted = torch.sort(mog_samples_raw.squeeze())[0].cpu().numpy()
-        swd = ot.wasserstein_1d(X_sorted, Y_sorted, p=p)
 
-        if Flag:
-            print("Using direct 1D Wasserstein (no projections)")
-    else:
-        # Multi-dimensional - use SWD with fixed seed
+        # Slice means and civ to conditioned dimension only
+        sample_dim = decoded_original.shape[0]  # Get dimension of best_x0_sample
+        mu_list_sliced = [mu[:sample_dim] for mu in mu_list]
+        Sigma_list_sliced = [Sigma[:sample_dim, :sample_dim] for Sigma in Sigma_list]
+
         swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw,
                                           num_projections, p,
-                                          mog_means, mog_variances, weights)
-    # swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw, num_projections, p)
+                                          mu_list_sliced, Sigma_list_sliced, alpha)
+
     return swd
 
