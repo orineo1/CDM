@@ -120,7 +120,7 @@ def sliced_wasserstein_distance(X, Y, num_projections=100, p=2,
     if mu_list_sliced is not None and Sigma_list_sliced is not None and alpha is not None:
         cov = dist_utils.mog_covariance(mu_list_sliced, Sigma_list_sliced, alpha)
         norm_coef = torch.sqrt(torch.trace(cov) / d).item()
-        swd = swd / norm_coef
+        norm_swd = swd / norm_coef
 
     if Flag:
       print(f"Raw SWD (before normalization): {swd:.6f}")
@@ -129,7 +129,7 @@ def sliced_wasserstein_distance(X, Y, num_projections=100, p=2,
       print(f"Normalization coefficient: {norm_coef:.6f}")
       print(f"Normalized SWD: {swd:.6f}")
 
-    return swd
+    return swd,norm_swd
 
 
 def compute_swd(
@@ -207,11 +207,11 @@ def compute_swd(
         # mu_list_sliced = [mu[:sample_dim] for mu in mu_list]
         # Sigma_list_sliced = [Sigma[:sample_dim, :sample_dim] for Sigma in Sigma_list]
 
-        swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw,
+        swd,norm_swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw,
                                           num_projections, p,
                                           mog_means, mog_variances, weights
                                           # mu_list_sliced, Sigma_list_sliced, alpha
         )
 
-    return swd
+    return swd,norm_swd
 
