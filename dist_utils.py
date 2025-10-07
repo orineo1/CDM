@@ -51,13 +51,11 @@ def mog_covariance(means, variances, weights):
     Compute covariance matrix of a mixture of Gaussians.
 
     means: list of (d,) tensors OR already stacked (K, d) tensor
-    variances: list of (d,) tensors OR already stacked (K, d) tensor
+    variances: list of (d, d) covariance matrices
     weights: list or tensor of scalars, length K
     """
     if isinstance(means, list):
         means = torch.stack(means)  # (K, d)
-    if isinstance(variances, list):
-        variances = torch.stack(variances)  # (K, d)
 
     if isinstance(weights, torch.Tensor):
         weights = weights.clone().to(dtype=means.dtype, device=means.device)
@@ -74,8 +72,7 @@ def mog_covariance(means, variances, weights):
     # mixture covariance
     cov = torch.zeros(d, d, device=means.device, dtype=means.dtype)
     for k in range(len(weights)):
-        var_k = variances[k].flatten()
-        Sigma_k = torch.diag(var_k)
+        Sigma_k = variances[k]
 
         diff = (means_flat[k] - mu).unsqueeze(1)
         cov += weights[k] * (Sigma_k + diff @ diff.T)
