@@ -177,10 +177,7 @@ def compute_swd(
 
         # Mixture weights
         temp_alpha_optim = dist_utils.compute_alpha(mu_list, Sigma_list, alpha, decoded_original)
-        # mu_temp_optim, Sigma_temp_optim, temp_alpha_optim = dist_utils.filter_and_normalize(mu_temp_optim,
-        #                                                                                     Sigma_temp_optim,
-        #                                                                                     temp_alpha_optim,
-        #                                                                                     threshold=0.02)
+
 
         # --- Ensure covariances are symmetric ---
         for i in range(Sigma_temp_optim.shape[0]):
@@ -202,10 +199,7 @@ def compute_swd(
         )
         mog_samples_raw = mog_samples_raw.float()
 
-        # Slice means and civ to conditioned dimension only
-        # sample_dim = decoded_original.shape[0]  # Get dimension of best_x0_sample
-        # mu_list_sliced = [mu[:sample_dim] for mu in mu_list]
-        # Sigma_list_sliced = [Sigma[:sample_dim, :sample_dim] for Sigma in Sigma_list]
+
 
         swd,norm_swd = sliced_wasserstein_distance(mog_samples_optim, mog_samples_raw,
                                           num_projections, p,
