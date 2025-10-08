@@ -322,11 +322,23 @@ def create_model_evaluation_summary(
                 results['SWD_raw'].append(swd_val)
 
     df = pd.DataFrame(results)
-
     summary = df.groupby(['Model', 'Task']).agg({
-        'SWD_normalized': ['mean', 'std', 'min', 'max'],
-        'SWD_raw': ['mean', 'std']
+        'SWD_normalized': ['mean', 'std', 'min', lambda x: x.quantile(0.25), lambda x: x.quantile(0.5),
+                           lambda x: x.quantile(0.75), 'max'],
+        'SWD_raw': ['mean', 'std', 'min', lambda x: x.quantile(0.25), lambda x: x.quantile(0.5),
+                    lambda x: x.quantile(0.75), 'max']
     }).round(6)
+
+    # CHANGED: rename percentile columns for clarity
+    summary.columns = [
+        'SWD_norm_mean', 'SWD_norm_std', 'SWD_norm_min', 'SWD_norm_25%', 'SWD_norm_50%', 'SWD_norm_75%', 'SWD_norm_max',
+        'SWD_raw_mean', 'SWD_raw_std', 'SWD_raw_min', 'SWD_raw_25%', 'SWD_raw_50%', 'SWD_raw_75%', 'SWD_raw_max'
+    ]
+
+    # summary = df.groupby(['Model', 'Task']).agg({
+    #     'SWD_normalized': ['mean', 'std', 'min', 'max'],
+    #     'SWD_raw': ['mean', 'std']
+    # }).round(6)
 
     print("\n" + "="*80)
     print("MODEL EVALUATION SUMMARY")
