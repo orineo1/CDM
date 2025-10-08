@@ -358,6 +358,8 @@ def to_numpy(loss_list):
     return np.array([l.detach().cpu().item() if torch.is_tensor(l) else l for l in loss_list])
 
 
+import numpy as np
+
 def create_summary_table(indices_dict,
                          norm_swd_dict,
                          swd_dict,
@@ -406,22 +408,26 @@ def create_summary_table(indices_dict,
 
     df = pd.DataFrame(data)
 
-
+    # OLD: Using custom functions that don't work properly
+    # CHANGED: Use numpy percentile function directly in aggregation
     summary = df.groupby('Method').agg({
-        'SWD': ['mean', 'std', lambda x: x.quantile(0.25), lambda x: x.quantile(0.5), lambda x: x.quantile(0.75)],
-        'SWD_regular': ['mean', 'std', lambda x: x.quantile(0.25), lambda x: x.quantile(0.5),
-                        lambda x: x.quantile(0.75)],
-        'L1': ['mean', 'std', lambda x: x.quantile(0.25), lambda x: x.quantile(0.5), lambda x: x.quantile(0.75)],
-        'Time': ['mean', 'std', lambda x: x.quantile(0.25), lambda x: x.quantile(0.5), lambda x: x.quantile(0.75)]
+        'SWD': ['mean', 'std', ('25%', lambda x: np.percentile(x, 25)),
+                ('50%', lambda x: np.percentile(x, 50)),
+                ('75%', lambda x: np.percentile(x, 75))],
+        'SWD_regular': ['mean', 'std', ('25%', lambda x: np.percentile(x, 25)),
+                        ('50%', lambda x: np.percentile(x, 50)),
+                        ('75%', lambda x: np.percentile(x, 75))],
+        'L1': ['mean', 'std', ('25%', lambda x: np.percentile(x, 25)),
+               ('50%', lambda x: np.percentile(x, 50)),
+               ('75%', lambda x: np.percentile(x, 75))],
+        'Time': ['mean', 'std', ('25%', lambda x: np.percentile(x, 25)),
+                 ('50%', lambda x: np.percentile(x, 50)),
+                 ('75%', lambda x: np.percentile(x, 75))]
     }).round(4)
 
-    # CHANGED: rename columns for clarity
-    summary.columns = [
-        'SWD_mean', 'SWD_std', 'SWD_25%', 'SWD_50%', 'SWD_75%',
-        'SWD_reg_mean', 'SWD_reg_std', 'SWD_reg_25%', 'SWD_reg_50%', 'SWD_reg_75%',
-        'L1_mean', 'L1_std', 'L1_25%', 'L1_50%', 'L1_75%',
-        'Time_mean', 'Time_std', 'Time_25%', 'Time_50%', 'Time_75%'
-    ]
+    # Flatten multi-level column names
+    summary.columns = ['_'.join(col).strip() if col[1] else col[0]
+                       for col in summary.columns.values]
 
     print("=" * 70)
     print(title)
@@ -429,18 +435,16 @@ def create_summary_table(indices_dict,
     print(summary)
     print()
 
-    # OLD: print(df.groupby('Method')['Time'].agg(['mean', 'std']).round(2))
-    # CHANGED: added percentiles for time statistics
+    # Time statistics with percentiles
     print("=" * 70)
     print(f"{title} - Time Statistics (seconds)")
     print("=" * 70)
     time_stats = df.groupby('Method')['Time'].agg([
         'mean', 'std',
-        lambda x: x.quantile(0.25),
-        lambda x: x.quantile(0.5),
-        lambda x: x.quantile(0.75)
+        ('25%', lambda x: np.percentile(x, 25)),
+        ('50%', lambda x: np.percentile(x, 50)),
+        ('75%', lambda x: np.percentile(x, 75))
     ]).round(2)
-    time_stats.columns = ['mean', 'std', '25%', '50%', '75%']
     print(time_stats)
     print("\n")
 
