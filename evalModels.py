@@ -357,6 +357,7 @@ import pandas as pd
 def to_numpy(loss_list):
     return np.array([l.detach().cpu().item() if torch.is_tensor(l) else l for l in loss_list])
 
+
 def create_summary_table(indices_dict,
                          norm_swd_dict,
                          swd_dict,
@@ -405,24 +406,42 @@ def create_summary_table(indices_dict,
 
     df = pd.DataFrame(data)
 
-    # Summary statistics
+
     summary = df.groupby('Method').agg({
-        'SWD': ['mean', 'std'],
-        'SWD_regular': ['mean', 'std'],
-        'L1': ['mean', 'std'],
-        'Time': ['mean', 'std']
+        'SWD': ['mean', 'std', lambda x: x.quantile(0.25), lambda x: x.quantile(0.5), lambda x: x.quantile(0.75)],
+        'SWD_regular': ['mean', 'std', lambda x: x.quantile(0.25), lambda x: x.quantile(0.5),
+                        lambda x: x.quantile(0.75)],
+        'L1': ['mean', 'std', lambda x: x.quantile(0.25), lambda x: x.quantile(0.5), lambda x: x.quantile(0.75)],
+        'Time': ['mean', 'std', lambda x: x.quantile(0.25), lambda x: x.quantile(0.5), lambda x: x.quantile(0.75)]
     }).round(4)
 
-    print("="*70)
+    # CHANGED: rename columns for clarity
+    summary.columns = [
+        'SWD_mean', 'SWD_std', 'SWD_25%', 'SWD_50%', 'SWD_75%',
+        'SWD_reg_mean', 'SWD_reg_std', 'SWD_reg_25%', 'SWD_reg_50%', 'SWD_reg_75%',
+        'L1_mean', 'L1_std', 'L1_25%', 'L1_50%', 'L1_75%',
+        'Time_mean', 'Time_std', 'Time_25%', 'Time_50%', 'Time_75%'
+    ]
+
+    print("=" * 70)
     print(title)
-    print("="*70)
+    print("=" * 70)
     print(summary)
     print()
 
-    print("="*70)
+    # OLD: print(df.groupby('Method')['Time'].agg(['mean', 'std']).round(2))
+    # CHANGED: added percentiles for time statistics
+    print("=" * 70)
     print(f"{title} - Time Statistics (seconds)")
-    print("="*70)
-    print(df.groupby('Method')['Time'].agg(['mean', 'std']).round(2))
+    print("=" * 70)
+    time_stats = df.groupby('Method')['Time'].agg([
+        'mean', 'std',
+        lambda x: x.quantile(0.25),
+        lambda x: x.quantile(0.5),
+        lambda x: x.quantile(0.75)
+    ]).round(2)
+    time_stats.columns = ['mean', 'std', '25%', '50%', '75%']
+    print(time_stats)
     print("\n")
 
     return df, summary
