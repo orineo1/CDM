@@ -148,8 +148,10 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
 
     # Final output
     x_t_final = x_t.detach().clone()
+    del x_t, condition, target_samples, mog_samples
     torch.cuda.empty_cache() if device == "cuda" else None
-    return x_t_final, x_t_final, final_loss
+
+    return x_t_final, x_t_final, final_loss.detach()
 
 
 def optimize_LGD_latent(model_uncond, model_cond, mog_means, mog_variances, weights,scaler2,encoder2, mu_list, Sigma_list, alpha,
