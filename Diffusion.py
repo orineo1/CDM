@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 class DiffusionModel(nn.Module):
     def __init__(self, nfeatures: int, nunits: int = 128, condition: bool = False,
-                 condition_on: int = 1, diffusion_steps: int = 100,nblocks: int = 6,device=None):
+                 condition_on: int = 0, diffusion_steps: int = 100,nblocks: int = 6,device=None):
         super(DiffusionModel, self).__init__()
         self.condition = condition
         self.nfeatures = nfeatures
