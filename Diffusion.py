@@ -1,3 +1,4 @@
+
 import torch.optim as optim
 import torch
 import torch.nn as nn
@@ -179,7 +180,7 @@ class DiffusionModel(nn.Module):
     #     # Return the loss history
     #     return losses
 
-    def train_model(self, X=None, data_generator=None, nepochs=100, batch_size=2048, condition_on=1,
+    def train_model(self, X=None, data_generator=None, nepochs=100, batch_size=2048,
                     guidance_dropout=0.2, device="cpu"):
         """
         Train the diffusion model with classifier-free guidance support.
