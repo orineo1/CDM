@@ -18,6 +18,7 @@ class DiffusionModel(nn.Module):
         self.diffusion_steps = diffusion_steps
         self.condition_on = condition_on
         self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.timesteps = range(self.diffusion_steps - 1, 1, -1)
 
         if condition:
             self.cond_embed = nn.Linear(condition_on, nunits)
