@@ -33,6 +33,11 @@ class DiffusionModel(nn.Module):
         self.inblock = nn.Linear(nfeatures, nunits)
         self.out= nn.Linear( nunits,nfeatures)
         self.time_embed = TimeEmbedding(nunits)
+        self.scheduler = type('obj', (object,), {
+            'alphas_cumprod': self.baralphas,
+            'betas': self.betas,
+            'alphas': self.alphas
+        })()
         self.net = GenericNN(
             input_dim=nunits,
             hidden_dims=[nunits] *nblocks,  # depth controls number of residual layers
@@ -414,7 +419,7 @@ class DiffusionModel(nn.Module):
 
         return x, xt,pred_x0_l
 
-    def sample_ddim_step(self, x_start, t, condition_x=None, device="cpu", eta=0.0): # TODO integrate into the sample_ddim
+    def sample_ddim_step(self, x_start, t,i=None, condition_x=None, device="cpu", eta=0.0): # TODO integrate into the sample_ddim
         """
         Perform a single DDIM step from x_start.
 
