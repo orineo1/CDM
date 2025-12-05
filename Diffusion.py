@@ -414,7 +414,7 @@ class DiffusionModel(nn.Module):
 
         return x, xt,pred_x0_l
 
-    def sample_ddim_step(self, x_start, t, condition_x=None, device="cpu", eta=0.0): # TODO integrate into the sample_ddim
+    def sample_ddim_step(self, x_start, t,i=None, condition_x=None, device="cpu", eta=0.0): # TODO integrate into the sample_ddim
         """
         Perform a single DDIM step from x_start.
 
