@@ -6,7 +6,7 @@ Master's thesis implementation comparing optimization methods for finding optima
 
 **LGD (Loss-Guided Diffusion)**: Unconditional and conditional diffusion models with Monte Carlo gradient estimation through DDIM sampling  
 **LGD-CM**: Loss-guided optimization using unconditional diffusion with conditional consistency models  
-**D-FLOW**: Flow matching-based optimization using ODE solvers and differentiable likelihood computation  
+**D-FLOW**: Flow matching-based optimization using ODE solvers
 **Superposition**: Score-based isosurface sampling with linear interpolation between conditional models
 
 ## Quick Start
