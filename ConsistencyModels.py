@@ -255,7 +255,6 @@ class ConsistencyModel(nn.Module):
 
 
 
-
 def kerras_boundaries(sigma_min, sigma_max, N, rho):
     steps = torch.arange(N + 1, dtype=torch.float32, device='cuda' if torch.cuda.is_available() else 'cpu')
     return (sigma_max ** (-1 / rho) + steps / N * (sigma_min ** (-1 / rho) - sigma_max ** (-1 / rho))) ** (-rho)
@@ -305,91 +304,177 @@ def ict_discretization_schedule(epoch, total_epochs, s0=10, s1=1280):
     return int(N)
 
 
+
+# Simple implementations if NN_utils is not available
+class TimeEmbedding(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, t):
+        device = t.device
+        half_dim = self.dim // 2
+        emb = math.log(10000) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
+        emb = t[:, None] * emb[None, :]
+        emb = torch.cat([emb.sin(), emb.cos()], dim=1)
+        return emb
+class GenericNN(nn.Module):
+    def __init__(self, input_dim, hidden_dims, output_dim):
+        super().__init__()
+        layers = []
+        prev_dim = input_dim
+
+        for hidden_dim in hidden_dims:
+            layers.extend([
+                nn.Linear(prev_dim, hidden_dim),
+                nn.ReLU()
+            ])
+            prev_dim = hidden_dim
+
+        layers.append(nn.Linear(prev_dim, output_dim))
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x, t_emb=None):
+        if t_emb is not None:
+            # Ensure t_emb has the right shape for broadcasting
+            if t_emb.dim() == 2 and x.dim() == 2:
+                x = x + t_emb
+        return self.net(x)
 class ConsistencyModeliCT(nn.Module):
-    def __init__(self, nfeatures: int, condition_on: int = 0, eps: float = 0.002, nunits: int = 128, depth: int = 6, device=None):
+    # CHANGED: Made compatible with CircularAngleConsistencyModel checkpoints
+    def __init__(self, nfeatures: int, condition_on: int = 0, eps: float = 0.002, nunits: int = 128, depth: int = 6,
+                 cond_embed_type: str = 'linear', cond_embed_model=None,
+                 add_input_norm: bool = False, add_output_norm: bool = False,  # NEW: compatibility flags
+                 device=None):
         super().__init__()
         self.eps = eps
         self.nfeatures = nfeatures
         self.condition_on = condition_on
         self.nunits = nunits
+        self.depth = depth
+        self.cond_embed_type = cond_embed_type
+        self.add_input_norm = add_input_norm  # NEW
+        self.add_output_norm = add_output_norm  # NEW
         self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.betas = None
 
+        # Conditioning
         if condition_on > 0:
-            self.cond_embed = nn.Linear(condition_on, nunits)
+            if cond_embed_model is not None:
+                self.cond_embed = cond_embed_model
+            elif cond_embed_type == 'linear':
+                self.cond_embed = nn.Linear(condition_on, nunits)
+            elif cond_embed_type == 'mlp':
+                self.cond_embed = nn.Sequential(
+                    nn.Linear(condition_on, nunits),
+                    nn.ReLU(),
+                    nn.Linear(nunits, nunits)
+                )
+            else:
+                raise ValueError(f"Unknown cond_embed_type: {cond_embed_type}")
 
         self.input_layer = nn.Linear(nfeatures, nunits)
+
+        # CHANGED: Add optional normalization layers for CircularAngleConsistencyModel compatibility
+        if add_input_norm:
+            self.input_norm = nn.LayerNorm(nunits)
+        if add_output_norm:
+            self.output_norm = nn.LayerNorm(nunits)
+        # CHANGED: Optional norms
+
         self.time_embed = TimeEmbedding(nunits)
         self.out = nn.Linear(nunits, nfeatures)
         self.net = GenericNN(
             input_dim=nunits,
-            hidden_dims=[nunits] * depth,
+            hidden_dims=[nunits] * self.depth,
             output_dim=nunits,
         )
 
-        # Calculate c parameter for smooth Huber loss based on data dimensionality
         self.c_huber = 0.00054 * math.sqrt(nfeatures)
-
         self.to(self.device)
 
+    def get_config(self):
+        """Return model configuration for saving"""
+        return {
+            'nfeatures': self.nfeatures,
+            'condition_on': self.condition_on,
+            'eps': self.eps,
+            'nunits': self.nunits,
+            'depth': self.depth,
+            'cond_embed_type': self.cond_embed_type,
+            'add_input_norm': self.add_input_norm,  # CHANGED: Save norm flags
+            'add_output_norm': self.add_output_norm,  # CHANGED: Save norm flags
+        }
+
     def ict_noise_sampling(self, boundaries, batch_size, P_mean=-1.1, P_std=2.0, device='cuda'):
-        """
-        iCT improved noise schedule sampling using error function distribution.
-
-        p(i) ∝ erf((log(σᵢ₊₁) - P_mean)/√2P_std) - erf((log(σᵢ) - P_mean)/√2P_std)
-
-        Args:
-            boundaries: noise level boundaries tensor
-            batch_size: number of samples to generate
-            P_mean: mean parameter for erf distribution (default: -1.1 from paper)
-            P_std: std parameter for erf distribution (default: 2.0 from paper)
-        """
         N = len(boundaries) - 1
-
-        # Calculate probabilities for each timestep using erf
-        log_sigmas = torch.log(boundaries[:-1])  # σᵢ
-        log_sigmas_next = torch.log(boundaries[1:])  # σᵢ₊₁
-
-        # Calculate erf terms
+        log_sigmas = torch.log(boundaries[:-1])
+        log_sigmas_next = torch.log(boundaries[1:])
         sqrt_2_std = math.sqrt(2) * P_std
         erf_next = torch.erf((log_sigmas_next - P_mean) / sqrt_2_std)
         erf_curr = torch.erf((log_sigmas - P_mean) / sqrt_2_std)
-
-        # p(i) ∝ erf((log(σᵢ₊₁) - P_mean)/√2P_std) - erf((log(σᵢ) - P_mean)/√2P_std)
         probs = erf_next - erf_curr
-        probs = torch.clamp(probs, min=1e-8)  # Ensure positive probabilities
-        probs = probs / probs.sum()  # Normalize
-
-        # Sample timestep indices according to computed probabilities
+        probs = torch.clamp(probs, min=1e-8)
+        probs = probs / probs.sum()
         t_idx = torch.multinomial(probs, batch_size, replacement=True).unsqueeze(1).to(device)
-
         return t_idx
 
     def forward(self, x, t, cond=None):
         x_ori = x
         x = self.input_layer(x)
 
+        # CHANGED: Apply input norm if present (CircularAngleConsistencyModel has this)
+        if hasattr(self, 'input_norm'):
+            x = self.input_norm(x)
+        # CHANGED: Optional input norm
+
         # Add conditioning if present
-        if self.condition_on>0 and cond is not None:
+        if self.condition_on > 0 and cond is not None:
+            # CHANGED: Flatten image if needed (BEFORE using cond_embed)
+            if cond.dim() == 4:  # [B, 1, 28, 28]
+                cond = cond.view(cond.size(0), -1)
+            elif cond.dim() == 3:  # [B, 28, 28]
+                cond = cond.view(cond.size(0), -1)
+            # CHANGED: Flatten FIRST
+
             cond_emb = self.cond_embed(cond)
             x = x + cond_emb
 
         # Ensure t is (B, 1)
         if isinstance(t, (float, int)):
             t = torch.tensor([t] * x.shape[0], dtype=torch.float32, device=x.device).unsqueeze(1)
-        time_emb = self.time_embed(t)
+        elif t.dim() == 1:  # CHANGED: Handle 1D time
+            t = t.unsqueeze(1)
+        elif t.dim() == 3:  # CHANGED: Handle 3D time
+            t = t.squeeze(-1)
+        # CHANGED: More flexible time handling
+
+        time_emb = self.time_embed(t.squeeze(-1) if t.dim() > 1 else t)  # CHANGED: Safe squeeze
 
         x = self.net(x, time_emb)
-        x= self.out(x)
+
+        # CHANGED: Apply output norm if present (CircularAngleConsistencyModel has this)
+        if hasattr(self, 'output_norm'):
+            x = self.output_norm(x)
+        # CHANGED: Optional output norm
+
+        x = self.out(x)
 
         # Output skip connection with consistency weights
         t = t - self.eps
         c_skip_t = 0.25 / (t.pow(2) + 0.25)
         c_out_t = 0.25 * t / ((t + self.eps).pow(2) + 0.25).sqrt()
 
-        return c_skip_t * x_ori + c_out_t * x
+        result = c_skip_t * x_ori + c_out_t * x
 
+        # CHANGED: Optional unit circle normalization (CircularAngleConsistencyModel does this)
+        if self.add_output_norm and self.nfeatures == 2:  # Only for circular angles
+            result = result / (torch.norm(result, dim=1, keepdim=True) + 1e-8)
+        # CHANGED: Optional circular normalization
+
+        return result
 
     def loss(self, x, z, t0, t1, ema_model, diffusion=None, cond=None, device="cpu"):
         # Improved loss weighting from "Improved Consistency Models" paper (Song et al., 2023)
@@ -449,8 +534,10 @@ class ConsistencyModeliCT(nn.Module):
             # Target model is just the current model (μ=0)
             ema_model = self
         else:
-            # Original approach with EMA
-            ema_model = ConsistencyModelImproved(nfeatures=self.nfeatures, condition_on=self.condition_on, nunits=self.nunits)
+            # CHANGED: Use get_config for EMA model creation
+            # OLD: ema_model = ConsistencyModelImproved(nfeatures=self.nfeatures, condition_on=self.condition_on, nunits=self.nunits)
+            ema_model = ConsistencyModeliCT(**self.get_config())
+            # CHANGED: Dynamic EMA creation
             ema_model.to(device)
             ema_model.load_state_dict(self.state_dict())
 
@@ -540,3 +627,57 @@ class ConsistencyModeliCT(nn.Module):
 
             pbar.set_description(f"loss: {loss_ema:.6f}, mu: {mu:.4f}, N: {N}")
         return
+
+    # CHANGED: Added save/load methods
+    def save_checkpoint(self, path, epoch, optimizer=None, scheduler=None, loss=None, **kwargs):
+        """Save model checkpoint with configuration"""
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': self.state_dict(),
+            'config': self.get_config(),
+            'loss': loss,
+        }
+        if optimizer is not None:
+            checkpoint['optimizer_state_dict'] = optimizer.state_dict()
+        if scheduler is not None:
+            checkpoint['scheduler_state_dict'] = scheduler.state_dict()
+        checkpoint.update(kwargs)
+
+        torch.save(checkpoint, path)
+        print(f"Checkpoint saved: {path}")
+
+    @classmethod
+    def load_from_checkpoint(cls, checkpoint_path, cond_embed_model=None, device=None):
+        """Load model from checkpoint with automatic architecture detection"""
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+
+        # CHANGED: Detect if checkpoint is from CircularAngleConsistencyModel
+        state_dict = checkpoint['model_state_dict']
+        has_input_norm = 'input_norm.weight' in state_dict
+        has_output_norm = 'output_norm.weight' in state_dict
+        # CHANGED: Auto-detect architecture
+
+        # Load config with backwards compatibility
+        config = checkpoint.get('config', {
+            'nfeatures': checkpoint.get('nfeatures', 2),
+            'condition_on': checkpoint.get('condition_on', checkpoint.get('img_features', 784)),  # CHANGED: Map img_features
+            'eps': checkpoint.get('eps', 0.002),
+            'nunits': checkpoint.get('nunits', 128),
+            'depth': checkpoint.get('depth', 6),
+            'cond_embed_type': checkpoint.get('cond_embed_type', 'linear'),
+            'add_input_norm': has_input_norm,  # CHANGED: Auto-detect
+            'add_output_norm': has_output_norm,  # CHANGED: Auto-detect
+        })
+
+        model = cls(**config, cond_embed_model=cond_embed_model, device=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+
+        print(f"Model loaded from checkpoint: {checkpoint_path}")
+        if 'epoch' in checkpoint:
+            print(f"Epoch: {checkpoint['epoch']}")
+        if 'loss' in checkpoint:
+            print(f"Loss: {checkpoint['loss']:.6f}")
+        print(f"Config: {config}")
+        print(f"Architecture: {'CircularAngle' if has_input_norm else 'Standard'} variant")
+
+        return model, checkpoint
