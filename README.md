@@ -14,7 +14,6 @@ Master's thesis implementation comparing optimization methods for finding optima
 ### LGD Method
 ```python
 from Diffusion import DiffusionModel
-from ConsistencyModels import ConsistencyModeliCT
 from Optimization import optimize_LGD
 from LossFunctions import MMDLoss, RBF
 import dist_utils
@@ -27,24 +26,92 @@ mu_list, Sigma_list, alpha, mog_means, mog_variances, weights, x_star = \
 data_gen = lambda n, **kw: dist_utils.generate_mog_samples_not_differentiable(
     n, mu_list, Sigma_list, alpha)
 
-# Train unconditional diffusion model
+# Train unconditional diffusion model P(X)
 model_uncond = DiffusionModel(nfeatures=9, condition=False, device='cuda')
-model_uncond.train_model(data_generator=data_gen, nepochs=1000, batch_size=2048, device='cuda')
+model_uncond.train_model(
+    data_generator=lambda n, **kw: data_gen(n)[:, :9],
+    nepochs=20000, batch_size=2048, device='cuda'
+)
 
-# Train conditional diffusion model
+# Train conditional diffusion model P(Y|X)
 model_cond = DiffusionModel(nfeatures=10, condition=True, condition_on=9, device='cuda')
-model_cond.train_model(data_generator=data_gen, nepochs=1000, batch_size=2048, 
-                       condition_on=9, device='cuda')
+model_cond.train_model(
+    data_generator=data_gen, 
+    nepochs=20000, 
+    batch_size=2048, 
+    condition_on=9, 
+    device='cuda'
+)
 
 # Optimize to find best x*
 best_x, _, final_loss = optimize_LGD(
     model_uncond, model_cond, mog_means, mog_variances, weights,
-    mu_list, Sigma_list, alpha, nsamples=500, num_x_t=3, device='cuda'
+    mu_list, Sigma_list, alpha, 
+    nsamples=250, num_x_t=3, 
+    loss="MMD", CM=False,  # CM=False for regular diffusion
+    device='cuda'
 )
 
 print(f"Optimized x*: {best_x}")
 print(f"Final MMD loss: {final_loss:.6f}")
 ```
+
+### LGD-CM Method (LGD with Consistency Models)
+```python
+from Diffusion import DiffusionModel
+from ConsistencyModels import ConsistencyModeliCT
+from Optimization import optimize_LGD
+import dist_utils
+
+# Generate MoG parameters (same as LGD)
+mu_list, Sigma_list, alpha, mog_means, mog_variances, weights, x_star = \
+    dist_utils.get_param_mog_with_target(dim_data=10, num_components=5, device='cuda')
+
+data_gen = lambda n, **kw: dist_utils.generate_mog_samples_not_differentiable(
+    n, mu_list, Sigma_list, alpha)
+
+# Train unconditional diffusion model P(X) - same as LGD
+model_uncond = DiffusionModel(nfeatures=9, condition=False, device='cuda')
+model_uncond.train_model(
+    data_generator=lambda n, **kw: data_gen(n)[:, :9],
+    nepochs=20000, batch_size=2048, device='cuda'
+)
+
+# CHANGED: Train conditional Consistency Model instead of diffusion
+consistency_model = ConsistencyModeliCT(
+    nfeatures=1,           # Output dimension (Y)
+    condition_on=9,        # Conditioning dimension (X)
+    nunits=128,
+    depth=6,
+    device='cuda'
+)
+consistency_model.train_model(
+    data_generator=data_gen,
+    nepochs=7500,          # Fewer epochs than diffusion
+    batch_size=1024,
+    device='cuda',
+    condition=9,
+    use_improved_training=True  # Use iCT improvements
+)
+
+# Optimize - only change is CM=True flag
+best_x, _, final_loss = optimize_LGD(
+    model_uncond, consistency_model, mog_means, mog_variances, weights,
+    mu_list, Sigma_list, alpha,
+    nsamples=250, num_x_t=3,
+    loss="MMD", CM=True,   # CHANGED: CM=True for consistency models
+    device='cuda'
+)
+
+print(f"Optimized x*: {best_x}")
+print(f"Final MMD loss: {final_loss:.6f}")
+```
+
+**Key Differences LGD vs LGD-CM:**
+- **Conditional Model**: LGD uses `DiffusionModel` for P(Y|X), LGD-CM uses `ConsistencyModeliCT`
+- **Training**: Consistency models train faster (~7.5k epochs vs 20k) with different loss function
+- **Sampling**: Consistency models sample in 10-15 steps vs 100 steps for DDIM
+- **Optimization**: Same `optimize_LGD` function, just set `CM=True` flag
 
 ### D-FLOW Method
 ```python
@@ -53,21 +120,35 @@ from Optimization import optimize_DFLOW
 
 # Train flow matching models
 vf_X = FMModel(nfeatures=9, condition_on=0, nunits=128, device='cuda')
-vf_X.train_FM(data_generator=data_gen, nepochs=5000, batch_size=1024)
+vf_X.train_FM(
+    data_generator=lambda n, **kw: data_gen(n)[:, :9],
+    nepochs=20000, 
+    batch_size=1024
+)
 
 vf_y_cond_x = FMModel(nfeatures=1, condition_on=9, nunits=128, device='cuda')
-vf_y_cond_x.train_FM(data_generator=data_gen, nepochs=5000, batch_size=1024)
+vf_y_cond_x.train_FM(
+    data_generator=data_gen, 
+    nepochs=20000, 
+    batch_size=1024
+)
 
 # Optimize using differentiable flows
 best_x1, final_loss = optimize_DFLOW(
-    vf_y_cond_x, vf_X, device='cuda',
-    mog_means=mog_means, mog_variances=mog_variances, weights=weights,
-    max_iter=100, n_sample=500, loss_method="MMD"
+    vf_y_cond_x, vf_X, 
+    device='cuda',
+    mog_means=mog_means, 
+    mog_variances=mog_variances, 
+    weights=weights,
+    max_iter=100, 
+    n_sample=250, 
+    loss_method="MMD"
 )
 
 print(f"Optimized x*: {best_x1}")
 print(f"Final loss: {final_loss:.6f}")
 ```
+
 
 ## Evaluation Metrics
 
