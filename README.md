@@ -96,17 +96,6 @@ print(f"Final loss: {final_loss:.6f}")
 - `NN_utils.py`: Neural network building blocks
 - `EncoderDecoder.py`: VAE for latent space optimization
 
-## Evaluation Protocol
-
-Each method is evaluated on:
-- **Accuracy**: Final SWD/MMD distance to target distribution
-- **Consistency**: Standard deviation across 25 independent optimization runs
-- **Speed**: Wall-clock time per optimization iteration
-- **Robustness**: Performance stability across different random initializations
-
-Results include mean, standard deviation, and quartile statistics for comprehensive comparison.
-
-
 
 **Diffusion Models:**
 - Ho et al., "Denoising Diffusion Probabilistic Models" (2020) - https://arxiv.org/abs/2006.11239
