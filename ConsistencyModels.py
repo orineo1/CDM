@@ -9,9 +9,9 @@ from NN_utils import GenericNN, TimeEmbedding
 
 ############### Consistency Models 2023 Song et al. ###############
 
-def kerras_boundaries(sigma_min, sigma_max, N, rho):
-    steps = torch.arange(N + 1, dtype=torch.float32, device='cuda' if torch.cuda.is_available() else 'cpu')
-    return (sigma_max ** (-1 / rho) + steps / N * (sigma_min ** (-1 / rho) - sigma_max ** (-1 / rho))) ** (-rho)
+# def kerras_boundaries(sigma_min, sigma_max, N, rho):
+#     steps = torch.arange(N + 1, dtype=torch.float32, device='cuda' if torch.cuda.is_available() else 'cpu')
+#     return (sigma_max ** (-1 / rho) + steps / N * (sigma_min ** (-1 / rho) - sigma_max ** (-1 / rho))) ** (-rho)
 
 
 class ConsistencyModel(nn.Module):
@@ -252,6 +252,7 @@ class ConsistencyModel(nn.Module):
         return
 
 ############### Improved Techniques for Training Consistency Models 2023 Song & Dharwil ###############
+
 
 
 
