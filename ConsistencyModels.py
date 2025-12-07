@@ -254,6 +254,16 @@ class ConsistencyModel(nn.Module):
 ############### Improved Techniques for Training Consistency Models 2023 Song & Dharwil ###############
 
 
+import math
+from typing import List
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import TensorDataset, DataLoader
+from tqdm import tqdm
+from NN_utils import GenericNN, TimeEmbedding
+
+
 
 def kerras_boundaries(sigma_min, sigma_max, N, rho):
     steps = torch.arange(N + 1, dtype=torch.float32, device='cuda' if torch.cuda.is_available() else 'cpu')
@@ -275,6 +285,7 @@ def smooth_huber_loss(x, y, c=0.00054):
     """
     l2_squared = torch.sum((x - y) ** 2, dim=-1, keepdim=True)
     return torch.sqrt(l2_squared + c**2) - c
+
 
 def ict_discretization_schedule(epoch, total_epochs, s0=10, s1=1280):
     """
