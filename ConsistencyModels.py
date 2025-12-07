@@ -276,7 +276,6 @@ def smooth_huber_loss(x, y, c=0.00054):
     l2_squared = torch.sum((x - y) ** 2, dim=-1, keepdim=True)
     return torch.sqrt(l2_squared + c**2) - c
 
-
 def ict_discretization_schedule(epoch, total_epochs, s0=10, s1=1280):
     """
     iCT improved discretization curriculum: N(k) = min(s₀ * 2^⌊k/K'⌋, s₁) + 1
