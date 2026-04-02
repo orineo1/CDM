@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from NN_utils import GenericNN,TimeEmbedding  # Assuming you've defined this elsewhere
 from tqdm import tqdm
+from torch.utils.data import TensorDataset, DataLoader
 
 
 
@@ -185,87 +186,72 @@ class DiffusionModel(nn.Module):
     #
     #     # Return the loss history
     #     return losses
+    def train_model(self, X=None, data_generator=None, nepochs=100, batch_size=2048,
+                    condition_on=0, guidance_dropout=0.2, device="cpu",
+                    n_pretrain_samples=200_000):  # add this parameter
 
-    def train_model(self, X=None, data_generator=None, nepochs=100, batch_size=2048,condition_on=0,
-                    guidance_dropout=0.2, device="cpu"):
-        """
-        Train the diffusion model with classifier-free guidance support.
-
-        Args:
-            X: Input data (optional if data_generator is provided)
-            data_generator: Function that generates batches of data (optional if X is provided)
-            nepochs: Number of training epochs
-            batch_size: Batch size for training
-            condition_on: Number of features to condition on (only used if self.condition is True)
-            guidance_dropout: Probability of dropping the conditioning for classifier-free guidance
-            device: Device to train on ("cpu" or "cuda")
-
-        Returns:
-            losses: List of training losses
-        """
         assert X is not None or data_generator is not None, "Need either X or data_generator"
 
-        # Define loss function and optimizers
         loss_fn = nn.MSELoss()
         optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
-        # Learning rate scheduler
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=nepochs)
-
-        # Move model to device
         self.to(device)
-
-        # Loss tracker
         losses = []
+
+        # Pre-generate dataset once
+        if data_generator is not None:
+            print(f"Pre-generating {n_pretrain_samples} samples...")
+            X = data_generator(n_pretrain_samples, device='cpu')  # keep on CPU, DataLoader will move it
+
+        # Now always use DataLoader path
+        dataset = TensorDataset(X)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            pin_memory=(device != 'cpu'),  # faster GPU transfer
+            num_workers=2
+        )
+
         pbar = tqdm(range(nepochs))
         for epoch in pbar:
             epoch_loss = 0
             steps = 0
 
-            if data_generator is not None:
-                # Use data generator
-                Xbatch = data_generator(batch_size, device=device)
-                # Extract conditioning input if needed
+            for (Xbatch,) in dataloader:
+                Xbatch = Xbatch.to(device)
+
                 if self.condition:
                     x_cond = Xbatch[:, :condition_on]
                 else:
                     x_cond = None
 
-                # Random timesteps
                 timesteps = torch.randint(0, self.diffusion_steps, size=[len(Xbatch), 1])
-
-                # Apply noise to Xbatch
                 noised, eps = self.noise(Xbatch, timesteps)
 
-                # Get the model's data type
                 model_dtype = next(self.parameters()).dtype
-
-                # Move tensors to device and ensure consistent dtype
                 noised = noised.to(device=device, dtype=model_dtype)
                 timesteps = timesteps.to(device=device, dtype=model_dtype)
                 eps = eps.to(device=device, dtype=model_dtype)
 
                 if self.condition and x_cond is not None:
                     x_cond = x_cond.to(device=device, dtype=model_dtype)
-
-                    # Create a mask for classifier-free guidance training
-                    guidance_mask = torch.rand(len(Xbatch)) >= guidance_dropout
+                    guidance_mask = torch.rand(len(Xbatch), device=device) >= guidance_dropout
 
                     if guidance_mask.sum() < len(Xbatch):
-                        cond_outputs = self(noised[guidance_mask], timesteps[guidance_mask], x_cond[guidance_mask])
-                        uncond_outputs = self(noised[~guidance_mask], timesteps[~guidance_mask], None)
                         predicted_noise = torch.zeros_like(noised)
-                        predicted_noise[guidance_mask] = cond_outputs
-                        predicted_noise[~guidance_mask] = uncond_outputs
+                        predicted_noise[guidance_mask] = self(
+                            noised[guidance_mask], timesteps[guidance_mask], x_cond[guidance_mask])
+                        predicted_noise[~guidance_mask] = self(
+                            noised[~guidance_mask], timesteps[~guidance_mask], None)
                     else:
                         predicted_noise = self(noised, timesteps, x_cond)
                 else:
                     predicted_noise = self(noised, timesteps)
 
-                # Calculate loss
                 loss = loss_fn(predicted_noise, eps)
                 losses.append(loss.item())
 
-                # Optimize
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -273,68 +259,159 @@ class DiffusionModel(nn.Module):
                 epoch_loss += loss.item()
                 steps += 1
 
-
-
-            else:
-                # Use provided dataset X
-                for i in range(0, len(X), batch_size):
-                    Xbatch = X[i:i + batch_size]
-
-                    # Extract conditioning input if needed
-                    if self.condition:
-                        x_cond = Xbatch[:, :condition_on]
-                    else:
-                        x_cond = None
-
-                    # Random timesteps
-                    timesteps = torch.randint(0, self.diffusion_steps, size=[len(Xbatch), 1])
-
-                    # Apply noise to Xbatch
-                    noised, eps = self.noise(Xbatch, timesteps)
-
-                    # Get the model's data type
-                    model_dtype = next(self.parameters()).dtype
-
-                    # Move tensors to device and ensure consistent dtype
-                    noised = noised.to(device=device, dtype=model_dtype)
-                    timesteps = timesteps.to(device=device, dtype=model_dtype)
-                    eps = eps.to(device=device, dtype=model_dtype)
-
-                    if self.condition and x_cond is not None:
-                        x_cond = x_cond.to(device=device, dtype=model_dtype)
-
-                        # Create a mask for classifier-free guidance training
-                        guidance_mask = torch.rand(len(Xbatch)) >= guidance_dropout
-
-                        if guidance_mask.sum() < len(Xbatch):
-                            cond_outputs = self(noised[guidance_mask], timesteps[guidance_mask], x_cond[guidance_mask])
-                            uncond_outputs = self(noised[~guidance_mask], timesteps[~guidance_mask], None)
-                            predicted_noise = torch.zeros_like(noised)
-                            predicted_noise[guidance_mask] = cond_outputs
-                            predicted_noise[~guidance_mask] = uncond_outputs
-                        else:
-                            predicted_noise = self(noised, timesteps, x_cond)
-                    else:
-                        predicted_noise = self(noised, timesteps)
-
-                    # Calculate loss
-                    loss = loss_fn(predicted_noise, eps)
-                    losses.append(loss.item())
-
-                    # Optimize
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
-
-                    epoch_loss += loss.item()
-                    steps += 1
-
-            # Update learning rate schedule
             scheduler.step()
             pbar.set_description(f"loss: {epoch_loss / steps:.6f}")
 
-        # Return the loss history
         return losses
+    # def train_model(self, X=None, data_generator=None, nepochs=100, batch_size=2048,condition_on=0,
+    #                 guidance_dropout=0.2, device="cpu"):
+    #     """
+    #     Train the diffusion model with classifier-free guidance support.
+    #
+    #     Args:
+    #         X: Input data (optional if data_generator is provided)
+    #         data_generator: Function that generates batches of data (optional if X is provided)
+    #         nepochs: Number of training epochs
+    #         batch_size: Batch size for training
+    #         condition_on: Number of features to condition on (only used if self.condition is True)
+    #         guidance_dropout: Probability of dropping the conditioning for classifier-free guidance
+    #         device: Device to train on ("cpu" or "cuda")
+    #
+    #     Returns:
+    #         losses: List of training losses
+    #     """
+    #     assert X is not None or data_generator is not None, "Need either X or data_generator"
+    #
+    #     # Define loss function and optimizers
+    #     loss_fn = nn.MSELoss()
+    #     optimizer = torch.optim.AdamW(self.parameters(), lr=0.001)
+    #     # Learning rate scheduler
+    #     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=nepochs)
+    #
+    #     # Move model to device
+    #     self.to(device)
+    #
+    #     # Loss tracker
+    #     losses = []
+    #     pbar = tqdm(range(nepochs))
+    #     for epoch in pbar:
+    #         epoch_loss = 0
+    #         steps = 0
+    #
+    #         if data_generator is not None:
+    #             # Use data generator
+    #             Xbatch = data_generator(batch_size, device=device)
+    #             # Extract conditioning input if needed
+    #             if self.condition:
+    #                 x_cond = Xbatch[:, :condition_on]
+    #             else:
+    #                 x_cond = None
+    #
+    #             # Random timesteps
+    #             timesteps = torch.randint(0, self.diffusion_steps, size=[len(Xbatch), 1])
+    #
+    #             # Apply noise to Xbatch
+    #             noised, eps = self.noise(Xbatch, timesteps)
+    #
+    #             # Get the model's data type
+    #             model_dtype = next(self.parameters()).dtype
+    #
+    #             # Move tensors to device and ensure consistent dtype
+    #             noised = noised.to(device=device, dtype=model_dtype)
+    #             timesteps = timesteps.to(device=device, dtype=model_dtype)
+    #             eps = eps.to(device=device, dtype=model_dtype)
+    #
+    #             if self.condition and x_cond is not None:
+    #                 x_cond = x_cond.to(device=device, dtype=model_dtype)
+    #
+    #                 # Create a mask for classifier-free guidance training
+    #                 guidance_mask = torch.rand(len(Xbatch)) >= guidance_dropout
+    #
+    #                 if guidance_mask.sum() < len(Xbatch):
+    #                     cond_outputs = self(noised[guidance_mask], timesteps[guidance_mask], x_cond[guidance_mask])
+    #                     uncond_outputs = self(noised[~guidance_mask], timesteps[~guidance_mask], None)
+    #                     predicted_noise = torch.zeros_like(noised)
+    #                     predicted_noise[guidance_mask] = cond_outputs
+    #                     predicted_noise[~guidance_mask] = uncond_outputs
+    #                 else:
+    #                     predicted_noise = self(noised, timesteps, x_cond)
+    #             else:
+    #                 predicted_noise = self(noised, timesteps)
+    #
+    #             # Calculate loss
+    #             loss = loss_fn(predicted_noise, eps)
+    #             losses.append(loss.item())
+    #
+    #             # Optimize
+    #             optimizer.zero_grad()
+    #             loss.backward()
+    #             optimizer.step()
+    #
+    #             epoch_loss += loss.item()
+    #             steps += 1
+    #
+    #
+    #
+    #         else:
+    #             # Use provided dataset X
+    #             for i in range(0, len(X), batch_size):
+    #                 Xbatch = X[i:i + batch_size]
+    #
+    #                 # Extract conditioning input if needed
+    #                 if self.condition:
+    #                     x_cond = Xbatch[:, :condition_on]
+    #                 else:
+    #                     x_cond = None
+    #
+    #                 # Random timesteps
+    #                 timesteps = torch.randint(0, self.diffusion_steps, size=[len(Xbatch), 1])
+    #
+    #                 # Apply noise to Xbatch
+    #                 noised, eps = self.noise(Xbatch, timesteps)
+    #
+    #                 # Get the model's data type
+    #                 model_dtype = next(self.parameters()).dtype
+    #
+    #                 # Move tensors to device and ensure consistent dtype
+    #                 noised = noised.to(device=device, dtype=model_dtype)
+    #                 timesteps = timesteps.to(device=device, dtype=model_dtype)
+    #                 eps = eps.to(device=device, dtype=model_dtype)
+    #
+    #                 if self.condition and x_cond is not None:
+    #                     x_cond = x_cond.to(device=device, dtype=model_dtype)
+    #
+    #                     # Create a mask for classifier-free guidance training
+    #                     guidance_mask = torch.rand(len(Xbatch)) >= guidance_dropout
+    #
+    #                     if guidance_mask.sum() < len(Xbatch):
+    #                         cond_outputs = self(noised[guidance_mask], timesteps[guidance_mask], x_cond[guidance_mask])
+    #                         uncond_outputs = self(noised[~guidance_mask], timesteps[~guidance_mask], None)
+    #                         predicted_noise = torch.zeros_like(noised)
+    #                         predicted_noise[guidance_mask] = cond_outputs
+    #                         predicted_noise[~guidance_mask] = uncond_outputs
+    #                     else:
+    #                         predicted_noise = self(noised, timesteps, x_cond)
+    #                 else:
+    #                     predicted_noise = self(noised, timesteps)
+    #
+    #                 # Calculate loss
+    #                 loss = loss_fn(predicted_noise, eps)
+    #                 losses.append(loss.item())
+    #
+    #                 # Optimize
+    #                 optimizer.zero_grad()
+    #                 loss.backward()
+    #                 optimizer.step()
+    #
+    #                 epoch_loss += loss.item()
+    #                 steps += 1
+    #
+    #         # Update learning rate schedule
+    #         scheduler.step()
+    #         pbar.set_description(f"loss: {epoch_loss / steps:.6f}")
+    #
+    #     # Return the loss history
+    #     return losses
 
     # @torch.no_grad()
     def sample(self, nsamples, condition_x=None, device="cpu", eta=0.0, t_start=None, t_end=None):
