@@ -418,7 +418,9 @@ class ConsistencyModeliCT(nn.Module):
         probs = erf_next - erf_curr
         probs = torch.clamp(probs, min=1e-8)
         probs = probs / probs.sum()
-        t_idx = torch.multinomial(probs, batch_size, replacement=True).unsqueeze(1).to(device)
+        # t_idx = torch.multinomial(probs, batch_size, replacement=True).unsqueeze(1).to(device)
+        t_idx = torch.multinomial(probs.cpu(), batch_size, replacement=True).unsqueeze(1).to(device)
+
         return t_idx
 
     def forward(self, x, t, cond=None):
