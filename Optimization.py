@@ -15,9 +15,51 @@ from tqdm.notebook import tqdm
 from guidance import (
     GuidanceConfig, optimize_guided,
     init_randn, init_zeros,
-    perturb_none, perturb_beta_ratio,
+    perturb_none, perturb_beta_ratio, perturb_beta_prod_ratio_sq,
+    perturb_sqrt_beta_prod,
     aggregate_logsumexp, aggregate_single,
 )
+
+
+def optimize_LGD_CM(model_uncond, model_cond, target_generator, loss_function,
+                    step_size_vector, cond_output_transform=None,
+                    nsamples=250, num_x_t=3, device="cuda", FLAG=False,
+                    r_t_override=None, T=None, final_nsamples=250):
+    """Promoted from PocThesis.ipynb cell 7.
+
+    This was already the most general legacy variant -- it takes the target
+    generator, loss, step-size schedule and output transform as arguments.
+    It now delegates to guidance.core like the others.
+
+    Note `step_size_vector` is indexed by the timestep `t`, not by the loop
+    counter, matching the original.
+    """
+    if final_nsamples is None:
+        final_nsamples = 4 * nsamples
+
+    cfg = GuidanceConfig(
+        n_cond=nsamples,
+        n_mc=num_x_t,
+        final_n_cond=final_nsamples,
+        init_fn=init_randn,
+        unsqueeze_init=True,
+        perturb_fn=perturb_beta_prod_ratio_sq,
+        perturb_square=True,                      # std = r_t**2
+        aggregate_fn=aggregate_logsumexp,
+        step_size_fn=lambda t, i: step_size_vector[t],
+        timestep_source="model",
+        ddim_step_style="indexed",
+        repeat_condition=False,                   # x0_sample passed directly
+        condition_on_slice=False,
+        cond_output_transform=cond_output_transform,
+        target_generator=target_generator,
+        compute_final_loss=True,
+        device=device,
+        progress=FLAG,
+        tag="legacy:optimize_LGD_CM",
+    )
+    out = optimize_guided(model_uncond, model_cond, loss_function, cfg)
+    return out["x_final"], out["x_final"], out["final_loss"]
 
 
 ######### Diffusion

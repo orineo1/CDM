@@ -35,12 +35,21 @@ def _iter_timesteps(model_uncond, cfg):
     elif cfg.timestep_source == "model":
         for i, t in enumerate(model_uncond.timesteps):
             yield i, t
+    elif cfg.timestep_source == "list":
+        # MNIST iterates an explicit schedule and excludes the last step,
+        # which it handles unguided after the loop.
+        assert cfg.timesteps_list is not None, "timestep_source='list' needs timesteps_list"
+        for i, t in enumerate(cfg.timesteps_list[:-1]):
+            yield i, t
     else:
         raise ValueError(f"unknown timestep_source: {cfg.timestep_source}")
 
 
 def _ddim_step(model_uncond, x_t, t, i, cfg):
-    """Legacy classes expose two different signatures for sample_ddim_step."""
+    """Legacy variants expose three different ways of taking a DDIM step."""
+    if cfg.ddim_step_fn is not None:
+        # MNIST computes the step inline against a diffusers scheduler.
+        return cfg.ddim_step_fn(model_uncond, x_t, t, i)
     if cfg.ddim_step_style == "condition_x":
         return model_uncond.sample_ddim_step(
             x_t, t, condition_x=None, device=cfg.device, eta=0.0
@@ -61,7 +70,8 @@ def _draw_conditional(model_cond, x0_sample, cfg):
         condition = x0_sample
 
     out = model_cond.sample(
-        nsamples=cfg.n_cond, condition_x=condition, device=cfg.device
+        nsamples=cfg.n_cond, condition_x=condition, device=cfg.device,
+        **cfg.cond_sample_kwargs
     )
     samples = out[0] if isinstance(out, tuple) else out
 
@@ -93,7 +103,8 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
     assert cfg.target_generator is not None, "cfg.target_generator must be set"
 
     device = cfg.device
-    x_t = cfg.init_fn(model_uncond.nfeatures, device)
+    # MNIST's UNet has no .nfeatures; its init_fn ignores the argument.
+    x_t = cfg.init_fn(getattr(model_uncond, "nfeatures", None), device)
     if cfg.unsqueeze_init:
         x_t = x_t.unsqueeze(0)
 
@@ -145,6 +156,15 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
         with torch.no_grad():
             x_t = cfg.update_fn(x_t, x_t_minus_1, grad, step)
         n_steps += 1
+
+    # ---- optional final unguided step (MNIST takes one, using its
+    #      pred_x0 as the returned sample) ----
+    if cfg.final_unguided_step:
+        with torch.no_grad():
+            last_t = cfg.timesteps_list[-1]
+            _, pred_x0 = _ddim_step(model_uncond, x_t, last_t,
+                                    len(cfg.timesteps_list) - 1, cfg)
+            x_t = pred_x0
 
     # ---- final loss, evaluated fresh at the returned x ----
     final_loss = None

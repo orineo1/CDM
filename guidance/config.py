@@ -145,10 +145,23 @@ class GuidanceConfig:
     # "model": enumerate(model_uncond.timesteps) (LGD_CM)
     timestep_source: str = "model"
 
-    # --- ddim step signature: legacy classes differ ---
+    # --- ddim step: legacy variants differ in signature, and MNIST computes
+    #     the step inline against a diffusers scheduler instead of calling the
+    #     model's own method. ddim_step_fn, if set, overrides the style. ---
     # "condition_x": model.sample_ddim_step(x, t, condition_x=None, device=, eta=0.0)
     # "indexed":     model.sample_ddim_step(x, t, i, device=, eta=0.0)
     ddim_step_style: str = "indexed"
+    # Called as ddim_step_fn(model_uncond, x_t, t, i) -> (x_prev, pred_x0)
+    ddim_step_fn: Optional[Callable] = None
+
+    # --- explicit timestep list (timestep_source="list") ---
+    timesteps_list: Optional[Any] = None
+    # MNIST takes one unguided DDIM step after the loop and returns its pred_x0
+    final_unguided_step: bool = False
+
+    # extra kwargs forwarded to model_cond.sample (e.g. the consistency
+    # multi-step schedule ts=[150., 50., 20., 10., 5., 1.] used by MNIST)
+    cond_sample_kwargs: dict = field(default_factory=dict)
 
     # --- conditional-sampler plumbing ---
     # legacy variants differ in whether the condition is repeated to
