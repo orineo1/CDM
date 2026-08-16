@@ -12,8 +12,54 @@ import torch
 import torch.optim as optim_cond
 from tqdm.notebook import tqdm
 
+from guidance import (
+    GuidanceConfig, optimize_guided,
+    init_randn, init_zeros,
+    perturb_none, perturb_beta_ratio,
+    aggregate_logsumexp, aggregate_single,
+)
+
+
 ######### Diffusion
 def optimize_DPS(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
+                 nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda"):
+    """DEPRECATED wrapper -- kept so existing notebooks keep working unchanged.
+
+    Delegates to guidance.core.optimize_guided with the configuration that
+    reproduces this function's historical behaviour. The frozen original is in
+    Optimization_legacy.py and is what tests/test_equivalence.py compares to.
+    """
+    if isinstance(mog_means, torch.Tensor):
+        mog_means = mog_means.to(device)
+    if isinstance(mog_variances, torch.Tensor):
+        mog_variances = mog_variances.to(device)
+    if isinstance(weights, torch.Tensor):
+        weights = weights.to(device)
+
+    cfg = GuidanceConfig(
+        n_cond=nsamples,
+        n_mc=1,                                   # DPS has no MC loop
+        init_fn=init_randn,
+        unsqueeze_init=False,                     # DPS does not unsqueeze
+        perturb_fn=perturb_none,                  # conditions on pred_x0 directly
+        aggregate_fn=aggregate_single,
+        step_size_fn=lambda t, i: model_uncond.betas[t].to(device),
+        timestep_source="range",
+        ddim_step_style="condition_x",
+        repeat_condition=True,
+        condition_on_slice=(not CM),
+        target_generator=lambda n, dev: generate_mog_samples(
+            n, mog_means, mog_variances, weights, tau=10.0).to(dev),
+        compute_final_loss=False,                 # DPS returns best-so-far
+        device=device,
+        progress=True,
+        tag="legacy:optimize_DPS",
+    )
+    out = optimize_guided(model_uncond, model_cond, MMDLoss(kernel=RBF()), cfg)
+    return out["x_final"], out["best_x0"], out["best_loss"]
+
+
+def _optimize_DPS_legacy_body(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
                  nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda"):
     mmd_loss = MMDLoss(kernel=RBF())
 
@@ -86,6 +132,41 @@ from torch import optim
 from tqdm import tqdm
 # Optimize LGD using Monte Carlo-based guidance
 def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
+                 nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda", FLAG=False):
+    """DEPRECATED wrapper -- kept so existing notebooks keep working unchanged.
+
+    Reproduces the historical behaviour exactly, including two quirks:
+      * init is ZEROS, not N(0,I) (the paper's Alg. 1 says N(0,I); the newer
+        optimize_LGD_CM carries a "CHANGED: zeros -> randn" comment). Fix this
+        only AFTER tests/test_equivalence.py passes.
+      * the guidance step size is 1.0 -- there is no zeta_t, despite Alg. 3
+        specifying zeta_t = zeta'/||grad L||.
+    """
+    cfg = GuidanceConfig(
+        n_cond=nsamples,
+        n_mc=num_x_t,
+        init_fn=init_zeros,                       # historical; see docstring
+        unsqueeze_init=True,
+        perturb_fn=perturb_beta_ratio,
+        perturb_square=False,                     # std = r_t, not r_t**2
+        aggregate_fn=aggregate_logsumexp,
+        step_size_fn=lambda t, i: 1.0,            # no zeta
+        timestep_source="range",
+        ddim_step_style="condition_x",
+        repeat_condition=True,
+        condition_on_slice=(not CM),
+        target_generator=lambda n, dev: generate_mog_samples_not_differentiable(
+            n, mog_means, mog_variances, weights),
+        compute_final_loss=True,
+        device=device,
+        progress=FLAG,
+        tag="legacy:optimize_LGD",
+    )
+    out = optimize_guided(model_uncond, model_cond, MMDLoss(kernel=RBF()), cfg)
+    return out["x_final"], out["x_final"], out["final_loss"]
+
+
+def _optimize_LGD_legacy_body(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
                  nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda",FLAG=False):
 
     mmd_loss = MMDLoss(kernel=RBF())  # Assumes MMDLoss and RBF are defined elsewhere
