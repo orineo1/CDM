@@ -228,79 +228,8 @@ def generate_isosurface_samples(model_cond, cond_l=None, bs=512, device='cpu',di
 
     return x_gen, _
 
-def compute_matrix_elements(models, x_t, current_t, dt, noise, device, cond_vec):
-    """
-    Generalized compute_matrix_elements for N models.
-
-    Args:
-        models: list of trained models
-        x_t: current state (batch_size, ndim)
-        current_t: current time (batch_size, 1)
-        dt: time step
-        noise: Brownian motion increment (batch_size, ndim)
-        device: torch device
-        cond_vec: list of conditioning vectors (same length as models)
-
-    Returns:
-        A: coefficient matrix (batch_size, N+1, N+1)
-        b: right-hand side vector (batch_size, N+1)
-    """
-    N = len(models)
-    batch_size, ndim = x_t.shape
-
-    scores = []
-    u_ts = []
-
-    # Get scores and vector fields
-    with torch.no_grad():
-        for model, cond in zip(models, cond_vec):
-            scores.append(model(current_t, x_t, cond=cond))
-            u_ts.append(get_score_vector_field(model, current_t, x_t, cond=cond))
-
-    # Build coefficient matrix A
-    A = torch.zeros(batch_size, N + 1, N + 1, device=device)
-
-    for i in range(N):
-        for j in range(N):
-            A[:, i, j] = dt * torch.sum(u_ts[j] * scores[i], dim=1)
-        A[:, i, N] = -1  # last column: -d_log
-
-    # Last row for constraint: sum(κ_i) = 1
-    A[:, N, :N] = 1
-    A[:, N, N] = 0
-
-    # Compute b vector
-    div_f = model.dlog_alphadt(current_t) * ndim  # scalar (batch_size, 1)
-    f_t = model.dlog_alphadt(current_t) * x_t
-    g_sq = 2 * torch.exp(model.log_sigma(current_t)) * model.beta_func(current_t)
-    g = torch.sqrt(g_sq)
-
-    b = torch.zeros(batch_size, N + 1, device=device)
-    for i in range(N):
-        score = scores[i]
-        term2 = torch.sum((f_t - (g_sq / 2) * score) * score, dim=1)
-        noise_term = 0  # Can be re-enabled if needed: torch.sum(g * noise * score, dim=1)
-        b[:, i] = -(div_f.squeeze(-1) + term2 * dt + noise_term)
-
-    b[:, N] = 1  # constraint: sum(κ_i) = 1
-
-    return A, b
 
 
-def solve_linear_system(A, b):
-    """
-    Solve the linear system A * κ = b.
-
-    Returns:
-        kappa: solution (batch_size, 3) containing [κ₁, κ₂, d_log]
-    """
-    try:
-        kappa = torch.linalg.solve(A, b)
-    except:
-        # Fallback to least squares for numerical stability
-        kappa = torch.linalg.lstsq(A, b, rcond=None).solution
-
-    return kappa
 
 #
 # def generate_isosurface_samples(model_cond, cond_l=None,bs=512,device='cpu'):

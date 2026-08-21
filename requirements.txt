@@ -1,0 +1,20 @@
+# Core
+torch>=2.0
+numpy>=1.24
+
+# Optimal transport (utils.dist, losses.functions)
+POT>=0.9
+
+# Diffusion schedulers (MNIST: DDIMScheduler)
+diffusers>=0.27
+transformers>=4.38
+
+# Notebooks and plotting
+jupyter
+matplotlib
+pandas
+scikit-learn
+tqdm
+
+# Tests
+pytest>=7.0

@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Run outputs -- regenerable, and can get large
+results/runs.jsonl
+results/*.png
+
+# Model checkpoints (tracked deliberately only where small)
+*.ckpt
+
+# Local editor / OS
+.vscode/
+.idea/
+.DS_Store
