@@ -442,3 +442,27 @@ class DiffusionModel(nn.Module):
                   torch.exp(log_sigma_prev) * pred_eps)
 
         return x_prev, x0_hat
+
+
+# ---------------------------------------------------------------------------
+# Naming note
+#
+# Both priors/diffusion.py and this module define a class called
+# `DiffusionModel`, which reads like duplication. It is not. The two classes
+# share only 5 methods; 3 are unique to diffusion.py and 11 are unique to this
+# module (beta_func, log_alpha, log_sigma, sigma, q_t, dlog_alphadt,
+# dlog_sigmadt, vector_field_SDE, sm_loss, compute_log_likelihood_step,
+# xai_func). They are different models that happen to share a name:
+#
+#   priors.diffusion.DiffusionModel          discrete-time DDPM, betas/alphas
+#                                            schedule, sample_ddim_step
+#   priors.diffusion_general.DiffusionModel  continuous-time SDE formulation,
+#                                            drift/diffusion coefficients,
+#                                            score-matching loss
+#
+# They must NOT be merged. The alias below lets new code disambiguate without
+# renaming the class, which would break the DiffusionGeneral.py compatibility
+# shim and any pickled checkpoint recording the original module path.
+# ---------------------------------------------------------------------------
+
+DiffusionModelSDE = DiffusionModel

@@ -84,3 +84,20 @@ def test_from_import_style_still_works():
 def test_packages_import_cleanly():
     for pkg in ("priors", "samplers", "losses", "utils", "guidance", "gcio"):
         importlib.import_module(pkg)
+
+
+def test_diffusion_models_are_distinct_not_duplicates():
+    """priors.diffusion.DiffusionModel and priors.diffusion_general.DiffusionModel
+    share a name but are different models (discrete-time DDPM vs continuous-time
+    SDE). They must not be merged; see the naming note in diffusion_general.py."""
+    from priors.diffusion import DiffusionModel as Discrete
+    from priors.diffusion_general import DiffusionModel as SDE
+    from priors.diffusion_general import DiffusionModelSDE
+
+    assert Discrete is not SDE, "the two DiffusionModel classes were merged"
+    assert DiffusionModelSDE is SDE, "DiffusionModelSDE alias is broken"
+
+    methods = lambda c: {n for n in dir(c) if not n.startswith("_")}
+    only_sde = methods(SDE) - methods(Discrete)
+    assert "vector_field_SDE" in only_sde
+    assert "sample_ddim_step" in methods(Discrete) - methods(SDE)
