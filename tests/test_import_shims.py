@@ -99,5 +99,10 @@ def test_diffusion_models_are_distinct_not_duplicates():
 
     methods = lambda c: {n for n in dir(c) if not n.startswith("_")}
     only_sde = methods(SDE) - methods(Discrete)
-    assert "vector_field_SDE" in only_sde
-    assert "sample_ddim_step" in methods(Discrete) - methods(SDE)
+    only_discrete = methods(Discrete) - methods(SDE)
+
+    # Both expose sample_ddim_step (with different signatures -- see
+    # GuidanceConfig.ddim_step_style), so it is NOT a discriminator.
+    assert "vector_field_SDE" in only_sde, only_sde
+    assert "sm_loss" in only_sde, only_sde
+    assert "sample_superdiff_and" in only_discrete, only_discrete
