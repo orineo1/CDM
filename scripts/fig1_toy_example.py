@@ -645,7 +645,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
 
     # ---- left, middle: induced conditionals on y ------------------------------
     ax = ax_cond
-    ylo, yhi = max(st.y_range[0], -6.0), min(st.y_range[1], 6.0)
+    ylo, yhi = max(st.y_range[0], -5.0), min(st.y_range[1], 5.0)
     y = torch.linspace(ylo, yhi, 600)
     G = cond_params(st, st.x_star[0])
     gy = mixture_density_1d(y, G).detach()
@@ -657,17 +657,21 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         ax.plot(y, dk, color=c_decoy[k % len(c_decoy)], ls=":", lw=1.6, zorder=1,
                 label=rf"$\mathcal{{P}}(Y\mid X={cx:g})$")
         j = int(np.argmax(dk))
-        ax.annotate(rf"$x={cx:g}$", (float(y[j]), float(dk[j])), xytext=(0, 4), textcoords="offset points",
-                    ha="center", va="bottom", fontsize=fs_leg, color=c_decoy[k % len(c_decoy)])
+        # label placement alternates so labels do not sit on other curves: above, right of, left of the peak
+        place = [dict(xytext=(0, 4), ha="center", va="bottom"), dict(xytext=(26, -16), ha="left", va="top"),
+                 dict(xytext=(-8, 2), ha="right", va="bottom")][k % 3]
+        ax.annotate(rf"$x={cx:g}$", (float(y[j]), float(dk[j])), textcoords="offset points",
+                    fontsize=fs_leg, color=c_decoy[k % len(c_decoy)], **place)
     ax.fill_between(y, gy, color=c_true, alpha=0.08, zorder=1)
+    ax.plot([], [], color=c_true, ls="--", lw=2, label=r"target $\mathcal{G}(Y)$")   # legend slot before the methods
     for name in methods:
         r, st_ = res[name], STYLE[name]
         p = cond_params(st, torch.tensor(r["x_hat"]))
         ax.plot(y, mixture_density_1d(y, p).detach(), color=st_["color"], lw=st_["lw"], alpha=st_["alpha"], zorder=st_["z"],
                 label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={max(r['l2_gmm'], 0.0):.4f}$")
     # the target is drawn last (dashed, like x*) so it stays visible where a recovered x-hat matches it exactly
-    ax.plot(y, gy, color=c_true, ls="--", lw=2, label=r"target $\mathcal{G}(Y)$", zorder=5)
-    ax.set_xlim(ylo, yhi); ax.set_ylim(0, 1.22 * ax.get_ylim()[1] / 1.05); ax.set_xlabel("y")   # headroom for the peak labels
+    ax.plot(y, gy, color=c_true, ls="--", lw=2, zorder=5)
+    ax.set_xlim(ylo, yhi); ax.set_ylim(0, min(0.6, 1.1 * ax.get_ylim()[1] / 1.05)); ax.set_xlabel("y")
     ax.set_title(r"induced conditional $\mathcal{P}(Y\mid X=x)$ vs. the target, on $y$", fontsize=fs_title)
     ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3 if len(methods) <= 2 else 2,
               frameon=False); ax.grid(alpha=0.2)
