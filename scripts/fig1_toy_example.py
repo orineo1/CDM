@@ -484,7 +484,7 @@ def make_figure(st, sim, sweep, out_png):
     ax.legend(fontsize=fs_leg, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False); ax.grid(alpha=0.2)
 
     # bottom: beta sweep (on x); one shared y-limit from the analytic curves
-    ymax = 1.08 * max(max(Q[b].max(), px.max()) for b in betas)
+    ymax = 1.3 * max(max(Q[b].max(), px.max()) for b in betas)   # headroom for the legend in the last panel
     for i, beta in enumerate(betas):
         ax = fig.add_subplot(gs[1, i])
         ax.hist(sweep[beta], bins=40, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
