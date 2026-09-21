@@ -27,15 +27,16 @@ VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 
 SETTINGS=${SETTINGS:-"1x1 1x5 1x10 5x1 5x5 5x10 10x1 10x5 10x10"}
+RUNS_DIR=${RUNS_DIR:-runs/table1v2}
 read -r -a ARR <<< "$SETTINGS"
 S=${ARR[$SLURM_ARRAY_TASK_ID]}
 echo "=== task $SLURM_ARRAY_TASK_ID: scenario $S on $(hostname) ==="
 python -c "import torch; print('torch', torch.__version__, '| cuda', torch.cuda.is_available())"
-python scripts/make_table1.py --settings "$S" --device cuda --no-collect ${TABLE_ARGS:-}
+python scripts/make_table1.py --settings "$S" --runs-dir "$RUNS_DIR" --device cuda --no-collect ${TABLE_ARGS:-}
 
 # the last task to finish collects (cheap; a re-run of --collect is always safe)
 if [ "$SLURM_ARRAY_TASK_ID" = "$((${#ARR[@]} - 1))" ]; then
     echo "=== collect ==="
-    python scripts/make_table1.py --settings $SETTINGS --collect ${TABLE_ARGS:-} || true
+    python scripts/make_table1.py --settings $SETTINGS --runs-dir "$RUNS_DIR" --collect ${TABLE_ARGS:-} || true
 fi
 echo "done"

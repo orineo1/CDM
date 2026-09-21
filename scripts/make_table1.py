@@ -15,8 +15,8 @@ The paper's parameter files can be used instead with "file:<path>".
 
 Per scenario, under <runs-dir>/<scenario>/ (every step is skipped when its output exists,
 --force redoes it):
-  data.pt                          scripts/generate_data.py
-  models/uncond/model_unconditional.pt      scripts/train_models.py --model unconditional
+  data.pt                          scripts/generate_data.py (--standardize: X and Y blocks whitened)
+  models/uncond/model_unconditional.pt      scripts/train_models.py --model unconditional (fresh draws, --epochs batches)
   models/diffusion/model_conditional.pt     scripts/train_models.py --model conditional --architecture diffusion
   models/cm/model_conditional.pt            scripts/train_models.py --model conditional --architecture cm
   check.json / check.png           scripts/check_models.py (networks vs. the analytic mixture)
@@ -48,12 +48,14 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--settings", nargs="+", default=DEFAULT_SETTINGS, help="'<dimX>x<dimY>' or 'file:<params.txt>'")
     p.add_argument("--methods", nargs="+", default=METHODS, choices=METHODS)
-    p.add_argument("--runs-dir", default="runs/table1")
+    p.add_argument("--runs-dir", default="runs/table1v2")
     p.add_argument("--out", default="results/table1")
     g = p.add_argument_group("data and training")
     g.add_argument("--n-components", type=int, default=4)
     g.add_argument("--n-samples", type=int, default=20000)
-    g.add_argument("--epochs", type=int, default=3000, help="training epochs for each network")
+    g.add_argument("--epochs", type=int, default=10000, help="training batches (fresh draws) or epochs (fixed set) per network")
+    g.add_argument("--fixed-samples", action="store_true", help="train on the stored sample set instead of fresh draws")
+    g.add_argument("--no-standardize", action="store_true", help="keep the raw mixture scale (default: whiten X and Y blocks)")
     g.add_argument("--batch-size", type=int, default=1024)
     g.add_argument("--nunits", type=int, default=128)
     g.add_argument("--nblocks", type=int, default=3)
@@ -121,9 +123,13 @@ def prepare(setting, args):
         else:
             cmd += ["--random-mog", "--dim", str(setting["dim_x"] + setting["dim_y"]), "--condition-on", str(setting["dim_x"]),
                     "--n-components", str(args.n_components)]
+        if not args.no_standardize:
+            cmd += ["--standardize"]
         run(cmd, args, log)
     common = ["--data", paths["data"], "--epochs", str(args.epochs), "--batch-size", str(args.batch_size),
               "--nunits", str(args.nunits), "--nblocks", str(args.nblocks), "--seed", str(args.seed)] + dev
+    if not args.fixed_samples:
+        common += ["--fresh-samples"]
     if args.force or not os.path.exists(paths["prior"]):
         run([py, os.path.join(SCRIPTS, "train_models.py"), "--model", "unconditional", "--architecture", "diffusion",
              "--output-dir", os.path.dirname(paths["prior"])] + common, args, log)

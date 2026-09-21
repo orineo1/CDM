@@ -65,6 +65,9 @@ def parse_args():
     p.add_argument("--lr", type=float, default=None,
                    help="Learning rate. If not set, uses model defaults "
                         "(0.001 for diffusion/fm, 0.0001 for cm).")
+    p.add_argument("--fresh-samples", action="store_true",
+                   help="train on fresh draws from the mixture in the data file (one batch per epoch) "
+                        "instead of the stored sample set; --epochs then counts batches")
     p.add_argument("--guidance-dropout", type=float, default=0.2,
                    help="Classifier-free guidance dropout probability.")
 
@@ -76,6 +79,9 @@ def parse_args():
     p.add_argument("--seed", type=int, default=None)
 
     return p.parse_args()
+
+
+GEN = {}   # fresh-sample generators, set in main() with --fresh-samples
 
 
 def train_unconditional(X_train, args, nfeatures_x, device):
@@ -107,13 +113,18 @@ def train_unconditional(X_train, args, nfeatures_x, device):
             nfeatures=nfeatures_x, nblocks=args.nblocks, nunits=args.nunits,
             condition=False, diffusion_steps=args.diffusion_steps, device=device,
         )
-        print(f"    Data: {X_train.shape[0]} samples, {args.epochs} epochs, "
-              f"batch_size={args.batch_size}")
-        print(f"    Gradient steps: ~{args.epochs * (len(X_train) // args.batch_size + 1)}")
-        model.train_model(
-            X=X_train.to(device), nepochs=args.epochs, batch_size=args.batch_size,
-            device=device,
-        )
+        if args.fresh_samples:
+            print(f"    Fresh draws: {args.epochs} batches of {args.batch_size}")
+            model.train_model(X=None, data_generator=GEN["x"], nepochs=args.epochs, batch_size=args.batch_size,
+                              device=device)
+        else:
+            print(f"    Data: {X_train.shape[0]} samples, {args.epochs} epochs, "
+                  f"batch_size={args.batch_size}")
+            print(f"    Gradient steps: ~{args.epochs * (len(X_train) // args.batch_size + 1)}")
+            model.train_model(
+                X=X_train.to(device), nepochs=args.epochs, batch_size=args.batch_size,
+                device=device,
+            )
 
     return model
 
@@ -132,11 +143,16 @@ def train_conditional(X_train_full, args, nfeatures, condition_on, device):
         print(f"    Data: {X_train_full.shape[0]} samples, {args.epochs} epochs, "
               f"batch_size={args.batch_size}")
         print(f"    Gradient steps: ~{args.epochs * (len(X_train_full) // args.batch_size + 1)}")
-        model.train_model(
-            X=X_train_full.to(device), nepochs=args.epochs,
-            batch_size=args.batch_size, device=device,
-            condition=condition_on, use_improved_training=True,
-        )
+        if args.fresh_samples:
+            print(f"    Fresh draws: {args.epochs} batches of {args.batch_size}")
+            model.train_model(X=None, data_generator=GEN["joint"], nepochs=args.epochs, batch_size=args.batch_size,
+                              device=device, condition=condition_on, use_improved_training=True)
+        else:
+            model.train_model(
+                X=X_train_full.to(device), nepochs=args.epochs,
+                batch_size=args.batch_size, device=device,
+                condition=condition_on, use_improved_training=True,
+            )
 
     elif args.architecture == "diffusion":
         print(f"\n--- Training conditional diffusion P(Y|X) ---")
@@ -147,11 +163,16 @@ def train_conditional(X_train_full, args, nfeatures, condition_on, device):
         )
         print(f"    Data: {X_train_full.shape[0]} samples, {args.epochs} epochs, "
               f"batch_size={args.batch_size}")
-        model.train_model(
-            X=X_train_full.to(device), nepochs=args.epochs,
-            batch_size=args.batch_size, condition_on=condition_on,
-            guidance_dropout=args.guidance_dropout, device=device,
-        )
+        if args.fresh_samples:
+            print(f"    Fresh draws: {args.epochs} batches of {args.batch_size}")
+            model.train_model(X=None, data_generator=GEN["joint"], nepochs=args.epochs, batch_size=args.batch_size,
+                              condition_on=condition_on, guidance_dropout=args.guidance_dropout, device=device)
+        else:
+            model.train_model(
+                X=X_train_full.to(device), nepochs=args.epochs,
+                batch_size=args.batch_size, condition_on=condition_on,
+                guidance_dropout=args.guidance_dropout, device=device,
+            )
 
     elif args.architecture == "fm":
         print(f"\n--- Training conditional flow matching P(Y|X) ---")
@@ -233,6 +254,15 @@ def main():
     print(f"  Samples: {samples.shape} ({samples.shape[0]} points in R^{nfeatures})")
     print(f"  X dims: {condition_on}, Y dims: {nfeatures - condition_on}")
 
+    if args.fresh_samples:
+        from functools import partial
+        from utils.dist import generate_mog_samples_not_differentiable
+        mu, Sg, al = data["mu_list"], data["Sigma_list"], data["alpha"]
+        gj = partial(generate_mog_samples_not_differentiable, means=mu, variances=Sg, weights=al)
+        gx = partial(generate_mog_samples_not_differentiable, means=mu, variances=Sg, weights=al,
+                     kernel_func=lambda X: X[:, :condition_on])
+        GEN["joint"] = lambda n, device="cpu": gj(n, device=device).float()      # mixture params may be float64
+        GEN["x"] = lambda n, device="cpu": gx(n, device=device).float()
     X_only = samples[:, :condition_on].float()
     X_full = samples.float()
 

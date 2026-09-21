@@ -922,3 +922,29 @@ def gmm_l2_distance(mu_p, Sigma_p, w_p, mu_q, Sigma_q, w_q):
     qq = inner(mu_q, Sigma_q, w_q, mu_q, Sigma_q, w_q)
     pq = inner(mu_p, Sigma_p, w_p, mu_q, Sigma_q, w_q)
     return pp - 2 * pq + qq
+
+
+def standardize_mixture(mu_list, Sigma_list, alpha, condition_on):
+    """Affine reparametrisation that whitens the X block and the Y block separately.
+
+    With m the mixture mean and C its covariance (exact), W = blockdiag(C_xx^{-1/2}, C_yy^{-1/2});
+    every component becomes mu' = W (mu - m), Sigma' = W Sigma W^T, so X' and Y' each have zero
+    mean and identity covariance while the conditional structure is preserved
+    (X' depends on X only, Y' on Y only). Distances between conditionals that are invariant to
+    affine maps (total variation, relative L2) are unchanged. Returns (mu', Sigma', W, m); a point
+    x maps to W_x (x - m_x)."""
+    d = mu_list[0].numel()
+    dt = torch.float64
+    mus = [m.to(dt).view(-1) for m in mu_list]
+    Sigs = [S.to(dt) for S in Sigma_list]
+    a = alpha.to(dt).view(-1)
+    m = sum(w * mu for w, mu in zip(a, mus))
+    C = sum(w * (S + torch.outer(mu, mu)) for w, S, mu in zip(a, Sigs, mus)) - torch.outer(m, m)
+    W = torch.zeros(d, d, dtype=dt)
+    for lo, hi in ((0, condition_on), (condition_on, d)):
+        if hi > lo:
+            evals, evecs = torch.linalg.eigh(C[lo:hi, lo:hi])
+            W[lo:hi, lo:hi] = evecs @ torch.diag(evals.clamp_min(1e-12) ** -0.5) @ evecs.T
+    new_mu = [(W @ (mu - m)).to(mu_list[0].dtype) for mu in mus]
+    new_Sigma = [(W @ S @ W.T).to(Sigma_list[0].dtype) for S in Sigs]
+    return new_mu, new_Sigma, W, m

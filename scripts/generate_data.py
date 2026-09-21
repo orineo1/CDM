@@ -55,6 +55,10 @@ def parse_args():
     p.add_argument("--x-star", type=float, nargs="+", default=None,
                    help="The true x* for computing G(Y)=P(Y|X=x*). "
                         "If not set, uses default or auto-generated value.")
+    p.add_argument("--standardize", action="store_true",
+                   help="whiten the X block and the Y block of the mixture separately (exact affine "
+                        "reparametrisation; conditionals, x*, TV and relative L2 are preserved) so the "
+                        "networks see zero-mean, unit-covariance data")
     p.add_argument("--filter-threshold", type=float, default=0.01,
                    help="Weight threshold for pruning negligible G(Y) components.")
 
@@ -120,6 +124,17 @@ def main():
         mu_list, Sigma_list, alpha, x_star = build_default_2d_mog(args)
         target_means = target_variances = target_weights = None  # computed below
 
+    # ---- Optional block-wise whitening (before the target, which is recomputed in the new coordinates) ----
+    standardize_info = None
+    if args.standardize:
+        mu_list, Sigma_list, W, m = dist_utils.standardize_mixture(mu_list, Sigma_list, alpha, args.condition_on)
+        if x_star is not None:
+            c = args.condition_on
+            x_star = (W[:c, :c] @ (x_star.to(W.dtype).view(-1) - m[:c])).to(mu_list[0].dtype)
+        target_means = None      # recompute from the transformed mixture
+        standardize_info = {"W": W, "m": m}
+        print("Standardized: X and Y blocks whitened (zero mean, identity covariance each)")
+
     # ---- Compute target G(Y) if not already set ----
     if target_means is None:
         mu_cond, Sigma_cond = dist_utils.compute_conditionals(mu_list, Sigma_list, x_star)
@@ -147,6 +162,7 @@ def main():
         "x_star": x_star,
         "condition_on": args.condition_on,
         "n_samples": args.n_samples,
+        "standardize": standardize_info,
     }
     torch.save(payload, args.output)
 
