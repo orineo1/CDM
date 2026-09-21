@@ -341,7 +341,7 @@ def make_figure(out_png, mlgd, mlgdf, sweep, curves, args):
         p = cond_params(torch.tensor(r["x_hat"]))
         ax.plot(y, mixture_density_1d(y, p).detach(), color=c, lw=2,
                 label=rf"{name}: $\mathcal{{P}}(Y\mid X=\hat{{x}})$, $L^2={r['l2_gmm']:.4f}$")
-    ax.set_xlabel("y"); ax.set_title(r"induced conditional at $\hat{x}$ vs.\ target", fontsize=fs_title)
+    ax.set_xlabel("y"); ax.set_title(r"induced conditional at $\hat{x}$ vs. target", fontsize=fs_title)
     ax.legend(fontsize=fs_leg); ax.grid(alpha=0.2)
 
     # bottom: beta sweep
