@@ -303,6 +303,8 @@ def optimize_guided_population(model_uncond, model_cond, loss_function, cfg: Gui
     trace, resample_steps = [], []
     t_start = time.time()
 
+    steps = list(_iter_timesteps(model_uncond, cfg))
+    n_total = max(1, len(steps))
     for i, t in _make_iterator(model_uncond, cfg):
         losses, gnorms, step = [], [], 0.0
         for r in range(R):
@@ -311,10 +313,12 @@ def optimize_guided_population(model_uncond, model_cond, loss_function, cfg: Gui
         L = torch.tensor(losses)
         ess, resampled, ancestors = float(R), False, None
         if cfg.resample_beta is not None:
+            frac = (i + 1) / n_total
+            beta_i = cfg.resample_beta * (frac if cfg.resample_schedule == "linear" else 1.0)
             if cfg.weight_mode == "fresh":
-                logw = -cfg.resample_beta * L
+                logw = -beta_i * L
             else:   # accumulated: telescoped potential ratio exp(-beta (L_t - L_{t+1})), reset on resampling
-                logw = logw - cfg.resample_beta * (L - (prev_loss if prev_loss is not None else 0.0))
+                logw = logw - beta_i * (L - (prev_loss if prev_loss is not None else 0.0))
             w = torch.softmax(logw, 0)
             ess = float(1.0 / (w * w).sum())
             if (i + 1) % cfg.resample_every == 0 and ess < cfg.ess_frac * R:
@@ -329,6 +333,7 @@ def optimize_guided_population(model_uncond, model_cond, loss_function, cfg: Gui
         n_steps += 1
         trace.append({"i": i, "t": int(t) if not torch.is_tensor(t) else float(t), "loss": losses,
                       "grad_norm": gnorms, "step": step, "ess": ess, "resampled": resampled,
+                      "resample_beta": (beta_i if cfg.resample_beta is not None else None),
                       "ancestors": ancestors, "elapsed_s": time.time() - t_start})
 
     if cfg.final_unguided_step:

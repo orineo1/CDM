@@ -59,6 +59,7 @@ Trajectories: independent restarts or a particle population
                       by final loss is returned, all particles are written out.
   --n-particles N     (10)     --resample-beta B  (5.0; 0 disables resampling)
   --ess-frac F        (0.5)    --resample-every k (1)    --weight-mode fresh|accumulated
+  --resample-schedule constant|linear   linear ramps the strength 0 -> B (annealed)
 
 Post-refinement (optional, either --algo): K plain gradient steps on the plug-in
 loss from the returned x, no diffusion, optionally with a prior term
@@ -134,6 +135,8 @@ def parse_args():
     g.add_argument("--ess-frac", type=float, default=0.5, help="resample when ESS < ess_frac * n_particles")
     g.add_argument("--resample-every", type=int, default=1)
     g.add_argument("--weight-mode", choices=["fresh", "accumulated"], default="fresh")
+    g.add_argument("--resample-schedule", choices=["constant", "linear"], default="constant",
+                   help="linear: resampling strength ramps from 0 to --resample-beta over the reverse process (annealing)")
     g = p.add_argument_group("post-refinement (any --algo)")
     g.add_argument("--refine-steps", type=int, default=0, help="gradient steps on the plug-in loss from the returned x")
     g.add_argument("--refine-lr", type=float, default=0.05)
@@ -226,6 +229,7 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
         n_particles=args.n_particles, resample_beta=(None if args.resample_beta is None or args.resample_beta <= 0
                                                        else args.resample_beta),
         ess_frac=args.ess_frac, resample_every=args.resample_every, weight_mode=args.weight_mode,
+        resample_schedule=args.resample_schedule,
         refine_steps=args.refine_steps, refine_lr=args.refine_lr, refine_lambda=args.refine_lambda,
         device=args.device, seed=seed, progress=args.progress,
         tag=f"find_xstar:{args.guidance}:{args.algo}:{'MLGD-F' if sampler_type == 'cm' else 'MLGD'}",

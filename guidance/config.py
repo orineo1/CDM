@@ -189,6 +189,10 @@ class GuidanceConfig:
     ess_frac: float = 0.5
     resample_every: int = 1              # only consider resampling every k steps
     weight_mode: str = "fresh"           # "fresh": w = exp(-beta L_t); "accumulated": telescoped over steps
+    # schedule of the resampling strength over the reverse process (fraction of steps done, 0 -> 1):
+    # "constant": resample_beta throughout; "linear": ramps 0 -> resample_beta (annealing: no resampling
+    # while the Tweedie estimates are uninformative, full strength at the end)
+    resample_schedule: str = "constant"
 
     # --- post-refinement: plain gradient steps on the plug-in loss from the returned x,
     #     no diffusion; optional prior term lambda * score_theta(x, t=1) ---

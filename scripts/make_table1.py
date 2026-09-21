@@ -64,6 +64,7 @@ def parse_args():
     g.add_argument("--attempts", type=int, default=5, help="independent runs of each algorithm; mean/std over them")
     g.add_argument("--n-cond", type=int, default=250)
     g.add_argument("--resample-beta", type=float, default=5.0)
+    g.add_argument("--resample-schedule", choices=["constant", "linear"], default="constant")
     g.add_argument("--refine-steps", type=int, default=0)
     g.add_argument("--extra", default="", help="extra flags passed verbatim to find_xstar.py")
     g = p.add_argument_group("control")
@@ -153,6 +154,7 @@ def search(setting, paths, log, method, args):
     cmd = [py, os.path.join(SCRIPTS, "find_xstar.py"), "--prior", paths["prior"], "--sampler", sampler, "--target", paths["data"],
            "--algo", algo, "--n-restarts", str(args.budget), "--n-particles", str(args.budget),
            "--n-attempts", str(args.attempts), "--n-cond", str(args.n_cond), "--resample-beta", str(args.resample_beta),
+           "--resample-schedule", args.resample_schedule,
            "--refine-steps", str(args.refine_steps), "--seed", str(args.seed), "--out", out, "--no-store"]
     if args.device:
         cmd += ["--device", args.device]

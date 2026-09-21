@@ -90,3 +90,12 @@ def test_refinement_runs_and_reports_before_after():
     assert torch.isfinite(single["x_final"]).all()
     pop = optimize_guided_population(mu, mc, loss, _cfg(n_particles=2, refine_steps=2))
     assert len(pop["refine"]["traces"]) == 2 and pop["refine"]["x_before"].shape == (2, 1)
+
+
+def test_linear_resample_schedule_ramps_and_runs():
+    mu, mc = _models()
+    loss = MMDLoss(kernel=RBF(device=DEVICE))
+    pop = optimize_guided_population(mu, mc, loss, _cfg(n_particles=3, resample_beta=2.0, resample_schedule="linear"))
+    betas = [s["resample_beta"] for s in pop["trace"]]
+    assert betas[0] < betas[-1] and abs(betas[-1] - 2.0) < 1e-9
+    assert pop["x_particles"].shape == (3, 1)
