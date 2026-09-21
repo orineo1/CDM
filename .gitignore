@@ -24,3 +24,5 @@ checkpoints/toy/
 results/*.log
 results/fig1_*.json
 runs/
+results/fig1_*.npz
+results/fig1_*_sim.json
