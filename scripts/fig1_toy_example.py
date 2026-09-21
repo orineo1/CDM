@@ -196,7 +196,7 @@ def parse_args():
                    help="independent restarts per method; the best final loss is shown, all endpoints are saved")
     p.add_argument("--init", choices=["randn", "zeros"], default="randn",
                    help="x_T initialisation; the paper says N(0,I), the legacy code used zeros")
-    p.add_argument("--betas", type=float, nargs="+", default=[0.0, 2.0, 8.0, 32.0])
+    p.add_argument("--betas", type=float, nargs="+", default=[0.0, 2.0, 8.0, 16.0])
     p.add_argument("--n-beta-samples", type=int, default=2000, help="guided trajectories per beta, run as one batch")
     p.add_argument("--quick", action="store_true", help="tiny run to check the pipeline")
     a = p.parse_args()
@@ -692,10 +692,13 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     for m in methods:
         vline(ax, m, lab(m, res[m]))
     ax.axvline(x_star, color=c_true, ls="--", lw=2, label=r"true $x^\star$", zorder=5)
+    if any(res[m].get("restarts") for m in methods):
+        ax.scatter([], [], marker="|", s=80, color="0.4", lw=1.5,
+                   label=r"ticks (top panel): every restart / particle; the line is the best one")
     ax.set_xlim(xlo, xhi); ax.set_ylim(0, 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max()); ax.set_xlabel("x")
     ax.set_ylabel(r"$\mathcal{L}(x) = \mathcal{D}\left(\mathcal{P}(Y\mid X=x),\,\mathcal{G}\right)$")
     if layout == "lr":
-        ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=3, frameon=False)
+        ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=2, frameon=False)
     else:
         ax.set_title(r"loss landscape: minimised only at $x^\star$", fontsize=fs_title)
     ax.grid(alpha=0.2)
