@@ -478,7 +478,7 @@ def make_figure(st, sim, sweep, out_png):
     for r, c, lw, a, z, name in [(mlgd, c_mlgd, 4, 0.6, 3, "MLGD"), (mlgdf, c_mlgdf, 1.6, 1.0, 4, "MLGD-F")]:
         p = cond_params(st, torch.tensor(r["x_hat"]))
         ax.plot(y, mixture_density_1d(y, p).detach(), color=c, lw=lw, alpha=a, zorder=z,
-                label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={r['l2_gmm']:.4f}$")
+                label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={max(r['l2_gmm'], 0.0):.4f}$")
     ax.set_xlim(ylo, yhi); ax.set_xlabel("y")
     ax.set_title(r"induced conditional at $\hat{x}$ vs. target, on $y$", fontsize=fs_title)
     ax.legend(fontsize=fs_leg, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False); ax.grid(alpha=0.2)
