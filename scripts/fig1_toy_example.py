@@ -615,6 +615,11 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         sweep_ylabel = lambda i: i == 0
         sweep_xlabel = lambda i: True
     ax_joint, ax_loss, ax_cond = top_axes
+    for letter, ax_ in zip("abc", [ax_joint, ax_loss, ax_cond]):   # inside the top-left corner (empty in every panel)
+        ax_.text(0.012, 0.965, f"({letter})", transform=ax_.transAxes, fontsize=fs_title, fontweight="bold",
+                 ha="left", va="top", zorder=10)
+    sweep_axes[0].text(-0.08, 1.04, "(d)", transform=sweep_axes[0].transAxes, fontsize=fs_title, fontweight="bold",
+                       ha="right", va="bottom")
 
     def lab(name, r):
         return rf"{name} $\hat{{x}}$"
@@ -630,11 +635,6 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     y0, y1 = ax.get_ylim()
     ax.annotate(r"$x^*$", (x_star, y1), xytext=(-4, -4), textcoords="offset points", ha="right", va="top",
                 fontsize=fs_title - 1, zorder=6)
-    for k, m in enumerate(methods):   # every restart / particle endpoint as a tick, one row per method
-        xs = [q["x_hat"] for q in res[m].get("restarts", [])]
-        if xs:
-            ax.scatter(xs, [y0 + 0.035 * k * (y1 - y0)] * len(xs), marker="|", s=110, color=STYLE[m]["color"],
-                       lw=1.5, zorder=5, clip_on=False)
     ax.set_xlim(xlo, xhi); ax.set_ylabel("y")
     ax.set_title(r"joint $\mathcal{P}(X, Y)$ and the recovered $\hat{x}$", fontsize=fs_title); ax.grid(alpha=0.2)
     if layout == "lr":
@@ -654,7 +654,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     for k, cx in enumerate(others):   # what a wrong x induces: dotted, own colour, labelled at its peak
         pk = cond_params(st, torch.tensor(cx))
         dk = mixture_density_1d(y, pk).detach().numpy()
-        ax.plot(y, dk, color=c_decoy[k % len(c_decoy)], ls=":", lw=1.6, zorder=1,
+        ax.plot(y, dk, color=c_decoy[k % len(c_decoy)], ls=":", lw=2.2, zorder=1,
                 label=rf"$\mathcal{{P}}(Y\mid X={cx:g})$")
         j = int(np.argmax(dk))
         # label placement alternates so labels do not sit on other curves: above, right of, left of the peak
@@ -664,10 +664,13 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
                     fontsize=fs_leg, color=c_decoy[k % len(c_decoy)], **place)
     ax.fill_between(y, gy, color=c_true, alpha=0.08, zorder=1)
     ax.plot([], [], color=c_true, ls="--", lw=2, label=r"target $\mathcal{G}(Y)$")   # legend slot before the methods
-    for name in methods:
+    # the recovered conditionals often coincide (every method that found x* draws the same curve), so
+    # they are drawn as nested outlines: decreasing width in a fixed order, each on top of the previous
+    widths = {"MLGD": 6.0, "PMLGD": 4.2, "PMLGD-F": 2.6, "MLGD-F": 1.4}
+    for z, name in enumerate([m for m in ("MLGD", "PMLGD", "PMLGD-F", "MLGD-F") if m in methods]):
         r, st_ = res[name], STYLE[name]
         p = cond_params(st, torch.tensor(r["x_hat"]))
-        ax.plot(y, mixture_density_1d(y, p).detach(), color=st_["color"], lw=st_["lw"], alpha=st_["alpha"], zorder=st_["z"],
+        ax.plot(y, mixture_density_1d(y, p).detach(), color=st_["color"], lw=widths[name], alpha=0.9, zorder=2 + z,
                 label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={max(r['l2_gmm'], 0.0):.4f}$")
     # the target is drawn last (dashed, like x*) so it stays visible where a recovered x-hat matches it exactly
     ax.plot(y, gy, color=c_true, ls="--", lw=2, zorder=5)
@@ -689,8 +692,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
             e = sim["empirical_loss"][name]
             xe, v = np.array(e["x"]), np.array(e["values"])
             mu_e, sd_e = v.mean(0), v.std(0)
-            ax2.plot(xe, mu_e, color=c, lw=1.2, alpha=0.9, zorder=2)
-            ax2.fill_between(xe, mu_e - sd_e, mu_e + sd_e, color=c, alpha=0.15, lw=0, zorder=1)
+            ax2.plot(xe, mu_e, color=c, lw=1.2, alpha=0.9, zorder=2)   # mean over seeds
         ax2.set_ylim(bottom=0); ax2.set_ylabel(r"sample loss $\hat{\mathcal{L}}(x)$ (MMD)", fontsize=fs_leg)
         ax2.tick_params(labelsize=fs_leg)
         n_c = sim["empirical_loss"]["MLGD"]["n_cond"]
@@ -698,9 +700,6 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     for m in methods:
         vline(ax, m, lab(m, res[m]))
     ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
-    if any(res[m].get("restarts") for m in methods):
-        ax.scatter([], [], marker="|", s=80, color="0.4", lw=1.5,
-                   label=r"ticks (top panel): every restart / particle; the line is the best one")
     ax.set_xlim(xlo, xhi); ax.set_ylim(0, 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max()); ax.set_xlabel("x")
     ax.set_ylabel(r"$\mathcal{L}(x) = \mathcal{D}\left(\mathcal{P}(Y\mid X=x),\,\mathcal{G}\right)$")
     if layout == "lr":
@@ -710,7 +709,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     ax.grid(alpha=0.2)
 
     # ---- right: the CDMS beta-sweep, 2 x 2 -------------------------------------
-    ymax = 1.3 * max(max(Q[b].max(), px.max()) for b in betas)
+    ymax = 1.1 * max(max(Q[b].max(), px.max()) for b in betas)
     for i, beta in enumerate(betas):
         ax = sweep_axes[i]
         ax.hist(sweep[beta], bins=80, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
