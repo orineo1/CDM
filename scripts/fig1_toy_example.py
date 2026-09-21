@@ -578,7 +578,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     if layout == "lr":
         fig = plt.figure(figsize=(14, 12))
         outer = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.33)
-        left = outer[0].subgridspec(2, 1, height_ratios=[2.1, 1], hspace=0.6)
+        left = outer[0].subgridspec(2, 1, height_ratios=[2.1, 1], hspace=0.45)
         left_top = left[0].subgridspec(2, 1, height_ratios=[1.2, 1], hspace=0.08)   # joint + loss share x
         right = outer[1].subgridspec(4, 1, hspace=0.12)
         ax_joint = fig.add_subplot(left_top[0])
@@ -602,18 +602,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     ax_joint, ax_loss, ax_cond = top_axes
 
     def lab(name, r):
-        R = r.get("n_restarts", 1)
-        if R <= 1:
-            return rf"{name} $\hat{{x}}$"
-        what = "particles" if name.startswith("P") else "restarts"
-        s_ = rf"{name}: {r['hits_xstar_basin']}/{R} {what} in the $x^\star$ basin" if len(methods) <= 2 \
-            else rf"{name}: {r['hits_xstar_basin']}/{R} in basin"
-        if name.startswith("P"):
-            s_ += f", {r.get('n_resamples', 0)} resamplings"
-        before = r.get("hits_before_refine", r.get("refine", {}).get("hits_before") if isinstance(r.get("refine"), dict) else None)
-        if before is not None:
-            s_ += f" ({before}/{R} pre-refine)"
-        return s_
+        return rf"{name} $\hat{{x}}$"
 
     # ---- left, top: the joint ------------------------------------------------
     ax = ax_joint
@@ -639,7 +628,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
 
     # ---- left, middle: induced conditionals on y ------------------------------
     ax = ax_cond
-    ylo, yhi = st.y_range
+    ylo, yhi = max(st.y_range[0], -6.0), min(st.y_range[1], 6.0)
     y = torch.linspace(ylo, yhi, 600)
     G = cond_params(st, st.x_star[0])
     gy = mixture_density_1d(y, G).detach()
@@ -671,8 +660,6 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     Gd = tuple(g.detach() for g in G)
     L = l2_1d(cond_params(st, torch.as_tensor(x_grid, dtype=torch.float32)), Gd).numpy()
     ax.plot(x_grid, L, color="0.25", lw=2, label=r"population $\mathcal{L}(x)$", zorder=2)
-    for cx in others:   # the loss at each wrong cluster centre
-        ax.plot(cx, float(l2_1d(cond_params(st, torch.tensor(cx)), Gd)), "o", color="0.45", ms=5, zorder=3)
     if "empirical_loss" in sim:   # the sample loss the optimiser sees (MMD), mean +- sd over seeds, own scale
         ax2 = ax.twinx()
         for name, c in [("MLGD", c_mlgd), ("MLGD-F", c_mlgdf)]:
@@ -693,8 +680,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     ax.set_xlim(xlo, xhi); ax.set_ylim(0, 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max()); ax.set_xlabel("x")
     ax.set_ylabel(r"$\mathcal{L}(x) = \mathcal{D}\left(\mathcal{P}(Y\mid X=x),\,\mathcal{G}\right)$")
     if layout == "lr":
-        ax.set_title(r"loss landscape $\mathcal{L}(x)$", fontsize=fs_title - 2, loc="right", y=0.98, pad=-14)
-        ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=2, frameon=False)
+        ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=3, frameon=False)
     else:
         ax.set_title(r"loss landscape: minimised only at $x^\star$", fontsize=fs_title)
     ax.grid(alpha=0.2)
