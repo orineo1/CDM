@@ -19,11 +19,46 @@ pip install -r requirements.txt            # CPU is enough for the synthetic exa
 # GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121
 ```
 
-## Quick start: a synthetic Mixture-of-Gaussians run
+## Finding x*: the main script
+
+`scripts/find_xstar.py` is the method. It takes a prior over `X`, a conditional
+sampler for `Y|X` and a target `G(Y)`, runs guided reverse diffusion with the
+distributional loss as guidance, and returns the best `x_hat` over several restarts:
+
+```bash
+python scripts/find_xstar.py \
+    --prior   runs/mog4d/models/model_unconditional.pt \
+    --sampler runs/mog4d/models/model_conditional.pt \
+    --target  runs/mog4d/data.pt \
+    --n-attempts 10 --out runs/mog4d/xstar.json
+```
+
+The prior and sampler are checkpoints written by `scripts/train_models.py` (see
+the next section for producing them); the target is either a `generate_data.py`
+file, which describes `G` as a mixture and also carries `x*` for evaluation, or a
+`.pt`/`.npy` array of target samples. The algorithm is chosen on the command line:
+
+| Flag | Meaning | Default |
+|---|---|---|
+| `--sampler-type cm\|diffusion\|auto` | few-step sampler (MLGD-F) or full conditional diffusion (MLGD) | auto, from the checkpoint |
+| `--guidance lgd\|dps` | LGD: Monte-Carlo perturbations of the Tweedie point, log-sum-exp aggregate, constant step; DPS: single Tweedie point, step `zeta' * beta_t` | lgd |
+| `--n-cond`, `--n-target` | conditional / target samples per step | 250 / n_cond |
+| `--loss mmd\|swd`, `--rbf-kernels`, `--rbf-mul`, `--swd-projections` | the distributional distance | mmd, 5 bandwidths |
+| `--select all\|uniform`, `--n-sel` | backpropagate through all samples or a random subset | all |
+| `--n-mc`, `--perturb`, `--aggregate` | the outer-loop Monte-Carlo estimator | preset by `--guidance` |
+| `--step-size`, `--zeta`, `--eta`, `--guidance-cutoff-t`, `--init` | step rule, DDIM stochasticity, initialisation | 1.0, 1.0, 0, none, randn |
+| `--n-attempts`, `--seed`, `--device`, `--final-n-cond` | restarts and reporting | 10, 42, auto, 4 n_cond |
+
+Every attempt prints its `x_hat`, final loss and, when `x*` is known, the
+distance to it and the exact L2 distance between `P(Y|X=x_hat)` and `G`; the
+JSON holds all of them and the best. Attempts are also appended to
+`results/runs.jsonl`.
+
+## Producing a prior, a sampler and a target: the synthetic pipeline
 
 One command draws a joint `P(X,Y)`, trains the prior on `X` and the conditional
 sampler on `Y|X`, runs the guided optimisation and evaluates the recovered
-`x_hat` against the known optimum:
+`x_hat` against the known optimum (a few minutes on CPU, most of it training):
 
 ```bash
 python scripts/run_experiment.py --random-mog --dim 4 --n-components 3 --condition-on 3 \
@@ -98,7 +133,7 @@ losses/         MMD/RBF, circular, sliced Wasserstein
 utils/          networks, mixtures and the exact L2 between GMMs, evaluation, superposition
 gcio/           run persistence (results/runs.jsonl)
 legacy/         function-per-variant entry points and the frozen pre-refactor reference
-scripts/        all command-line entry points, test runners, cluster templates
+scripts/        all command-line entry points (find_xstar.py is the method), test runners, cluster templates
 tests/          smoke, equivalence, determinism
 notebooks/      exploratory notebooks (not maintained; the scripts supersede them)
 SimulationParameters/   the paper's fixed MoG settings
@@ -114,9 +149,8 @@ python scripts/run_regression.py                            # check against it
 ```
 
 `tests/test_equivalence.py` checks each refactored optimizer against the frozen
-reference in `legacy/Optimization_legacy.py` on fixed seeds. Known open issue:
-`test_optimize_DPS_equivalence` fails inside the reference DPS code itself, which
-unpacks two values from a sampler that returns three.
+reference in `legacy/Optimization_legacy.py` on fixed seeds. The same suite runs
+on GitHub Actions for every push.
 
 ## Results
 

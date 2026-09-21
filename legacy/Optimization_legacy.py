@@ -42,7 +42,7 @@ def optimize_DPS(model_uncond, model_cond, mog_means, mog_variances, weights, mu
         x_t_minus_1, pred_x0 = model_uncond.sample_ddim_step(x_t, t, condition_x=None, device=device, eta=0.0)
 
         condition = pred_x0.view(1, -1).repeat(nsamples, 1).to(device)
-        target_samples, _ = model_cond.sample(nsamples=nsamples, condition_x=condition,device=device)
+        target_samples, _, _ = model_cond.sample(nsamples=nsamples, condition_x=condition,device=device)
         target_samples = target_samples.to(device)
 
         if not CM:

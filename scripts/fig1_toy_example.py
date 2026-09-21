@@ -424,9 +424,9 @@ def make_figure(st, sim, sweep, out_png):
         ax = fig.add_subplot(gs[1, i])
         ax.hist(sweep[beta], bins=40, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
                 edgecolor="white", label="guided samples")
-        ax.plot(x_grid, px, color=c_prior, ls="--", lw=2.2, label=r"prior $\mathcal{P}(x)$")
         ax.plot(x_grid, Q[beta], color=c_q, lw=2.4, label=r"analytic $\mathcal{Q}_\beta(x)$")
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12)
+        ax.plot(x_grid, px, color=c_prior, ls="--", lw=2.2, label=r"prior $\mathcal{P}(x)$")   # on top: visible even where it coincides with Q_0
         ax.axvline(x_star, color=c_true, ls=":", lw=1.4, label=r"$x^\star$")
         ax.set_xlim(xlo, xhi); ax.set_ylim(0, ymax); ax.set_xlabel("x")
         ax.set_title(rf"$\beta = {beta:g}$", fontsize=fs_title); ax.grid(alpha=0.15)
