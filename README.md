@@ -159,4 +159,8 @@ Runs call `gcio.results.save_run(...)` and tables are built from the store,
 
 ## Cluster
 
-`scripts/cluster_setup.txt` has SLURM and PBS templates for the same commands.
+`scripts/cluster_setup.txt` explains the environment (modules, venv, CUDA
+torch). `scripts/slurm_fig1.sh` is a ready SLURM job for the Figure 1 runs
+(`sbatch scripts/slurm_fig1.sh hard`, `N_RESTARTS=50` to change the restart
+count); it writes the figures and their simulation caches to `results/`, which
+you copy back and redraw locally without recomputing.

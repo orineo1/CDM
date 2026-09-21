@@ -165,6 +165,8 @@ def parse_args():
     p.add_argument("--nunits", type=int, default=128)
     p.add_argument("--n-cond", type=int, default=250)
     p.add_argument("--n-mc", type=int, default=1)
+    p.add_argument("--n-restarts", type=int, default=10,
+                   help="independent restarts per method; the best final loss is shown, all endpoints are saved")
     p.add_argument("--init", choices=["randn", "zeros"], default="randn",
                    help="x_T initialisation; the paper says N(0,I), the legacy code used zeros")
     p.add_argument("--betas", type=float, nargs="+", default=[0.0, 0.5, 2.0, 8.0])
@@ -174,7 +176,7 @@ def parse_args():
     if a.out is None:
         a.out = f"results/fig1_{a.setting}.png"
     if a.quick:
-        a.epochs, a.n_beta_samples, a.n_cond = 300, 50, 100
+        a.epochs, a.n_beta_samples, a.n_cond, a.n_restarts = 300, 50, 100, 2
     if a.retrain:
         a.uncond = a.cond = a.cm = "train"
     return a
@@ -282,7 +284,7 @@ def target_mixture(st):
     return filter_and_normalize(mu_t, S_t, w_t, threshold=0.001)
 
 
-def run_mlgd(st, uncond, model_cond, use_cm, args):
+def run_mlgd(st, uncond, model_cond, use_cm, args, seed):
     mog_means, mog_vars, w = target_mixture(st)
     cfg = GuidanceConfig(
         n_cond=args.n_cond, n_mc=args.n_mc,
@@ -292,7 +294,7 @@ def run_mlgd(st, uncond, model_cond, use_cm, args):
         timestep_source="range", ddim_step_style="condition_x",
         repeat_condition=True, condition_on_slice=(not use_cm),
         target_generator=lambda n, dev: generate_mog_samples_not_differentiable(n, mog_means, mog_vars, w).to(dev),
-        compute_final_loss=True, device=args.device, seed=args.seed,
+        compute_final_loss=True, device=args.device, seed=seed,
         tag=f"fig1_{st.name}:" + ("MLGD-F" if use_cm else "MLGD"),
     )
     t0 = time.time()
@@ -303,7 +305,27 @@ def run_mlgd(st, uncond, model_cond, use_cm, args):
     w_p = compute_alpha(st.mu_list, st.Sigma_list, st.alpha, x_hat.view(1))
     return {"x_hat": float(x_hat), "l2_gmm": float(gmm_l2_distance(mu_p, S_p, w_p, mog_means, mog_vars, w)),
             "l2_x": float(abs(x_hat - st.x_star[0])), "final_loss": float(res["final_loss"]), "time_s": elapsed,
-            "n_steps": res["n_steps"], "best_loss": res["best_loss"], "trace": res["trace"], "config": cfg.describe()}
+            "n_steps": res["n_steps"], "best_loss": res["best_loss"], "trace": res["trace"], "config": cfg.describe(),
+            "seed": seed}
+
+
+def run_mlgd_restarts(st, uncond, model_cond, use_cm, args):
+    """R independent restarts; the record of the best one (by the algorithm's own final
+    loss, as in the paper's protocol) plus every restart's outcome."""
+    name = "MLGD-F" if use_cm else "MLGD"
+    runs = [run_mlgd(st, uncond, model_cond, use_cm, args, seed=args.seed * 100 + r) for r in range(args.n_restarts)]
+    best = min(runs, key=lambda r: r["final_loss"])
+    basin = 0.5 * min(abs(float(m[0]) - float(st.x_star[0])) for m in st.mu_list if abs(float(m[0]) - float(st.x_star[0])) > 1e-6) \
+        if len({float(m[0]) for m in st.mu_list}) > 1 else 1.5
+    hits = sum(abs(r["x_hat"] - float(st.x_star[0])) < basin for r in runs)
+    out = dict(best)
+    out.update({"n_restarts": len(runs), "hits_xstar_basin": int(hits), "basin_halfwidth": float(basin),
+                "restarts": [{k: r[k] for k in ("seed", "x_hat", "final_loss", "l2_gmm", "l2_x", "time_s", "n_steps")} for r in runs],
+                "traces": [r["trace"] for r in runs]})
+    out.pop("trace", None)
+    print(f"[{name}] best of {len(runs)}: x_hat={best['x_hat']:+.4f}  L2 GMM={best['l2_gmm']:.5f}  |x_hat-x*|={best['l2_x']:.4f}  "
+          f"| {hits}/{len(runs)} restarts in the x* basin | {sum(r['time_s'] for r in runs):.0f}s total")
+    return out
 
 
 # ----------------------------------------------------------------------------
@@ -359,10 +381,8 @@ def sim_paths(out):
 
 def simulate(st, args):
     uncond, cond, cm, train_times = get_models(st, args)
-    mlgd = run_mlgd(st, uncond, cond, use_cm=False, args=args)
-    print(f"[MLGD]   x_hat={mlgd['x_hat']:+.4f}  L2 GMM={mlgd['l2_gmm']:.5f}  |x_hat-x*|={mlgd['l2_x']:.4f}  {mlgd['time_s']:.1f}s")
-    mlgdf = run_mlgd(st, uncond, cm, use_cm=True, args=args)
-    print(f"[MLGD-F] x_hat={mlgdf['x_hat']:+.4f}  L2 GMM={mlgdf['l2_gmm']:.5f}  |x_hat-x*|={mlgdf['l2_x']:.4f}  {mlgdf['time_s']:.1f}s")
+    mlgd = run_mlgd_restarts(st, uncond, cond, use_cm=False, args=args)
+    mlgdf = run_mlgd_restarts(st, uncond, cm, use_cm=True, args=args)
     sweep, diag = run_beta_sweep(st, uncond, args)
     sim = {"setting": st.name, "args": vars(args), "train_times_s": train_times, "MLGD": mlgd, "MLGD-F": mlgdf,
            "betas": list(args.betas),
@@ -414,8 +434,9 @@ def make_figure(st, sim, sweep, out_png):
     x_grid, px, Q = analytic_curves(st, betas)
     xlo, xhi = st.x_range
     # never let a recovered x-hat fall outside the frame
-    xlo = min(xlo, mlgd["x_hat"] - 0.6, mlgdf["x_hat"] - 0.6)
-    xhi = max(xhi, mlgd["x_hat"] + 0.6, mlgdf["x_hat"] + 0.6)
+    allx = [mlgd["x_hat"], mlgdf["x_hat"]] + [q["x_hat"] for r in (mlgd, mlgdf) for q in r.get("restarts", [])]
+    xlo = min(xlo, min(allx) - 0.6)
+    xhi = max(xhi, max(allx) + 0.6)
     c_data, c_true, c_mlgd, c_mlgdf, c_q, c_prior = "steelblue", "black", "tomato", "seagreen", "darkorange", "#303030"
     fs_title, fs_leg = 15, 9.5
     x_star = float(st.x_star[0])
@@ -430,11 +451,21 @@ def make_figure(st, sim, sweep, out_png):
     ax.scatter(xy[:, 0], xy[:, 1], s=8, alpha=0.3, color=c_data)
     ax.axvline(x_star, color=c_true, ls="--", lw=2.2, label=r"true $x^\star$")
     # different widths so both stay visible when the two solutions (nearly) coincide
-    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=3.5, alpha=0.8, label=r"MLGD $\hat{x}$")
-    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, alpha=1.0, label=r"MLGD-F $\hat{x}$")
+    def lab(name, r):
+        if r.get("n_restarts", 1) > 1:
+            return rf"{name} $\hat{{x}}$ (best of {r['n_restarts']}; {r['hits_xstar_basin']}/{r['n_restarts']} in the $x^\star$ basin)"
+        return rf"{name} $\hat{{x}}$"
+    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=3.5, alpha=0.8, label=lab("MLGD", mlgd))
+    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, alpha=1.0, label=lab("MLGD-F", mlgdf))
+    # every restart's endpoint as a tick at the bottom of the panel
+    y0, y1 = ax.get_ylim()
+    for r, c, off in [(mlgd, c_mlgd, 0.0), (mlgdf, c_mlgdf, 0.035)]:
+        xs = [q["x_hat"] for q in r.get("restarts", [])]
+        if xs:
+            ax.scatter(xs, [y0 + off * (y1 - y0)] * len(xs), marker="|", s=120, color=c, lw=1.5, zorder=5, clip_on=False)
     ax.set_xlim(xlo, xhi); ax.set_xlabel("x"); ax.set_ylabel("y")
     ax.set_title(r"joint $\mathcal{P}(X, Y)$", fontsize=fs_title)
-    ax.legend(fontsize=fs_leg, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False); ax.grid(alpha=0.2)
+    ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False); ax.grid(alpha=0.2)
 
     # top right: conditionals vs target (on y)
     ax = fig.add_subplot(gs[0, 2:4])
