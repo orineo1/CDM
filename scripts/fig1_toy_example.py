@@ -383,12 +383,12 @@ def make_figure(st, sim, sweep, out_png):
     mlgd, mlgdf = sim["MLGD"], sim["MLGD-F"]
     x_grid, px, Q = analytic_curves(st, betas)
     xlo, xhi = st.x_range
-    c_data, c_true, c_mlgd, c_mlgdf, c_q, c_prior = "steelblue", "black", "tomato", "seagreen", "darkorange", "dimgray"
+    c_data, c_true, c_mlgd, c_mlgdf, c_q, c_prior = "steelblue", "black", "tomato", "seagreen", "darkorange", "#303030"
     fs_title, fs_leg = 15, 9.5
     x_star = float(st.x_star[0])
 
     fig = plt.figure(figsize=(16, 7))
-    gs = gridspec.GridSpec(2, 4, figure=fig, wspace=0.28, hspace=0.45)
+    gs = gridspec.GridSpec(2, 4, figure=fig, wspace=0.28, hspace=0.75)
 
     # top left: joint
     ax = fig.add_subplot(gs[0, 0:2])
@@ -400,7 +400,7 @@ def make_figure(st, sim, sweep, out_png):
     ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=2, alpha=0.9, label=r"MLGD-F $\hat{x}$")
     ax.set_xlim(xlo, xhi); ax.set_xlabel("x"); ax.set_ylabel("y")
     ax.set_title(r"joint $\mathcal{P}(X, Y)$", fontsize=fs_title)
-    ax.legend(fontsize=fs_leg, loc="upper right", framealpha=0.9); ax.grid(alpha=0.2)
+    ax.legend(fontsize=fs_leg, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False); ax.grid(alpha=0.2)
 
     # top right: conditionals vs target (on y)
     ax = fig.add_subplot(gs[0, 2:4])
@@ -413,10 +413,10 @@ def make_figure(st, sim, sweep, out_png):
     for r, c, name in [(mlgd, c_mlgd, "MLGD"), (mlgdf, c_mlgdf, "MLGD-F")]:
         p = cond_params(st, torch.tensor(r["x_hat"]))
         ax.plot(y, mixture_density_1d(y, p).detach(), color=c, lw=2,
-                label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + "\n" + rf"$L^2 = {r['l2_gmm']:.4f}$")
+                label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={r['l2_gmm']:.4f}$")
     ax.set_xlim(ylo, yhi); ax.set_xlabel("y")
     ax.set_title(r"induced conditional at $\hat{x}$ vs. target, on $y$", fontsize=fs_title)
-    ax.legend(fontsize=fs_leg, loc="upper right", framealpha=0.9, labelspacing=0.8); ax.grid(alpha=0.2)
+    ax.legend(fontsize=fs_leg, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False); ax.grid(alpha=0.2)
 
     # bottom: beta sweep (on x); one shared y-limit from the analytic curves
     ymax = 1.08 * max(max(Q[b].max(), px.max()) for b in betas)
@@ -424,10 +424,11 @@ def make_figure(st, sim, sweep, out_png):
         ax = fig.add_subplot(gs[1, i])
         ax.hist(sweep[beta], bins=40, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
                 edgecolor="white", label="guided samples")
-        ax.plot(x_grid, Q[beta], color=c_q, lw=2.4, label=r"analytic $\mathcal{Q}_\beta(x)$")
-        ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12)
-        ax.plot(x_grid, px, color=c_prior, ls="--", lw=2.2, label=r"prior $\mathcal{P}(x)$")   # on top: visible even where it coincides with Q_0
-        ax.axvline(x_star, color=c_true, ls=":", lw=1.4, label=r"$x^\star$")
+        ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"analytic $\mathcal{Q}_\beta(x)$", zorder=3)
+        ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
+        ax.axvline(x_star, color=c_true, ls=":", lw=1.4, label=r"$x^\star$", zorder=4)
+        # the prior is drawn last, dashed and dark, so it stays visible where it coincides with Q_beta
+        ax.plot(x_grid, px, color=c_prior, ls=(0, (4, 3)), lw=2.4, label=r"prior $\mathcal{P}(x)$", zorder=5)
         ax.set_xlim(xlo, xhi); ax.set_ylim(0, ymax); ax.set_xlabel("x")
         ax.set_title(rf"$\beta = {beta:g}$", fontsize=fs_title); ax.grid(alpha=0.15)
         if i == 0:
