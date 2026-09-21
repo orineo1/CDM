@@ -128,14 +128,23 @@ def make_setting(name):
         #   x=-2: one mode at +2 (misses a mode: the worst match, right next to x*)
         #   x=+2: modes at +2, -2 (the target, x*)
         #   x=+6: one broad bump at 0 (blur)
-        # every cluster carries 1/4 of the prior mass, split equally over its components
+        # every cluster carries 1/4 of the prior mass, split equally over its components.
         # y-variances differ per cluster so the decoy conditionals do not overlap the target's curve:
-        # narrow three-mode decoy, broad single-mode decoy, the target itself, and a very broad bump
-        clusters = [(-6., [2., 0., -2.], 0.15), (-2., [2.], 0.9), (2., [2., -2.], 0.4), (6., [0.], 3.0)]
+        # narrow three-mode decoy, broad single-mode decoy, the target itself, and a very broad bump.
+        # Each component is tilted (correlation rho between X and Y): with a diagonal covariance
+        # P(Y|x) would be the same for every x inside a cluster, so the loss would be exactly flat
+        # over the whole x* cluster and x* would be a set, not a point. With rho != 0 the modes of
+        # P(Y|x) slide linearly in x, the loss is a bowl with a unique minimum at x*, and
+        # |x_hat - x*| is meaningful. The target's two modes tilt in opposite directions (a "V").
+        clusters = [(-6., [2., 0., -2.], 0.15, [0.5, 0.5, 0.5]),
+                    (-2., [2.], 0.9, [-0.7]),
+                    (2., [2., -2.], 0.4, [0.7, -0.7]),
+                    (6., [0.], 3.0, [-0.5])]
         mu, Sig, w = [], [], []
-        for cx, ys, vy in clusters:
-            for cy in ys:
-                mu.append(torch.tensor([cx, cy])); Sig.append(torch.tensor([[0.25, 0.0], [0.0, vy]])); w.append(1 / (4 * len(ys)))
+        for cx, ys, vy, rhos in clusters:
+            for cy, rho in zip(ys, rhos):
+                cxy = rho * math.sqrt(0.25 * vy)
+                mu.append(torch.tensor([cx, cy])); Sig.append(torch.tensor([[0.25, cxy], [cxy, vy]])); w.append(1 / (4 * len(ys)))
         return Setting(name, mu, Sig, torch.tensor(w), torch.tensor([2.]))
     if name == "mog2d":
         loc = {}
@@ -174,7 +183,7 @@ def parse_args():
     p.add_argument("--init", choices=["randn", "zeros"], default="randn",
                    help="x_T initialisation; the paper says N(0,I), the legacy code used zeros")
     p.add_argument("--betas", type=float, nargs="+", default=[0.0, 0.5, 2.0, 8.0])
-    p.add_argument("--n-beta-samples", type=int, default=200, help="guided trajectories per beta, run as one batch")
+    p.add_argument("--n-beta-samples", type=int, default=2000, help="guided trajectories per beta, run as one batch")
     p.add_argument("--quick", action="store_true", help="tiny run to check the pipeline")
     a = p.parse_args()
     if a.out is None:
@@ -197,25 +206,28 @@ def set_seed(seed):
 # Exact 1D quantities, differentiable in x
 # ----------------------------------------------------------------------------
 def cond_params(st, x):
-    """P(Y | X = x): means, variances, weights of a 1D mixture, differentiable in x."""
+    """P(Y | X = x): means, variances, weights of a 1D mixture, differentiable in x.
+
+    x may be a scalar or a batch of any shape; the mixture index is the last dimension."""
+    x = torch.as_tensor(x)
     means, variances, logw = [], [], []
     for mu, S, a in zip(st.mu_list, st.Sigma_list, st.alpha):
         mu, S = mu.to(x), S.to(x)
         sxx, sxy, syy = S[0, 0], S[0, 1], S[1, 1]
         means.append(mu[1] + sxy / sxx * (x - mu[0]))
-        variances.append(syy - sxy * sxy / sxx)
+        variances.append((syy - sxy * sxy / sxx).expand_as(x))
         logw.append(torch.log(a.to(x)) - 0.5 * torch.log(2 * math.pi * sxx) - (x - mu[0]) ** 2 / (2 * sxx))
-    return torch.stack(means), torch.stack(variances), torch.softmax(torch.stack(logw), 0)
+    return torch.stack(means, -1), torch.stack(variances, -1), torch.softmax(torch.stack(logw, -1), -1)
 
 
 def _inner(m1, v1, w1, m2, v2, w2):
-    s = v1[:, None] + v2[None, :]
-    d = m1[:, None] - m2[None, :]
-    return (w1[:, None] * w2[None, :] * torch.exp(-d * d / (2 * s)) / torch.sqrt(2 * math.pi * s)).sum()
+    s = v1[..., :, None] + v2[..., None, :]
+    d = m1[..., :, None] - m2[..., None, :]
+    return (w1[..., :, None] * w2[..., None, :] * torch.exp(-d * d / (2 * s)) / torch.sqrt(2 * math.pi * s)).sum((-2, -1))
 
 
 def l2_1d(p, q):
-    """Exact squared L2 distance between two 1D Gaussian mixtures."""
+    """Exact squared L2 distance between two 1D Gaussian mixtures (batched over leading dims)."""
     return _inner(*p, *p) - 2 * _inner(*p, *q) + _inner(*q, *q)
 
 
@@ -313,6 +325,32 @@ def run_mlgd(st, uncond, model_cond, use_cm, args, seed):
             "seed": seed}
 
 
+def empirical_loss_curve(st, model_cond, use_cm, args, n_grid=41, n_seeds=3):
+    """The plug-in loss the optimiser actually sees, on a grid of x: MMD between n_cond draws of the
+    trained sampler at x and n_cond draws of the target, repeated over seeds. Unlike the population
+    loss L(x) it carries estimator noise and sampler error."""
+    mog_means, mog_vars, w = target_mixture(st)
+    loss_fn = MMDLoss(kernel=RBF(device=args.device))
+    xlo, xhi = st.x_range
+    grid = np.linspace(xlo, xhi, n_grid)
+    vals = np.zeros((n_seeds, n_grid))
+    t0 = time.time()
+    with torch.no_grad():
+        for si in range(n_seeds):
+            set_seed(args.seed * 100 + si)
+            for gi, x in enumerate(grid):
+                cond = torch.full((args.n_cond, CONDITION_ON), float(x), device=args.device)
+                out = model_cond.sample(nsamples=args.n_cond, condition_x=cond, device=args.device)
+                y = out[0] if isinstance(out, tuple) else out
+                if not use_cm:
+                    y = y[:, model_cond.condition_on:]
+                tgt = generate_mog_samples_not_differentiable(args.n_cond, mog_means, mog_vars, w).to(args.device)
+                vals[si, gi] = float(loss_fn(y, tgt))
+    print(f"[loss-curve] {'MLGD-F' if use_cm else 'MLGD'}: {n_grid} x-values x {n_seeds} seeds, n_cond={args.n_cond}, {time.time()-t0:.0f}s")
+    return {"x": grid.tolist(), "values": vals.tolist(), "n_cond": int(args.n_cond), "n_seeds": n_seeds,
+            "time_s": time.time() - t0}
+
+
 def run_mlgd_restarts(st, uncond, model_cond, use_cm, args):
     """R independent restarts; the record of the best one (by the algorithm's own final
     loss, as in the paper's protocol) plus every restart's outcome."""
@@ -345,9 +383,9 @@ def run_beta_sweep(st, uncond, args):
     G = tuple(g.detach() for g in cond_params(st, st.x_star[0].to(args.device)))
 
     def analytic_loss(pred_samples, target_samples):
-        # one row per trajectory; rows are independent, so the gradient of the
-        # sum is the per-trajectory gradient
-        return torch.stack([l2_1d(cond_params(st, x0), G) for x0 in pred_samples.view(-1)]).sum()
+        # one row per trajectory, evaluated for the whole batch at once; rows are
+        # independent, so the gradient of the sum is the per-trajectory gradient
+        return l2_1d(cond_params(st, pred_samples.view(-1)), G).sum()
 
     samples, diag = {}, {}
     for beta in args.betas:
@@ -388,8 +426,9 @@ def simulate(st, args):
     mlgd = run_mlgd_restarts(st, uncond, cond, use_cm=False, args=args)
     mlgdf = run_mlgd_restarts(st, uncond, cm, use_cm=True, args=args)
     sweep, diag = run_beta_sweep(st, uncond, args)
+    curves = {"MLGD": empirical_loss_curve(st, cond, False, args), "MLGD-F": empirical_loss_curve(st, cm, True, args)}
     sim = {"setting": st.name, "args": vars(args), "train_times_s": train_times, "MLGD": mlgd, "MLGD-F": mlgdf,
-           "betas": list(args.betas),
+           "empirical_loss": curves, "betas": list(args.betas),
            "beta_sweep": {str(b): {"mean": float(np.mean(s)), "std": float(np.std(s)), "n": int(len(s)), **diag[b]}
                           for b, s in sweep.items()}}
     pj, pn = sim_paths(args.out)
@@ -450,10 +489,14 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     # layout "tb": top row = joint / loss / conditionals, bottom row = 1x4 beta sweep
     if layout == "lr":
         fig = plt.figure(figsize=(14, 12))
-        outer = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.2)
-        left = outer[0].subgridspec(3, 1, hspace=0.6)
+        outer = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.33)
+        left = outer[0].subgridspec(2, 1, height_ratios=[2.1, 1], hspace=0.45)
+        left_top = left[0].subgridspec(2, 1, height_ratios=[1.2, 1], hspace=0.08)   # joint + loss share x
         right = outer[1].subgridspec(4, 1, hspace=0.12)
-        top_axes = [fig.add_subplot(left[i]) for i in range(3)]
+        ax_joint = fig.add_subplot(left_top[0])
+        ax_loss = fig.add_subplot(left_top[1], sharex=ax_joint)
+        ax_cond = fig.add_subplot(left[1])
+        top_axes = [ax_joint, ax_loss, ax_cond]
         sweep_axes = []
         for i in range(4):
             sweep_axes.append(fig.add_subplot(right[i], sharex=sweep_axes[0] if sweep_axes else None))
@@ -488,9 +531,13 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         xs = [q["x_hat"] for q in r.get("restarts", [])]
         if xs:
             ax.scatter(xs, [y0 + off * (y1 - y0)] * len(xs), marker="|", s=110, color=c, lw=1.5, zorder=5, clip_on=False)
-    ax.set_xlim(xlo, xhi); ax.set_xlabel("x"); ax.set_ylabel("y")
-    ax.set_title(r"joint $\mathcal{P}(X, Y)$ and the recovered $\hat{x}$", fontsize=fs_title)
-    ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, frameon=False); ax.grid(alpha=0.2)
+    ax.set_xlim(xlo, xhi); ax.set_ylabel("y")
+    ax.set_title(r"joint $\mathcal{P}(X, Y)$ and the recovered $\hat{x}$", fontsize=fs_title); ax.grid(alpha=0.2)
+    if layout == "lr":
+        ax.tick_params(labelbottom=False)   # x-axis numbers only once, on the loss panel below
+    else:
+        ax.set_xlabel("x")
+        ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, frameon=False)
 
     # ---- left, middle: induced conditionals on y ------------------------------
     ax = ax_cond
@@ -522,22 +569,39 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     # ---- left, bottom: the loss landscape L(x) --------------------------------
     ax = ax_loss
     Gd = tuple(g.detach() for g in G)
-    L = np.array([float(l2_1d(cond_params(st, torch.tensor(float(x))), Gd)) for x in x_grid])
-    ax.plot(x_grid, L, color="0.25", lw=2, zorder=2)
+    L = l2_1d(cond_params(st, torch.as_tensor(x_grid, dtype=torch.float32)), Gd).numpy()
+    ax.plot(x_grid, L, color="0.25", lw=2, label=r"population $\mathcal{L}(x)$", zorder=2)
     for cx in others:   # the loss at each wrong cluster centre
         ax.plot(cx, float(l2_1d(cond_params(st, torch.tensor(cx)), Gd)), "o", color="0.45", ms=5, zorder=3)
-    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=4, alpha=0.6, zorder=3)
-    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, zorder=4)
-    ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
+    if "empirical_loss" in sim:   # the sample loss the optimiser sees (MMD), mean +- sd over seeds, own scale
+        ax2 = ax.twinx()
+        for name, c in [("MLGD", c_mlgd), ("MLGD-F", c_mlgdf)]:
+            e = sim["empirical_loss"][name]
+            xe, v = np.array(e["x"]), np.array(e["values"])
+            mu_e, sd_e = v.mean(0), v.std(0)
+            ax2.plot(xe, mu_e, color=c, lw=1.2, alpha=0.9, zorder=2)
+            ax2.fill_between(xe, mu_e - sd_e, mu_e + sd_e, color=c, alpha=0.15, lw=0, zorder=1)
+        ax2.set_ylim(bottom=0); ax2.set_ylabel(r"sample loss $\hat{\mathcal{L}}(x)$ (MMD)", fontsize=fs_leg)
+        ax2.tick_params(labelsize=fs_leg)
+        n_c = sim["empirical_loss"]["MLGD"]["n_cond"]
+        ax.plot([], [], color="0.5", lw=1.2, label=rf"$\hat{{\mathcal{{L}}}}(x)$ (MMD, $n_{{\rm cond}}={n_c}$; right axis)")
+    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=4, alpha=0.6, label=lab("MLGD", mlgd), zorder=3)
+    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, label=lab("MLGD-F", mlgdf), zorder=4)
+    ax.axvline(x_star, color=c_true, ls="--", lw=2, label=r"true $x^\star$", zorder=5)
     ax.set_xlim(xlo, xhi); ax.set_ylim(0, 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max()); ax.set_xlabel("x")
     ax.set_ylabel(r"$\mathcal{L}(x) = \mathcal{D}\left(\mathcal{P}(Y\mid X=x),\,\mathcal{G}\right)$")
-    ax.set_title(r"loss landscape: minimised only at $x^\star$", fontsize=fs_title); ax.grid(alpha=0.2)
+    if layout == "lr":
+        ax.set_title(r"loss landscape $\mathcal{L}(x)$", fontsize=fs_title - 2, loc="right", y=0.98, pad=-14)
+        ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=2, frameon=False)
+    else:
+        ax.set_title(r"loss landscape: minimised only at $x^\star$", fontsize=fs_title)
+    ax.grid(alpha=0.2)
 
     # ---- right: the CDMS beta-sweep, 2 x 2 -------------------------------------
     ymax = 1.3 * max(max(Q[b].max(), px.max()) for b in betas)
     for i, beta in enumerate(betas):
         ax = sweep_axes[i]
-        ax.hist(sweep[beta], bins=40, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
+        ax.hist(sweep[beta], bins=80, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
                 edgecolor="white", linewidth=0.3, label="guided samples")
         ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"analytic $\mathcal{Q}_\beta(x)$", zorder=3)
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)

@@ -4,6 +4,7 @@
 #   sbatch --partition=<gpu partition> scripts/slurm_fig1.sh      # everything below
 #   sbatch scripts/slurm_fig1.sh hard            # one setting
 #   N_RESTARTS=50 sbatch scripts/slurm_fig1.sh   # more restarts
+#   EXTRA_ARGS=--retrain sbatch scripts/slurm_fig1.sh hard   # setting changed: retrain the nets
 #
 # Each setting trains its three small networks once (cached under
 # checkpoints/toy/<setting>/), runs N_RESTARTS restarts of MLGD and MLGD-F,
@@ -33,11 +34,12 @@ VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
 if [ -f "$VENV/bin/activate" ]; then source "$VENV/bin/activate"; fi
 
 N_RESTARTS=${N_RESTARTS:-25}
+EXTRA_ARGS=${EXTRA_ARGS:-}          # e.g. EXTRA_ARGS=--retrain after the setting changed
 SETTINGS=${1:-"hard bimodal paper"}
 
 python -c "import torch; print('torch', torch.__version__, '| cuda', torch.cuda.is_available())"
 for s in $SETTINGS; do
     echo "=== setting $s, $N_RESTARTS restarts ==="
-    python scripts/fig1_toy_example.py --setting "$s" --n-restarts "$N_RESTARTS" --rerun-sim --device cuda
+    python scripts/fig1_toy_example.py --setting "$s" --n-restarts "$N_RESTARTS" --rerun-sim --device cuda $EXTRA_ARGS
 done
 echo "done: $(ls results/fig1_*.png)"
