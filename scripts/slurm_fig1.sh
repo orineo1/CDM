@@ -9,8 +9,10 @@
 # checkpoints/toy/<setting>/), runs N_RESTARTS restarts of MLGD and MLGD-F,
 # the batched beta-sweep, and writes results/fig1_<setting>.png plus the
 # simulation cache (_sim.json, _sweep.npz) next to it. Copy results/ back
-# to redraw locally without recomputing:
-#   scp -r cluster:GlobalConditional/results/fig1_* results/
+# to redraw locally without recomputing (scp through the jump host fails;
+# stream the files instead):
+#   for f in fig1_hard.png fig1_hard_sim.json fig1_hard_sweep.npz; do
+#     ssh huji-work "cat /sci/labs/orzuk/orzuk/github/CDM/results/$f" > results/$f; done
 #
 #SBATCH --job-name=cdm-fig1
 #SBATCH --partition=gpu            # override: sbatch --partition=<name> scripts/slurm_fig1.sh
