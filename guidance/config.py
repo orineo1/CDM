@@ -153,6 +153,7 @@ class GuidanceConfig:
     ddim_step_style: str = "indexed"
     # Called as ddim_step_fn(model_uncond, x_t, t, i) -> (x_prev, pred_x0)
     ddim_step_fn: Optional[Callable] = None
+    eta: float = 0.0                     # DDIM stochasticity (0 = deterministic, 1 = DDPM); legacy variants use 0
 
     # --- explicit timestep list (timestep_source="list") ---
     timesteps_list: Optional[Any] = None

@@ -52,11 +52,11 @@ def _ddim_step(model_uncond, x_t, t, i, cfg):
         return cfg.ddim_step_fn(model_uncond, x_t, t, i)
     if cfg.ddim_step_style == "condition_x":
         return model_uncond.sample_ddim_step(
-            x_t, t, condition_x=None, device=cfg.device, eta=0.0
+            x_t, t, condition_x=None, device=cfg.device, eta=cfg.eta
         )
     elif cfg.ddim_step_style == "indexed":
         return model_uncond.sample_ddim_step(
-            x_t, t, i, device=cfg.device, eta=0.0
+            x_t, t, i, device=cfg.device, eta=cfg.eta
         )
     else:
         raise ValueError(f"unknown ddim_step_style: {cfg.ddim_step_style}")
