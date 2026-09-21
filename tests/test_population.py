@@ -116,3 +116,14 @@ def test_exact_conditional_sampler_matches_analytic_conditional():
     assert torch.allclose(y.mean(0), mean_true, atol=0.05)
     y.mean().backward()
     assert x.grad is not None and torch.isfinite(x.grad).all()
+
+
+def test_adam_guidance_runs_single_and_population():
+    from guidance import AdamGuidance
+    mu, mc = _models()
+    loss = MMDLoss(kernel=RBF(device=DEVICE))
+    single = optimize_guided(mu, mc, loss, _cfg(update_fn=AdamGuidance(), step_size_fn=lambda t, i: 0.05))
+    assert torch.isfinite(single["x_final"]).all()
+    pop = optimize_guided_population(mu, mc, loss, _cfg(update_fn=AdamGuidance(), step_size_fn=lambda t, i: 0.05,
+                                                        n_particles=3, resample_beta=1e6, ess_frac=0.99))
+    assert pop["x_particles"].shape == (3, 1) and pop["n_resamples"] > 0

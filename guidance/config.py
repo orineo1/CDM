@@ -114,6 +114,36 @@ def update_ddim_minus_grad(x_t, x_t_minus_1, grad, step, **kw):
     return x_t_minus_1.detach().clone() - step * grad
 
 
+class AdamGuidance:
+    """Adam-style guidance update (AdamDPS-like): the guidance push uses bias-corrected first and
+    second moments of the loss gradient accumulated across the reverse steps of one trajectory,
+        m <- b1 m + (1 - b1) g,   v <- b2 v + (1 - b2) g^2,
+        x_{t-1} <- ddim(x_t) - step * m_hat / (sqrt(v_hat) + eps),
+    so the push is scale-free in the gradient and `step` is a displacement in x units.
+    Moments are kept per trajectory slot (particles pass their index); reset() clears them."""
+
+    def __init__(self, beta1=0.9, beta2=0.999, eps=1e-8):
+        self.beta1, self.beta2, self.eps = beta1, beta2, eps
+        self.state = {}
+
+    def reset(self):
+        self.state = {}
+
+    def __call__(self, x_t, x_t_minus_1, grad, step, slot=0, **kw):
+        st = self.state.get(slot)
+        if st is None:
+            st = {"m": torch.zeros_like(grad), "v": torch.zeros_like(grad), "k": 0}
+            self.state[slot] = st
+        st["k"] += 1
+        st["m"].mul_(self.beta1).add_(grad, alpha=1 - self.beta1)
+        st["v"].mul_(self.beta2).addcmul_(grad, grad, value=1 - self.beta2)
+        m_hat = st["m"] / (1 - self.beta1 ** st["k"])
+        v_hat = st["v"] / (1 - self.beta2 ** st["k"])
+        return x_t_minus_1.detach().clone() - step * m_hat / (v_hat.sqrt() + self.eps)
+
+    __name__ = "AdamGuidance"
+
+
 @dataclass
 class GuidanceConfig:
     """All knobs of the unified guided-diffusion optimizer.

@@ -83,7 +83,7 @@ def _draw_conditional(model_cond, x0_sample, cfg):
     return samples
 
 
-def _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best):
+def _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best, slot=0):
     """One guided reverse-diffusion step for one state x_t.
 
     Tweedie estimate, MC perturbations, inner loss (Algorithm 2), gradient with respect to
@@ -123,7 +123,7 @@ def _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best):
         step = 0.0
 
     with torch.no_grad():
-        x_next = cfg.update_fn(x_t, x_t_minus_1, grad, step)
+        x_next = cfg.update_fn(x_t, x_t_minus_1, grad, step, slot=slot)
     return x_next, {"loss": float(agg_loss.detach()), "grad_norm": float(grad.norm()), "step": float(step)}
 
 
@@ -222,6 +222,8 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
     """
     _seed(cfg)
     assert cfg.target_generator is not None, "cfg.target_generator must be set"
+    if hasattr(cfg.update_fn, "reset"):
+        cfg.update_fn.reset()
     device = cfg.device
     x_t = _init_state(model_uncond, cfg)
 
@@ -297,6 +299,8 @@ def optimize_guided_population(model_uncond, model_cond, loss_function, cfg: Gui
     """
     _seed(cfg)
     assert cfg.target_generator is not None, "cfg.target_generator must be set"
+    if hasattr(cfg.update_fn, "reset"):
+        cfg.update_fn.reset()
     R = int(cfg.n_particles)
     device = cfg.device
     xs = [_init_state(model_uncond, cfg) for _ in range(R)]
@@ -312,7 +316,7 @@ def optimize_guided_population(model_uncond, model_cond, loss_function, cfg: Gui
     for i, t in _make_iterator(model_uncond, cfg):
         losses, gnorms, step = [], [], 0.0
         for r in range(R):
-            xs[r], info = _guided_step(model_uncond, model_cond, loss_function, cfg, xs[r], t, i, bests[r])
+            xs[r], info = _guided_step(model_uncond, model_cond, loss_function, cfg, xs[r], t, i, bests[r], slot=r)
             losses.append(info["loss"]); gnorms.append(info["grad_norm"]); step = info["step"]
         L = torch.tensor(losses)
         ess, resampled, ancestors = float(R), False, None
@@ -329,6 +333,10 @@ def optimize_guided_population(model_uncond, model_cond, loss_function, cfg: Gui
                 idx = _systematic_resample(w)
                 xs = [xs[j].detach().clone() for j in idx.tolist()]
                 bests = [dict(bests[j]) for j in idx.tolist()]
+                if hasattr(cfg.update_fn, "state"):   # stateful guidance (Adam): copy the ancestors' moments
+                    old = cfg.update_fn.state
+                    cfg.update_fn.state = {r: {k: (v.clone() if torch.is_tensor(v) else v) for k, v in old[j].items()}
+                                           for r, j in enumerate(idx.tolist()) if j in old}
                 L = L[idx]
                 logw = torch.zeros(R)
                 resampled, ancestors = True, idx.tolist()

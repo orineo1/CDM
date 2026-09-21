@@ -48,6 +48,8 @@ Outer loop (Algorithm 1)
   --eta E             DDIM stochasticity, 0 = deterministic              (0.0)
   --guidance-cutoff-t T   no guidance for t < T (MNIST used 200)
   --init randn|zeros  x_T initialisation (paper: randn)
+  --guidance-optim sgd|adam   plain gradient push (Eq. 1) or Adam-style push with moments
+                      across the reverse steps (AdamDPS-like); --adam-betas b1 b2
 
 Trajectories: independent restarts or a particle population
   --algo lgd          R = --n-restarts independent trajectories; the smallest
@@ -94,7 +96,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
 sys.path.insert(0, HERE)
 
-from guidance import GuidanceConfig, optimize_guided, optimize_guided_population      # noqa: E402
+from guidance import GuidanceConfig, optimize_guided, optimize_guided_population, AdamGuidance   # noqa: E402
+from guidance.config import update_ddim_minus_grad                                             # noqa: E402
 from guidance.config import (init_randn, init_zeros, perturb_beta_ratio,               # noqa: E402
                              perturb_beta_prod_ratio_sq, perturb_sqrt_beta_prod, perturb_none,
                              aggregate_logsumexp, aggregate_mean, aggregate_single)
@@ -129,6 +132,10 @@ def parse_args():
     g.add_argument("--eta", type=float, default=0.0)
     g.add_argument("--guidance-cutoff-t", type=int, default=None)
     g.add_argument("--init", choices=["randn", "zeros"], default="randn")
+    g.add_argument("--guidance-optim", choices=["sgd", "adam"], default="sgd",
+                   help="adam: Adam-style guidance push (moments across the reverse steps, AdamDPS-like); "
+                        "the step size is then a displacement in x units")
+    g.add_argument("--adam-betas", type=float, nargs=2, default=[0.9, 0.999])
     g.add_argument("--algo", choices=["lgd", "particles"], default="lgd",
                    help="lgd: independent trajectories, best of --n-attempts; particles: --n-particles trajectories "
                         "run in lockstep with loss-weighted resampling (one population per attempt)")
@@ -227,6 +234,7 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
         init_fn=init_randn if args.init == "randn" else init_zeros, unsqueeze_init=True,
         perturb_fn=perturb, perturb_square=(args.perturb == "beta_prod_ratio_sq"),
         aggregate_fn=aggregate, step_size_fn=step_fn, guidance_cutoff_t=args.guidance_cutoff_t,
+        update_fn=(AdamGuidance(*args.adam_betas) if args.guidance_optim == "adam" else update_ddim_minus_grad),
         timestep_source="range", ddim_step_style="condition_x", eta=args.eta,
         repeat_condition=True, condition_on_slice=(sampler_type == "diffusion"),
         cond_output_transform=make_subsampler(args),

@@ -70,6 +70,8 @@ def parse_args():
     g.add_argument("--refine-steps", type=int, default=0)
     g.add_argument("--refine-lr", type=float, default=0.02)
     g.add_argument("--refine-n-cond", type=int, default=1000)
+    g.add_argument("--guidance-optim", choices=["sgd", "adam"], default="sgd")
+    g.add_argument("--step-size", default=None, help="find_xstar --step-size (default: preset)")
     g.add_argument("--extra", default="", help="extra flags passed verbatim to find_xstar.py")
     g = p.add_argument_group("control")
     g.add_argument("--seed", type=int, default=42)
@@ -161,6 +163,9 @@ def search(setting, paths, log, method, args):
            "--resample-schedule", args.resample_schedule,
            "--refine-steps", str(args.refine_steps), "--refine-lr", str(args.refine_lr),
            "--refine-n-cond", str(args.refine_n_cond), "--seed", str(args.seed), "--out", out, "--no-store"]
+    cmd += ["--guidance-optim", args.guidance_optim]
+    if args.step_size is not None:
+        cmd += ["--step-size", str(args.step_size)]
     if args.device:
         cmd += ["--device", args.device]
     if args.extra:
