@@ -457,20 +457,9 @@ def make_figure(st, sim, sweep, out_png):
         ax.plot(x_grid, px, color=c_prior, ls=(0, (4, 3)), lw=2.4, label=r"prior $\mathcal{P}(x)$", zorder=5)
         ax.set_xlim(xlo, xhi); ax.set_ylim(0, ymax); ax.set_xlabel("x")
         ax.set_title(rf"$\beta = {beta:g}$", fontsize=fs_title); ax.grid(alpha=0.15)
-        # mass outside the x* basin: analytic vs sampled; this is where the sampler's bias shows
-        dx = x_grid[1] - x_grid[0]
-        outside = np.abs(x_grid - x_star) > 1.5
-        pa = Q[beta][outside].sum() * dx
-        pe = float((np.abs(sweep[beta] - x_star) > 1.5).mean()); n = len(sweep[beta])
-        ax.text(0.98, 0.96, "mass outside\n" + r"$x^\star$ basin" + "\n" + rf"$\mathcal{{Q}}_\beta$: {pa:.3f}" + "\n"
-                + rf"samples: {pe:.3f}$\pm${np.sqrt(max(pe*(1-pe),1e-9)/n):.3f}",
-                transform=ax.transAxes, ha="right", va="top", fontsize=fs_leg - 2,
-                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="0.7", alpha=0.9))
         if i == 0:
             ax.set_ylabel(r"$\mathcal{Q}_\beta(x)$")
-            sweep_handles = ax.get_legend_handles_labels()
-    # one legend for the whole sweep row, below the panels, so it never covers data
-    fig.legend(*sweep_handles, loc="lower center", bbox_to_anchor=(0.5, -0.02), ncol=4, fontsize=fs_leg, frameon=False)
+            ax.legend(fontsize=fs_leg - 1, loc="upper left", framealpha=0.9)
 
     fig.savefig(out_png, dpi=200, bbox_inches="tight")
     print(f"[figure] wrote {out_png}")
