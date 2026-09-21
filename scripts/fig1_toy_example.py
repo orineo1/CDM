@@ -129,7 +129,9 @@ def make_setting(name):
         #   x=+2: modes at +2, -2 (the target, x*)
         #   x=+6: one broad bump at 0 (blur)
         # every cluster carries 1/4 of the prior mass, split equally over its components
-        clusters = [(-6., [2., 0., -2.], 0.4), (-2., [2.], 0.4), (2., [2., -2.], 0.4), (6., [0.], 3.0)]
+        # y-variances differ per cluster so the decoy conditionals do not overlap the target's curve:
+        # narrow three-mode decoy, broad single-mode decoy, the target itself, and a very broad bump
+        clusters = [(-6., [2., 0., -2.], 0.15), (-2., [2.], 0.9), (2., [2., -2.], 0.4), (6., [0.], 3.0)]
         mu, Sig, w = [], [], []
         for cx, ys, vy in clusters:
             for cy in ys:
@@ -153,6 +155,8 @@ def parse_args():
     p.add_argument("--out", default=None, help="figure path; default results/fig1_<setting>.png")
     p.add_argument("--rerun-sim", action="store_true",
                    help="run the simulation again even if <out>_sim.json exists (default: plot from cache)")
+    p.add_argument("--layout", choices=["lr", "tb"], default="lr",
+                   help="lr: left column (joint, conditionals, loss) + right 2x2 beta sweep; tb: top 1x3 + bottom 1x4")
     for name, what in [("uncond", "score network for P(X)"), ("cond", "conditional diffusion sampler for Y|X (MLGD)"),
                        ("cm", "conditional consistency sampler for Y|X (MLGD-F)")]:
         p.add_argument(f"--{name}", choices=["auto", "train", "load"], default="auto",
@@ -423,7 +427,7 @@ def analytic_curves(st, betas):
     return x_grid.numpy(), px.numpy(), Q
 
 
-def make_figure(st, sim, sweep, out_png):
+def make_figure(st, sim, sweep, out_png, layout="lr"):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -433,46 +437,73 @@ def make_figure(st, sim, sweep, out_png):
     mlgd, mlgdf = sim["MLGD"], sim["MLGD-F"]
     x_grid, px, Q = analytic_curves(st, betas)
     xlo, xhi = st.x_range
-    # never let a recovered x-hat fall outside the frame
     allx = [mlgd["x_hat"], mlgdf["x_hat"]] + [q["x_hat"] for r in (mlgd, mlgdf) for q in r.get("restarts", [])]
-    xlo = min(xlo, min(allx) - 0.6)
-    xhi = max(xhi, max(allx) + 0.6)
+    xlo, xhi = min(xlo, min(allx) - 0.6), max(xhi, max(allx) + 0.6)
+    # one palette for the whole figure: x* black dashed, G black solid, MLGD red (wide, translucent),
+    # MLGD-F green (thin, on top), Q_beta purple, prior orange dash-dot; dashed curves are drawn last
     c_data, c_true, c_mlgd, c_mlgdf, c_q, c_prior = "steelblue", "black", "tab:red", "tab:green", "tab:purple", "tab:orange"
-    fs_title, fs_leg = 15, 9.5
+    fs_title, fs_leg = 13, 9
     x_star = float(st.x_star[0])
 
-    fig = plt.figure(figsize=(16, 7))
-    gs = gridspec.GridSpec(2, 4, figure=fig, wspace=0.28, hspace=0.75)
+    # layout "lr": left column = joint / loss landscape (same x-axis) / conditionals on y;
+    #              right column = the four beta panels stacked, sharing the x-axis so basins line up
+    # layout "tb": top row = joint / loss / conditionals, bottom row = 1x4 beta sweep
+    if layout == "lr":
+        fig = plt.figure(figsize=(14, 12))
+        outer = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.2)
+        left = outer[0].subgridspec(3, 1, hspace=0.6)
+        right = outer[1].subgridspec(4, 1, hspace=0.12)
+        top_axes = [fig.add_subplot(left[i]) for i in range(3)]
+        sweep_axes = []
+        for i in range(4):
+            sweep_axes.append(fig.add_subplot(right[i], sharex=sweep_axes[0] if sweep_axes else None))
+        sweep_ylabel = lambda i: True
+        sweep_xlabel = lambda i: i == 3
+    else:
+        fig = plt.figure(figsize=(16, 7.5))
+        outer = gridspec.GridSpec(2, 1, figure=fig, height_ratios=[1.15, 1], hspace=0.7)
+        top = outer[0].subgridspec(1, 3, wspace=0.28)
+        bot = outer[1].subgridspec(1, 4, wspace=0.28)
+        top_axes = [fig.add_subplot(top[i]) for i in range(3)]
+        sweep_axes = [fig.add_subplot(bot[i]) for i in range(4)]
+        sweep_ylabel = lambda i: i == 0
+        sweep_xlabel = lambda i: True
+    ax_joint, ax_loss, ax_cond = top_axes
 
-    # top left: joint
-    ax = fig.add_subplot(gs[0, 0:2])
-    set_seed(0)
-    xy = generate_mog_samples_not_differentiable(5000, st.mu_list, st.Sigma_list, st.alpha).cpu().numpy()
-    ax.scatter(xy[:, 0], xy[:, 1], s=8, alpha=0.3, color=c_data)
-    # different widths so both stay visible when the two solutions (nearly) coincide
     def lab(name, r):
         if r.get("n_restarts", 1) > 1:
             return rf"{name} $\hat{{x}}$ (best of {r['n_restarts']}; {r['hits_xstar_basin']}/{r['n_restarts']} in the $x^\star$ basin)"
         return rf"{name} $\hat{{x}}$"
+
+    # ---- left, top: the joint ------------------------------------------------
+    ax = ax_joint
+    set_seed(0)
+    xy = generate_mog_samples_not_differentiable(5000, st.mu_list, st.Sigma_list, st.alpha).cpu().numpy()
+    ax.scatter(xy[:, 0], xy[:, 1], s=7, alpha=0.3, color=c_data)
     ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=4, alpha=0.6, label=lab("MLGD", mlgd), zorder=3)
-    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, alpha=1.0, label=lab("MLGD-F", mlgdf), zorder=4)
-    ax.axvline(x_star, color=c_true, ls="--", lw=2.2, label=r"true $x^\star$", zorder=5)   # dashed drawn last
-    # every restart's endpoint as a tick at the bottom of the panel
+    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, label=lab("MLGD-F", mlgdf), zorder=4)
+    ax.axvline(x_star, color=c_true, ls="--", lw=2, label=r"true $x^\star$", zorder=5)
     y0, y1 = ax.get_ylim()
     for r, c, off in [(mlgd, c_mlgd, 0.0), (mlgdf, c_mlgdf, 0.035)]:
         xs = [q["x_hat"] for q in r.get("restarts", [])]
         if xs:
-            ax.scatter(xs, [y0 + off * (y1 - y0)] * len(xs), marker="|", s=120, color=c, lw=1.5, zorder=5, clip_on=False)
+            ax.scatter(xs, [y0 + off * (y1 - y0)] * len(xs), marker="|", s=110, color=c, lw=1.5, zorder=5, clip_on=False)
     ax.set_xlim(xlo, xhi); ax.set_xlabel("x"); ax.set_ylabel("y")
-    ax.set_title(r"joint $\mathcal{P}(X, Y)$", fontsize=fs_title)
-    ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=2, frameon=False); ax.grid(alpha=0.2)
+    ax.set_title(r"joint $\mathcal{P}(X, Y)$ and the recovered $\hat{x}$", fontsize=fs_title)
+    ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, frameon=False); ax.grid(alpha=0.2)
 
-    # top right: conditionals vs target (on y)
-    ax = fig.add_subplot(gs[0, 2:4])
+    # ---- left, middle: induced conditionals on y ------------------------------
+    ax = ax_cond
     ylo, yhi = st.y_range
     y = torch.linspace(ylo, yhi, 600)
     G = cond_params(st, st.x_star[0])
     gy = mixture_density_1d(y, G).detach()
+    others = sorted({round(float(m[0]), 3) for m in st.mu_list} - {round(x_star, 3)})
+    greys = ["0.3", "0.5", "0.65", "0.75"]
+    for k, cx in enumerate(others):   # faint: what a wrong x induces
+        pk = cond_params(st, torch.tensor(cx))
+        ax.plot(y, mixture_density_1d(y, pk).detach(), color=greys[k % len(greys)], ls=":", lw=1.4, zorder=1,
+                label=rf"$\mathcal{{P}}(Y\mid X={cx:g})$")
     ax.fill_between(y, gy, color=c_true, alpha=0.08, zorder=1)
     ax.plot(y, gy, color=c_true, lw=2.2, label=r"target $\mathcal{G}(Y)$", zorder=2)
     for r, c, lw, a, z, name in [(mlgd, c_mlgd, 4, 0.6, 3, "MLGD"), (mlgdf, c_mlgdf, 1.6, 1.0, 4, "MLGD-F")]:
@@ -480,26 +511,47 @@ def make_figure(st, sim, sweep, out_png):
         ax.plot(y, mixture_density_1d(y, p).detach(), color=c, lw=lw, alpha=a, zorder=z,
                 label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={max(r['l2_gmm'], 0.0):.4f}$")
     ax.set_xlim(ylo, yhi); ax.set_xlabel("y")
-    ax.set_title(r"induced conditional at $\hat{x}$ vs. target, on $y$", fontsize=fs_title)
-    ax.legend(fontsize=fs_leg, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False); ax.grid(alpha=0.2)
+    ax.set_title(r"induced conditional $\mathcal{P}(Y\mid X=x)$ vs. the target, on $y$", fontsize=fs_title)
+    ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3, frameon=False); ax.grid(alpha=0.2)
 
-    # bottom: beta sweep (on x); one shared y-limit from the analytic curves
-    ymax = 1.3 * max(max(Q[b].max(), px.max()) for b in betas)   # headroom for the legend in the last panel
+    # ---- left, bottom: the loss landscape L(x) --------------------------------
+    ax = ax_loss
+    Gd = tuple(g.detach() for g in G)
+    L = np.array([float(l2_1d(cond_params(st, torch.tensor(float(x))), Gd)) for x in x_grid])
+    ax.plot(x_grid, L, color="0.25", lw=2, zorder=2)
+    for cx in others:   # the loss at each wrong cluster centre
+        ax.plot(cx, float(l2_1d(cond_params(st, torch.tensor(cx)), Gd)), "o", color="0.45", ms=5, zorder=3)
+    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=4, alpha=0.6, zorder=3)
+    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, zorder=4)
+    ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
+    ax.set_xlim(xlo, xhi); ax.set_ylim(0, 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max()); ax.set_xlabel("x")
+    ax.set_ylabel(r"$\mathcal{L}(x) = \mathcal{D}\left(\mathcal{P}(Y\mid X=x),\,\mathcal{G}\right)$")
+    ax.set_title(r"loss landscape: minimised only at $x^\star$", fontsize=fs_title); ax.grid(alpha=0.2)
+
+    # ---- right: the CDMS beta-sweep, 2 x 2 -------------------------------------
+    ymax = 1.3 * max(max(Q[b].max(), px.max()) for b in betas)
     for i, beta in enumerate(betas):
-        ax = fig.add_subplot(gs[1, i])
+        ax = sweep_axes[i]
         ax.hist(sweep[beta], bins=40, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
                 edgecolor="white", linewidth=0.3, label="guided samples")
         ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"analytic $\mathcal{Q}_\beta(x)$", zorder=3)
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
         ax.axvline(x_star, color=c_true, ls="--", lw=1.8, label=r"true $x^\star$", zorder=4)
-        # the prior is drawn last, dashed and dark, so it stays visible where it coincides with Q_beta
-        ax.plot(x_grid, px, color=c_prior, ls="-.", lw=2.2, label=r"prior $\mathcal{P}(x)$", zorder=5)
-        ax.set_xlim(xlo, xhi); ax.set_ylim(0, ymax); ax.set_xlabel("x")
-        ax.set_title(rf"$\beta = {beta:g}$", fontsize=fs_title); ax.grid(alpha=0.15)
-        if i == 0:
+        ax.plot(x_grid, px, color=c_prior, ls="-.", lw=2.2, label=r"prior $\mathcal{P}(x)$", zorder=5)   # drawn last
+        ax.set_xlim(xlo, xhi); ax.set_ylim(0, ymax); ax.grid(alpha=0.15)
+        if layout == "lr":
+            ax.text(0.02, 0.9, rf"$\beta = {beta:g}$", transform=ax.transAxes, fontsize=fs_title, va="top")
+            if i == 0:
+                ax.set_title(r"CDMS samples for increasing guidance strength $\beta$", fontsize=fs_title)
+            if not sweep_xlabel(i):
+                ax.tick_params(labelbottom=False)
+        else:
+            ax.set_title(rf"CDMS samples, $\beta = {beta:g}$", fontsize=fs_title)
+        if sweep_ylabel(i):
             ax.set_ylabel(r"$\mathcal{Q}_\beta(x)$")
+        if sweep_xlabel(i):
+            ax.set_xlabel("x")
         if i == len(betas) - 1:
-            # the last panel (largest beta) has the most empty space: mass has left the decoys
             ax.legend(fontsize=fs_leg - 1, loc="upper right", frameon=False)
 
     fig.savefig(out_png, dpi=200, bbox_inches="tight")
@@ -514,7 +566,7 @@ def main():
 
     cached = None if args.rerun_sim else load_sim(args)
     sim, sweep = cached if cached is not None else simulate(st, args)
-    make_figure(st, sim, sweep, args.out)
+    make_figure(st, sim, sweep, args.out, layout=args.layout)
 
 
 if __name__ == "__main__":
