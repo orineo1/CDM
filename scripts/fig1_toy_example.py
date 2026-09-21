@@ -626,8 +626,10 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     ax.scatter(xy[:, 0], xy[:, 1], s=7, alpha=0.3, color=c_data)
     for m in methods:
         vline(ax, m, lab(m, res[m]))
-    ax.axvline(x_star, color=c_true, ls="--", lw=2, label=r"true $x^\star$", zorder=5)
+    ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
     y0, y1 = ax.get_ylim()
+    ax.annotate(r"$x^\star$", (x_star, y1), xytext=(4, -4), textcoords="offset points", ha="left", va="top",
+                fontsize=fs_title - 1, zorder=6)
     for k, m in enumerate(methods):   # every restart / particle endpoint as a tick, one row per method
         xs = [q["x_hat"] for q in res[m].get("restarts", [])]
         if xs:
@@ -691,7 +693,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         ax.plot([], [], color="0.5", lw=1.2, label=rf"$\hat{{\mathcal{{L}}}}(x)$ (MMD, $n_{{\rm cond}}={n_c}$; right axis)")
     for m in methods:
         vline(ax, m, lab(m, res[m]))
-    ax.axvline(x_star, color=c_true, ls="--", lw=2, label=r"true $x^\star$", zorder=5)
+    ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
     if any(res[m].get("restarts") for m in methods):
         ax.scatter([], [], marker="|", s=80, color="0.4", lw=1.5,
                    label=r"ticks (top panel): every restart / particle; the line is the best one")
@@ -711,7 +713,10 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
                 edgecolor="white", linewidth=0.3, label="guided samples")
         ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"$\mathcal{Q}_\beta(x)$", zorder=3)
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
-        ax.axvline(x_star, color=c_true, ls="--", lw=1.8, label=r"true $x^\star$", zorder=4)
+        ax.axvline(x_star, color=c_true, ls="--", lw=1.8, zorder=4)
+        if i == 0:
+            ax.annotate(r"$x^\star$", (x_star, ymax), xytext=(4, -4), textcoords="offset points", ha="left", va="top",
+                        fontsize=fs_title - 1)
         ax.plot(x_grid, px, color=c_prior, ls="-.", lw=2.2, label=r"prior $\mathcal{P}(x)$", zorder=5)   # drawn last
         ax.set_xlim(xlo, xhi); ax.set_ylim(0, ymax); ax.grid(alpha=0.15)
         if layout == "lr":
@@ -728,7 +733,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
             ax.set_xlabel("x")
         if i == len(betas) - 1:   # legend order: prior, Q_beta, guided samples, x*
             h, l = ax.get_legend_handles_labels()
-            order = [l.index(k) for k in (r"prior $\mathcal{P}(x)$", r"$\mathcal{Q}_\beta(x)$", "guided samples", r"true $x^\star$")]
+            order = [l.index(k) for k in (r"prior $\mathcal{P}(x)$", r"$\mathcal{Q}_\beta(x)$", "guided samples")]
             ax.legend([h[j] for j in order], [l[j] for j in order], fontsize=fs_leg - 1, loc="upper right", frameon=False)
 
     fig.savefig(out_png, dpi=200, bbox_inches="tight")
