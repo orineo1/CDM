@@ -19,11 +19,12 @@ Settings (--setting):
             so matching it forces the optimiser to find x*.
   paper     the paper's App. B.8 toy: components (-3, 2), (3, -2), x* = -3;
             here G is a single Gaussian.
-  hard      five x-clusters with different induced shapes on y: the target's two
-            modes at x* = -3; one mode each at x = -6 (top) and x = 0 (bottom);
-            three modes at x = +3 (over-covering); one broad bump at x = +6.
-            Equal prior mass per cluster, so wrong x give partial matches with
-            distinct loss values and the loss landscape has five basins.
+  hard      four well-separated x-clusters with different induced shapes on y,
+            placed so that distance in x is unrelated to distributional fit:
+            three modes at x = -6 (over-covering, the best wrong match, far from
+            x*); one mode at x = -2 (misses a mode, the worst match, adjacent to
+            x*); the target's two modes at x* = +2; one broad bump at x = +6.
+            Equal prior mass per cluster; four basins with a known loss ranking.
   mog2d     the paper's 2D setting (11 components, SimulationParameters/
             mog_2d_full.txt, x* = -5, bimodal target at y = +-5).
 
@@ -121,16 +122,19 @@ def make_setting(name):
         return Setting(name, [torch.tensor([-3., 2.]), torch.tensor([-3., -2.]), torch.tensor([3., 0.])],
                        [S, S, S], torch.tensor([1 / 3, 1 / 3, 1 / 3]), torch.tensor([-3.]))
     if name == "hard":
-        # five x-clusters, each inducing a different shape on y:
-        #   x=-3: modes at +2,-2 (the target)   x=-6: +2 only   x=0: -2 only
-        #   x=+3: +2, 0, -2 (over-covering)     x=+6: one broad bump at 0
-        # every cluster carries 1/5 of the prior mass, split equally over its components
-        clusters = [(-3., [2., -2.], 0.4), (-6., [2.], 0.4), (0., [-2.], 0.4), (3., [2., 0., -2.], 0.4), (6., [0.], 3.0)]
+        # four x-clusters, 4 apart with x-sd 0.5, each inducing a different shape on y.
+        # Placed so that closeness in x says nothing about closeness of P(Y|x) to G:
+        #   x=-6: +2, 0, -2 (over-covering: the best wrong match, far from x*)
+        #   x=-2: one mode at +2 (misses a mode: the worst match, right next to x*)
+        #   x=+2: modes at +2, -2 (the target, x*)
+        #   x=+6: one broad bump at 0 (blur)
+        # every cluster carries 1/4 of the prior mass, split equally over its components
+        clusters = [(-6., [2., 0., -2.], 0.4), (-2., [2.], 0.4), (2., [2., -2.], 0.4), (6., [0.], 3.0)]
         mu, Sig, w = [], [], []
         for cx, ys, vy in clusters:
             for cy in ys:
-                mu.append(torch.tensor([cx, cy])); Sig.append(torch.tensor([[0.5, 0.0], [0.0, vy]])); w.append(1 / (5 * len(ys)))
-        return Setting(name, mu, Sig, torch.tensor(w), torch.tensor([-3.]))
+                mu.append(torch.tensor([cx, cy])); Sig.append(torch.tensor([[0.25, 0.0], [0.0, vy]])); w.append(1 / (4 * len(ys)))
+        return Setting(name, mu, Sig, torch.tensor(w), torch.tensor([2.]))
     if name == "mog2d":
         loc = {}
         with open(os.path.join(REPO, "SimulationParameters", "mog_2d_full.txt")) as f:
@@ -409,6 +413,9 @@ def make_figure(st, sim, sweep, out_png):
     mlgd, mlgdf = sim["MLGD"], sim["MLGD-F"]
     x_grid, px, Q = analytic_curves(st, betas)
     xlo, xhi = st.x_range
+    # never let a recovered x-hat fall outside the frame
+    xlo = min(xlo, mlgd["x_hat"] - 0.6, mlgdf["x_hat"] - 0.6)
+    xhi = max(xhi, mlgd["x_hat"] + 0.6, mlgdf["x_hat"] + 0.6)
     c_data, c_true, c_mlgd, c_mlgdf, c_q, c_prior = "steelblue", "black", "tomato", "seagreen", "darkorange", "#303030"
     fs_title, fs_leg = 15, 9.5
     x_star = float(st.x_star[0])
@@ -422,8 +429,9 @@ def make_figure(st, sim, sweep, out_png):
     xy = generate_mog_samples_not_differentiable(5000, st.mu_list, st.Sigma_list, st.alpha).cpu().numpy()
     ax.scatter(xy[:, 0], xy[:, 1], s=8, alpha=0.3, color=c_data)
     ax.axvline(x_star, color=c_true, ls="--", lw=2.2, label=r"true $x^\star$")
-    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=2, alpha=0.9, label=r"MLGD $\hat{x}$")
-    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=2, alpha=0.9, label=r"MLGD-F $\hat{x}$")
+    # different widths so both stay visible when the two solutions (nearly) coincide
+    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=3.5, alpha=0.8, label=r"MLGD $\hat{x}$")
+    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, alpha=1.0, label=r"MLGD-F $\hat{x}$")
     ax.set_xlim(xlo, xhi); ax.set_xlabel("x"); ax.set_ylabel("y")
     ax.set_title(r"joint $\mathcal{P}(X, Y)$", fontsize=fs_title)
     ax.legend(fontsize=fs_leg, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False); ax.grid(alpha=0.2)
