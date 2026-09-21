@@ -709,7 +709,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         ax = sweep_axes[i]
         ax.hist(sweep[beta], bins=80, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
                 edgecolor="white", linewidth=0.3, label="guided samples")
-        ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"analytic $\mathcal{Q}_\beta(x)$", zorder=3)
+        ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"$\mathcal{Q}_\beta(x)$", zorder=3)
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
         ax.axvline(x_star, color=c_true, ls="--", lw=1.8, label=r"true $x^\star$", zorder=4)
         ax.plot(x_grid, px, color=c_prior, ls="-.", lw=2.2, label=r"prior $\mathcal{P}(x)$", zorder=5)   # drawn last
@@ -726,8 +726,10 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
             ax.set_ylabel(r"$\mathcal{Q}_\beta(x)$")
         if sweep_xlabel(i):
             ax.set_xlabel("x")
-        if i == len(betas) - 1:
-            ax.legend(fontsize=fs_leg - 1, loc="upper right", frameon=False)
+        if i == len(betas) - 1:   # legend order: prior, Q_beta, guided samples, x*
+            h, l = ax.get_legend_handles_labels()
+            order = [l.index(k) for k in (r"prior $\mathcal{P}(x)$", r"$\mathcal{Q}_\beta(x)$", "guided samples", r"true $x^\star$")]
+            ax.legend([h[j] for j in order], [l[j] for j in order], fontsize=fs_leg - 1, loc="upper right", frameon=False)
 
     fig.savefig(out_png, dpi=200, bbox_inches="tight")
     print(f"[figure] wrote {out_png}")
