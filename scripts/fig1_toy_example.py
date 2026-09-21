@@ -437,7 +437,7 @@ def make_figure(st, sim, sweep, out_png):
     allx = [mlgd["x_hat"], mlgdf["x_hat"]] + [q["x_hat"] for r in (mlgd, mlgdf) for q in r.get("restarts", [])]
     xlo = min(xlo, min(allx) - 0.6)
     xhi = max(xhi, max(allx) + 0.6)
-    c_data, c_true, c_mlgd, c_mlgdf, c_q, c_prior = "steelblue", "black", "tomato", "seagreen", "darkorange", "#303030"
+    c_data, c_true, c_mlgd, c_mlgdf, c_q, c_prior = "steelblue", "black", "tab:red", "tab:green", "tab:purple", "tab:orange"
     fs_title, fs_leg = 15, 9.5
     x_star = float(st.x_star[0])
 
@@ -449,14 +449,14 @@ def make_figure(st, sim, sweep, out_png):
     set_seed(0)
     xy = generate_mog_samples_not_differentiable(5000, st.mu_list, st.Sigma_list, st.alpha).cpu().numpy()
     ax.scatter(xy[:, 0], xy[:, 1], s=8, alpha=0.3, color=c_data)
-    ax.axvline(x_star, color=c_true, ls="--", lw=2.2, label=r"true $x^\star$")
     # different widths so both stay visible when the two solutions (nearly) coincide
     def lab(name, r):
         if r.get("n_restarts", 1) > 1:
             return rf"{name} $\hat{{x}}$ (best of {r['n_restarts']}; {r['hits_xstar_basin']}/{r['n_restarts']} in the $x^\star$ basin)"
         return rf"{name} $\hat{{x}}$"
-    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=3.5, alpha=0.8, label=lab("MLGD", mlgd))
-    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, alpha=1.0, label=lab("MLGD-F", mlgdf))
+    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=4, alpha=0.6, label=lab("MLGD", mlgd), zorder=3)
+    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, alpha=1.0, label=lab("MLGD-F", mlgdf), zorder=4)
+    ax.axvline(x_star, color=c_true, ls="--", lw=2.2, label=r"true $x^\star$", zorder=5)   # dashed drawn last
     # every restart's endpoint as a tick at the bottom of the panel
     y0, y1 = ax.get_ylim()
     for r, c, off in [(mlgd, c_mlgd, 0.0), (mlgdf, c_mlgdf, 0.035)]:
@@ -473,11 +473,11 @@ def make_figure(st, sim, sweep, out_png):
     y = torch.linspace(ylo, yhi, 600)
     G = cond_params(st, st.x_star[0])
     gy = mixture_density_1d(y, G).detach()
-    ax.plot(y, gy, color=c_true, ls="--", lw=2, label=r"target $\mathcal{G}(Y)$")
-    ax.fill_between(y, gy, color=c_true, alpha=0.08)
-    for r, c, name in [(mlgd, c_mlgd, "MLGD"), (mlgdf, c_mlgdf, "MLGD-F")]:
+    ax.fill_between(y, gy, color=c_true, alpha=0.08, zorder=1)
+    ax.plot(y, gy, color=c_true, lw=2.2, label=r"target $\mathcal{G}(Y)$", zorder=2)
+    for r, c, lw, a, z, name in [(mlgd, c_mlgd, 4, 0.6, 3, "MLGD"), (mlgdf, c_mlgdf, 1.6, 1.0, 4, "MLGD-F")]:
         p = cond_params(st, torch.tensor(r["x_hat"]))
-        ax.plot(y, mixture_density_1d(y, p).detach(), color=c, lw=2,
+        ax.plot(y, mixture_density_1d(y, p).detach(), color=c, lw=lw, alpha=a, zorder=z,
                 label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={r['l2_gmm']:.4f}$")
     ax.set_xlim(ylo, yhi); ax.set_xlabel("y")
     ax.set_title(r"induced conditional at $\hat{x}$ vs. target, on $y$", fontsize=fs_title)
@@ -491,9 +491,9 @@ def make_figure(st, sim, sweep, out_png):
                 edgecolor="white", linewidth=0.3, label="guided samples")
         ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"analytic $\mathcal{Q}_\beta(x)$", zorder=3)
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
-        ax.axvline(x_star, color=c_true, ls=":", lw=1.4, label=r"$x^\star$", zorder=4)
+        ax.axvline(x_star, color=c_true, ls="--", lw=1.8, label=r"true $x^\star$", zorder=4)
         # the prior is drawn last, dashed and dark, so it stays visible where it coincides with Q_beta
-        ax.plot(x_grid, px, color=c_prior, ls=(0, (4, 3)), lw=2.4, label=r"prior $\mathcal{P}(x)$", zorder=5)
+        ax.plot(x_grid, px, color=c_prior, ls="-.", lw=2.2, label=r"prior $\mathcal{P}(x)$", zorder=5)
         ax.set_xlim(xlo, xhi); ax.set_ylim(0, ymax); ax.set_xlabel("x")
         ax.set_title(rf"$\beta = {beta:g}$", fontsize=fs_title); ax.grid(alpha=0.15)
         if i == 0:
