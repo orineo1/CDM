@@ -289,6 +289,25 @@ def write_tables(rows, everything, args):
         tex.append(f" & {name} & ${r['tv_mean']:.3f} \\pm {r['tv_std']:.3f}$ & ${r['l2rel_mean']:.3f} \\pm {r['l2rel_std']:.3f}$ "
                    f"& ${r['time_mean']:.0f}$ \\\\")
     open(args.out + ".tex", "w").write("\n".join(tex) + "\n")
+    # network-quality rows for the appendix table (same order as the main table)
+    mrows = []
+    for name, e in everything.items():
+        st = e["setting"]
+        if "check" not in e:
+            continue
+        c = e["check"]
+        worst = max((o["rel_fisher"] for o in c.get("score", []) if o["t"] > 1), default=float("nan"))
+        pr = c.get("prior", {}).get("swd_norm", float("nan"))
+        def at(k, key):
+            r = c.get(k)
+            if not r:
+                return "--"
+            v = r["points"].get("x*", {}).get("mean") if key == "xstar" else r["swd_norm_random_x_mean"]
+            return "--" if v is None else f"{v:.3f}"
+        label = f"$\\dim X={st.get('dim_x')}$, $\\dim Y={st.get('dim_y')}$" if "dim_x" in st else st["name"]
+        mrows.append(f"{label} & {worst:.3f} & {pr:.3f} & {at('cond_diffusion', 'xstar')} & {at('cond_diffusion', 'rand')} "
+                     f"& {at('cond_cm', 'xstar')} & {at('cond_cm', 'rand')} \\\\")
+    open(args.out + "_models.tex", "w").write("\n".join(mrows) + "\n")
     # appendix: model checks, hits, resamplings
     ap = ["# Table 1 appendix: networks and search diagnostics", ""]
     for name, e in everything.items():
@@ -311,7 +330,7 @@ def write_tables(rows, everything, args):
         ap.append("")
     open(args.out + "_appendix.md", "w").write("\n".join(ap))
     print("\n".join(md))
-    print(f"[table] wrote {args.out}.json / .md / .tex / _appendix.md")
+    print(f"[table] wrote {args.out}.json / .md / .tex / _models.tex / _appendix.md")
 
 
 def main():
