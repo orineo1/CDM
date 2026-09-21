@@ -226,12 +226,14 @@ def main():
         res = optimize_guided(prior, sampler, loss_fn, cfg)
         x_hat = res["x_final"].detach().float().view(-1)
         rec = {"attempt": r, "seed": seed, "x_hat": x_hat.cpu().tolist(), "final_loss": float(res["final_loss"]),
-               "time_s": time.time() - t0, **evaluate(x_hat, info)}
+               "best_loss": res["best_loss"], "n_steps": res["n_steps"], "time_s": time.time() - t0,
+               **evaluate(x_hat, info), "trace": res["trace"]}
         attempts.append(rec)
         extra = "  ".join(f"{k}={v:.4f}" for k, v in rec.items() if k in ("l2_gmm", "l2_to_xstar"))
+        extra += f"  steps={rec['n_steps']}"
         print(f"  [{r+1}/{args.n_attempts}] loss={rec['final_loss']:.5f}  x_hat={np.round(x_hat.cpu().numpy(), 4)}  {extra}  ({rec['time_s']:.1f}s)")
         if not args.no_store:
-            save_run("find_xstar", cfg, {k: v for k, v in rec.items() if k not in ("x_hat", "attempt")}, seed=seed,
+            save_run("find_xstar", cfg, {k: v for k, v in rec.items() if k not in ("x_hat", "attempt", "trace")}, seed=seed,
                      method=method, guidance=args.guidance, prior=args.prior, sampler=args.sampler, target=args.target)
 
     best = min(attempts, key=lambda a: a["final_loss"])

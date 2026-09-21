@@ -21,6 +21,7 @@ Both remain in Optimization.py unchanged.
 import math
 from typing import Optional
 
+import time
 import torch
 
 from .config import GuidanceConfig
@@ -92,7 +93,8 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
         cfg:           GuidanceConfig
 
     Returns:
-        dict with keys: x_final, final_loss, best_loss, best_x0, n_steps
+        dict with keys: x_final, final_loss, best_loss, best_x0, n_steps, time_s,
+        trace (per-step list of {i, t, loss, grad_norm, step, elapsed_s})
         (wrappers in Optimization.py unpack this into the legacy tuple shapes)
     """
     if cfg.seed is not None:
@@ -111,6 +113,8 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
     best_loss = float("inf")
     best_x0 = None
     n_steps = 0
+    trace = []                      # per-step diagnostics, returned with the result
+    t_start = time.time()
 
     iterator = _iter_timesteps(model_uncond, cfg)
     if cfg.progress:
@@ -156,6 +160,9 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
         with torch.no_grad():
             x_t = cfg.update_fn(x_t, x_t_minus_1, grad, step)
         n_steps += 1
+        trace.append({"i": i, "t": int(t) if not torch.is_tensor(t) else float(t),
+                      "loss": float(agg_loss.detach()), "grad_norm": float(grad.norm()),
+                      "step": float(step), "elapsed_s": time.time() - t_start})
 
     # ---- optional final unguided step (MNIST takes one, using its
     #      pred_x0 as the returned sample) ----
@@ -186,6 +193,8 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
         "best_loss": best_loss,
         "best_x0": best_x0,
         "n_steps": n_steps,
+        "time_s": time.time() - t_start,
+        "trace": trace,             # list of {i, t, loss, grad_norm, step, elapsed_s}
     }
 
 

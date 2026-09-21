@@ -19,6 +19,11 @@ Settings (--setting):
             so matching it forces the optimiser to find x*.
   paper     the paper's App. B.8 toy: components (-3, 2), (3, -2), x* = -3;
             here G is a single Gaussian.
+  hard      five x-clusters with different induced shapes on y: the target's two
+            modes at x* = -3; one mode each at x = -6 (top) and x = 0 (bottom);
+            three modes at x = +3 (over-covering); one broad bump at x = +6.
+            Equal prior mass per cluster, so wrong x give partial matches with
+            distinct loss values and the loss landscape has five basins.
   mog2d     the paper's 2D setting (11 components, SimulationParameters/
             mog_2d_full.txt, x* = -5, bimodal target at y = +-5).
 
@@ -115,6 +120,17 @@ def make_setting(name):
     if name == "bimodal":
         return Setting(name, [torch.tensor([-3., 2.]), torch.tensor([-3., -2.]), torch.tensor([3., 0.])],
                        [S, S, S], torch.tensor([1 / 3, 1 / 3, 1 / 3]), torch.tensor([-3.]))
+    if name == "hard":
+        # five x-clusters, each inducing a different shape on y:
+        #   x=-3: modes at +2,-2 (the target)   x=-6: +2 only   x=0: -2 only
+        #   x=+3: +2, 0, -2 (over-covering)     x=+6: one broad bump at 0
+        # every cluster carries 1/5 of the prior mass, split equally over its components
+        clusters = [(-3., [2., -2.], 0.4), (-6., [2.], 0.4), (0., [-2.], 0.4), (3., [2., 0., -2.], 0.4), (6., [0.], 3.0)]
+        mu, Sig, w = [], [], []
+        for cx, ys, vy in clusters:
+            for cy in ys:
+                mu.append(torch.tensor([cx, cy])); Sig.append(torch.tensor([[0.5, 0.0], [0.0, vy]])); w.append(1 / (5 * len(ys)))
+        return Setting(name, mu, Sig, torch.tensor(w), torch.tensor([-3.]))
     if name == "mog2d":
         loc = {}
         with open(os.path.join(REPO, "SimulationParameters", "mog_2d_full.txt")) as f:
@@ -126,7 +142,7 @@ def make_setting(name):
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--setting", choices=["bimodal", "paper", "mog2d"], default="bimodal")
+    p.add_argument("--setting", choices=["bimodal", "hard", "paper", "mog2d"], default="bimodal")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--ckpt-dir", default="checkpoints/toy")
@@ -148,13 +164,13 @@ def parse_args():
     p.add_argument("--init", choices=["randn", "zeros"], default="randn",
                    help="x_T initialisation; the paper says N(0,I), the legacy code used zeros")
     p.add_argument("--betas", type=float, nargs="+", default=[0.0, 0.5, 2.0, 8.0])
-    p.add_argument("--n-beta-samples", type=int, default=200)
+    p.add_argument("--n-beta-samples", type=int, default=200, help="guided trajectories per beta, run as one batch")
     p.add_argument("--quick", action="store_true", help="tiny run to check the pipeline")
     a = p.parse_args()
     if a.out is None:
         a.out = f"results/fig1_{a.setting}.png"
     if a.quick:
-        a.epochs, a.n_beta_samples, a.n_cond = 300, 30, 100
+        a.epochs, a.n_beta_samples, a.n_cond = 300, 50, 100
     if a.retrain:
         a.uncond = a.cond = a.cm = "train"
     return a
@@ -282,7 +298,8 @@ def run_mlgd(st, uncond, model_cond, use_cm, args):
     mu_p, S_p = compute_conditionals(st.mu_list, st.Sigma_list, x_hat.view(1))
     w_p = compute_alpha(st.mu_list, st.Sigma_list, st.alpha, x_hat.view(1))
     return {"x_hat": float(x_hat), "l2_gmm": float(gmm_l2_distance(mu_p, S_p, w_p, mog_means, mog_vars, w)),
-            "l2_x": float(abs(x_hat - st.x_star[0])), "final_loss": float(res["final_loss"]), "time_s": elapsed}
+            "l2_x": float(abs(x_hat - st.x_star[0])), "final_loss": float(res["final_loss"]), "time_s": elapsed,
+            "n_steps": res["n_steps"], "best_loss": res["best_loss"], "trace": res["trace"], "config": cfg.describe()}
 
 
 # ----------------------------------------------------------------------------
@@ -298,12 +315,15 @@ def run_beta_sweep(st, uncond, args):
     G = tuple(g.detach() for g in cond_params(st, st.x_star[0].to(args.device)))
 
     def analytic_loss(pred_samples, target_samples):
-        return l2_1d(cond_params(st, pred_samples.view(-1)[0]), G)
+        # one row per trajectory; rows are independent, so the gradient of the
+        # sum is the per-trajectory gradient
+        return torch.stack([l2_1d(cond_params(st, x0), G) for x0 in pred_samples.view(-1)]).sum()
 
-    samples = {}
+    samples, diag = {}, {}
     for beta in args.betas:
+        B = args.n_beta_samples
         cfg = GuidanceConfig(
-            n_cond=1, n_mc=1, init_fn=init_randn, unsqueeze_init=True,
+            n_cond=1, n_mc=1, init_fn=lambda nf, dev, B=B: torch.randn(B, nf, device=dev), unsqueeze_init=False,
             perturb_fn=perturb_none, aggregate_fn=aggregate_single,
             step_size_fn=lambda t, i, b=beta: b * float(uncond.betas[t]),   # DPS convention
             timestep_source="range", ddim_step_style="condition_x",
@@ -311,13 +331,18 @@ def run_beta_sweep(st, uncond, args):
             target_generator=lambda n, dev: torch.zeros(0, device=dev),
             compute_final_loss=False, eta=1.0, device=args.device, tag=f"fig1_{st.name}:beta={beta}",
         )
-        xs, t0 = [], time.time()
-        for i in range(args.n_beta_samples):
-            cfg.seed = args.seed * 1000 + i
-            xs.append(float(optimize_guided(uncond, _IdentitySampler(), analytic_loss, cfg)["x_final"].view(-1)[0]))
-        samples[beta] = np.array(xs)
+        t0 = time.time()
+        cfg.seed = args.seed * 1000 + int(round(10 * beta))
+        res = optimize_guided(uncond, _IdentitySampler(), analytic_loss, cfg)
+        xs = res["x_final"].view(-1).cpu().numpy()
+        samples[beta] = xs
+        # the batched loss is a sum over the B trajectories: store the per-trajectory mean per step
+        diag[beta] = {"n_samples": int(B), "n_steps": int(res["n_steps"]), "time_s": time.time() - t0,
+                      "loss_per_step_mean": [s["loss"] / B for s in res["trace"]],
+                      "grad_norm_per_step": [s["grad_norm"] for s in res["trace"]],
+                      "step_per_step": [s["step"] for s in res["trace"]], "config": cfg.describe()}
         print(f"[sweep] beta={beta}: {len(xs)} samples, mean {np.mean(xs):+.3f}, std {np.std(xs):.3f}, {time.time()-t0:.0f}s")
-    return samples
+    return samples, diag
 
 
 # ----------------------------------------------------------------------------
@@ -334,10 +359,11 @@ def simulate(st, args):
     print(f"[MLGD]   x_hat={mlgd['x_hat']:+.4f}  L2 GMM={mlgd['l2_gmm']:.5f}  |x_hat-x*|={mlgd['l2_x']:.4f}  {mlgd['time_s']:.1f}s")
     mlgdf = run_mlgd(st, uncond, cm, use_cm=True, args=args)
     print(f"[MLGD-F] x_hat={mlgdf['x_hat']:+.4f}  L2 GMM={mlgdf['l2_gmm']:.5f}  |x_hat-x*|={mlgdf['l2_x']:.4f}  {mlgdf['time_s']:.1f}s")
-    sweep = run_beta_sweep(st, uncond, args)
+    sweep, diag = run_beta_sweep(st, uncond, args)
     sim = {"setting": st.name, "args": vars(args), "train_times_s": train_times, "MLGD": mlgd, "MLGD-F": mlgdf,
            "betas": list(args.betas),
-           "beta_sweep": {str(b): {"mean": float(np.mean(s)), "std": float(np.std(s)), "n": int(len(s))} for b, s in sweep.items()}}
+           "beta_sweep": {str(b): {"mean": float(np.mean(s)), "std": float(np.std(s)), "n": int(len(s)), **diag[b]}
+                          for b, s in sweep.items()}}
     pj, pn = sim_paths(args.out)
     with open(pj, "w") as f:
         json.dump(sim, f, indent=2)
@@ -423,7 +449,7 @@ def make_figure(st, sim, sweep, out_png):
     for i, beta in enumerate(betas):
         ax = fig.add_subplot(gs[1, i])
         ax.hist(sweep[beta], bins=40, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
-                edgecolor="white", label="guided samples")
+                edgecolor="white", linewidth=0.3, label="guided samples")
         ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"analytic $\mathcal{Q}_\beta(x)$", zorder=3)
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
         ax.axvline(x_star, color=c_true, ls=":", lw=1.4, label=r"$x^\star$", zorder=4)
@@ -431,9 +457,20 @@ def make_figure(st, sim, sweep, out_png):
         ax.plot(x_grid, px, color=c_prior, ls=(0, (4, 3)), lw=2.4, label=r"prior $\mathcal{P}(x)$", zorder=5)
         ax.set_xlim(xlo, xhi); ax.set_ylim(0, ymax); ax.set_xlabel("x")
         ax.set_title(rf"$\beta = {beta:g}$", fontsize=fs_title); ax.grid(alpha=0.15)
+        # mass outside the x* basin: analytic vs sampled; this is where the sampler's bias shows
+        dx = x_grid[1] - x_grid[0]
+        outside = np.abs(x_grid - x_star) > 1.5
+        pa = Q[beta][outside].sum() * dx
+        pe = float((np.abs(sweep[beta] - x_star) > 1.5).mean()); n = len(sweep[beta])
+        ax.text(0.98, 0.96, "mass outside\n" + r"$x^\star$ basin" + "\n" + rf"$\mathcal{{Q}}_\beta$: {pa:.3f}" + "\n"
+                + rf"samples: {pe:.3f}$\pm${np.sqrt(max(pe*(1-pe),1e-9)/n):.3f}",
+                transform=ax.transAxes, ha="right", va="top", fontsize=fs_leg - 2,
+                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="0.7", alpha=0.9))
         if i == 0:
             ax.set_ylabel(r"$\mathcal{Q}_\beta(x)$")
-            ax.legend(fontsize=fs_leg - 1, loc="upper right", framealpha=0.9)
+            sweep_handles = ax.get_legend_handles_labels()
+    # one legend for the whole sweep row, below the panels, so it never covers data
+    fig.legend(*sweep_handles, loc="lower center", bbox_to_anchor=(0.5, -0.02), ncol=4, fontsize=fs_leg, frameon=False)
 
     fig.savefig(out_png, dpi=200, bbox_inches="tight")
     print(f"[figure] wrote {out_png}")
