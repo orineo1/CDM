@@ -150,16 +150,20 @@ def _prior_score(model_uncond, x, t=None):
 
 
 def refine(model_uncond, model_cond, loss_function, cfg, x0):
-    """Post-refinement: plain gradient descent on the plug-in loss L_hat(x) (Algorithm 2 called
-    at the clean x, gradient with respect to x, no diffusion), optionally regularised by the
-    prior: x <- x - lr * (grad L_hat(x) - lambda * score_theta(x)). Returns (x, trace)."""
-    x = x0.detach().clone()
+    """Post-refinement: gradient steps (Adam or SGD) on the plug-in loss L_hat(x) (Algorithm 2
+    called at the clean x with refine_n_cond samples, gradient with respect to x, no diffusion),
+    optionally regularised by the prior score: grad L_hat(x) - lambda * score_theta(x).
+    Returns (x, trace)."""
+    x = x0.detach().clone().requires_grad_(True)
+    n_ref = cfg.refine_n_cond or cfg.n_cond
+    view = _EvalView(cfg, n_ref)
+    opt = torch.optim.Adam([x], lr=cfg.refine_lr) if cfg.refine_optim == "adam" else torch.optim.SGD([x], lr=cfg.refine_lr)
     trace = []
     t_start = time.time()
     for k in range(cfg.refine_steps):
-        x = x.detach().clone().requires_grad_(True)
-        pred_samples = _draw_conditional(model_cond, x, cfg)
-        target_samples = cfg.target_generator(cfg.n_cond, cfg.device)
+        opt.zero_grad()
+        pred_samples = _draw_conditional(model_cond, x, view)
+        target_samples = cfg.target_generator(n_ref, cfg.device)
         loss_val = loss_function(pred_samples, target_samples)
         grad = torch.autograd.grad(loss_val, x)[0]
         prior_norm = 0.0
@@ -168,8 +172,8 @@ def refine(model_uncond, model_cond, loss_function, cfg, x0):
                 score = _prior_score(model_uncond, x.detach())
             prior_norm = float(score.norm())
             grad = grad - cfg.refine_lambda * score
-        with torch.no_grad():
-            x = x - cfg.refine_lr * grad
+        x.grad = grad
+        opt.step()
         trace.append({"k": k, "loss": float(loss_val.detach()), "grad_norm": float(grad.norm()),
                       "prior_score_norm": prior_norm, "elapsed_s": time.time() - t_start})
     return x.detach(), trace

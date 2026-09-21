@@ -68,6 +68,8 @@ def parse_args():
     g.add_argument("--resample-beta", type=float, default=5.0)
     g.add_argument("--resample-schedule", choices=["constant", "linear"], default="constant")
     g.add_argument("--refine-steps", type=int, default=0)
+    g.add_argument("--refine-lr", type=float, default=0.02)
+    g.add_argument("--refine-n-cond", type=int, default=1000)
     g.add_argument("--extra", default="", help="extra flags passed verbatim to find_xstar.py")
     g = p.add_argument_group("control")
     g.add_argument("--seed", type=int, default=42)
@@ -157,7 +159,8 @@ def search(setting, paths, log, method, args):
            "--algo", algo, "--n-restarts", str(args.budget), "--n-particles", str(args.budget),
            "--n-attempts", str(args.attempts), "--n-cond", str(args.n_cond), "--resample-beta", str(args.resample_beta),
            "--resample-schedule", args.resample_schedule,
-           "--refine-steps", str(args.refine_steps), "--seed", str(args.seed), "--out", out, "--no-store"]
+           "--refine-steps", str(args.refine_steps), "--refine-lr", str(args.refine_lr),
+           "--refine-n-cond", str(args.refine_n_cond), "--seed", str(args.seed), "--out", out, "--no-store"]
     if args.device:
         cmd += ["--device", args.device]
     if args.extra:

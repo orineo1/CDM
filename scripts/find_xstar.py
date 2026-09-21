@@ -66,7 +66,8 @@ Trajectories: independent restarts or a particle population
 Post-refinement (optional, either --algo): K plain gradient steps on the plug-in
 loss from the returned x, no diffusion, optionally with a prior term
   --refine-steps K (0)  --refine-lr (0.05)  --refine-lambda L (0: none)
-  update: x <- x - lr * (grad L_hat(x) - L * score_theta(x, t=1))
+  --refine-optim adam|sgd (adam)  --refine-n-cond N (samples per refinement step; default n_cond)
+  update: Adam/SGD step on grad L_hat(x) - L * score_theta(x)
 
 Run control
   --n-restarts R      lgd: trajectories per attempt, best final loss returned      (10)
@@ -143,6 +144,8 @@ def parse_args():
     g.add_argument("--refine-steps", type=int, default=0, help="gradient steps on the plug-in loss from the returned x")
     g.add_argument("--refine-lr", type=float, default=0.05)
     g.add_argument("--refine-lambda", type=float, default=0.0, help="weight of the prior score term")
+    g.add_argument("--refine-optim", choices=["adam", "sgd"], default="adam")
+    g.add_argument("--refine-n-cond", type=int, default=None, help="conditional samples per refinement step (default n_cond)")
     g = p.add_argument_group("inner estimator")
     g.add_argument("--n-cond", type=int, default=250)
     g.add_argument("--n-target", type=int, default=None)
@@ -233,6 +236,7 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
         ess_frac=args.ess_frac, resample_every=args.resample_every, weight_mode=args.weight_mode,
         resample_schedule=args.resample_schedule,
         refine_steps=args.refine_steps, refine_lr=args.refine_lr, refine_lambda=args.refine_lambda,
+        refine_optim=args.refine_optim, refine_n_cond=args.refine_n_cond,
         device=args.device, seed=seed, progress=args.progress,
         tag=f"find_xstar:{args.guidance}:{args.algo}:{'MLGD-F' if sampler_type == 'cm' else 'MLGD'}",
     )

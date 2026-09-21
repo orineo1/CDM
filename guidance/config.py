@@ -199,6 +199,8 @@ class GuidanceConfig:
     refine_steps: int = 0
     refine_lr: float = 0.05
     refine_lambda: float = 0.0
+    refine_optim: str = "adam"           # "adam" or "sgd"
+    refine_n_cond: Optional[int] = None  # conditional samples per refinement step (default: n_cond)
 
     # --- bookkeeping ---
     device: str = "cuda"
