@@ -24,8 +24,9 @@ Per scenario, under <runs-dir>/<scenario>/ (every step is skipped when its outpu
                                    --n-attempts independent runs, each returning the best of
                                    --budget trajectories (restarts or particles)
 
-Output: <out>.json (everything), <out>.md and <out>.tex (the table: exact L2 between
-P(Y | X = x_hat) and G, mean +- std over the attempts, and the time per attempt), plus
+Output: <out>.json (everything), <out>.md and <out>.tex (the table: total variation and
+relative squared L2 between P(Y | X = x_hat) and G, both scale-free across dim(Y), mean +- std
+over the attempts, and the time per attempt; the raw L2 is kept in the .md and .json), plus
 <out>_appendix.md (per-scenario model-check numbers, basin hit rates, resamplings).
 """
 import argparse
@@ -171,14 +172,23 @@ def collect(settings, args):
             if not os.path.exists(fp):
                 continue
             r = json.load(open(fp))
-            entry[m] = {"summary": r["summary"], "budget": r["budget"], "n_attempts": len(r["attempts"]),
-                        "attempts": [{k: a.get(k) for k in ("x_hat", "final_loss", "l2_gmm", "l2_to_xstar", "time_s", "n_resamples")}
-                                     for a in r["attempts"]]}
+            data = _load_mixture(os.path.join(d, "data.pt"))
+            atts = []
+            for a in r["attempts"]:
+                rec = {k: a.get(k) for k in ("x_hat", "final_loss", "l2_gmm", "l2_to_xstar", "time_s", "n_resamples")}
+                if data is not None and "target_means" in data["raw"]:
+                    rec.update(scale_free_distances(data, a["x_hat"]))
+                atts.append(rec)
+            summ = dict(r["summary"])
+            for k in ("tv", "l2_rel"):
+                vals = [a[k] for a in atts if k in a]
+                if vals:
+                    summ[k] = {"mean": float(np.mean(vals)), "std": float(np.std(vals)), "n": len(vals)}
+            entry[m] = {"summary": summ, "budget": r["budget"], "n_attempts": len(r["attempts"]), "attempts": atts}
             # basin hit rate over all trajectories of all attempts, when x* is known: a trajectory
             # counts as a hit if its x_hat is closer to x* than half the distance to the nearest other cluster centre
             hits, total = None, 0
             if r.get("x_star") is not None:
-                data = _load_mixture(os.path.join(d, "data.pt"))
                 if data is not None:
                     xs = np.array(r["x_star"]); c = len(xs)
                     centres = np.unique(np.round(np.array([m_[:c] for m_ in data["mu_list"]]), 6), axis=0)
@@ -189,8 +199,11 @@ def collect(settings, args):
                         pts += [q["x_hat"] for q in a.get("restarts", a.get("particles", [a]))]
                     hits = int(sum(np.linalg.norm(np.array(p_) - xs) < half for p_ in pts)); total = len(pts)
             entry[m]["hits"] = None if hits is None else f"{hits}/{total}"
-            s = r["summary"]
+            s = summ
+            tv = s.get("tv", {"mean": float("nan"), "std": float("nan")})
+            rel = s.get("l2_rel", {"mean": float("nan"), "std": float("nan")})
             rows.append({"setting": st["name"], "dim_x": st.get("dim_x"), "dim_y": st.get("dim_y"), "method": m,
+                         "tv_mean": tv["mean"], "tv_std": tv["std"], "l2rel_mean": rel["mean"], "l2rel_std": rel["std"],
                          "l2_mean": s["l2_gmm"]["mean"], "l2_std": s["l2_gmm"]["std"], "n": s["l2_gmm"]["n"],
                          "time_mean": s["time_s"]["mean"], "hits": entry[m]["hits"],
                          "resamplings": (np.mean([a["n_resamples"] for a in r["attempts"]]) if m.startswith("P") else None)})
@@ -202,9 +215,43 @@ def _load_mixture(path):
     try:
         import torch
         d = torch.load(path, map_location="cpu", weights_only=False)
-        return {"mu_list": [m.numpy() for m in d["mu_list"]]}
+        return {"mu_list": [m.numpy() for m in d["mu_list"]], "raw": d}
     except Exception:
         return None
+
+
+def _mixture_logpdf(x, means, covs, weights):
+    import torch
+    lp = torch.stack([torch.log(w) + torch.distributions.MultivariateNormal(m.view(-1), covariance_matrix=S).log_prob(x)
+                      for m, S, w in zip(means, covs, weights)], -1)
+    return torch.logsumexp(lp, -1)
+
+
+def scale_free_distances(data, x_hat, n_mc=20000, seed=0):
+    """Distances between P(Y | X = x_hat) and G that are comparable across dim(Y):
+    TV = 1/2 int |p - q| (in [0, 1]), by Monte Carlo from the mixture (p + q)/2 with the exact
+    densities (error ~ 1/sqrt(n_mc)); and the relative squared L2, ||p - q||^2 / ||q||^2."""
+    import torch
+    sys.path.insert(0, REPO)
+    from utils.dist import compute_conditionals, compute_alpha, filter_and_normalize, gmm_l2_distance, \
+        generate_mog_samples_not_differentiable
+    d = data["raw"]
+    x = torch.as_tensor(x_hat, dtype=torch.float32).view(-1)
+    mu_p, S_p = compute_conditionals(d["mu_list"], d["Sigma_list"], x)
+    w_p = compute_alpha(d["mu_list"], d["Sigma_list"], d["alpha"], x)
+    mu_p, S_p, w_p = filter_and_normalize(mu_p, S_p, w_p, threshold=1e-8)
+    mu_q, S_q, w_q = d["target_means"], d["target_variances"], d["target_weights"]
+    mu_q = [m.float() for m in mu_q]; S_q = [v.float() for v in S_q]; w_q = w_q.float()
+    torch.manual_seed(seed)
+    half = n_mc // 2
+    xs = torch.cat([generate_mog_samples_not_differentiable(half, mu_p, S_p, w_p).float(),
+                    generate_mog_samples_not_differentiable(n_mc - half, mu_q, S_q, w_q).float()], 0)
+    lp = _mixture_logpdf(xs, mu_p, S_p, w_p); lq = _mixture_logpdf(xs, mu_q, S_q, w_q)
+    # |p - q| / (p + q) averaged under (p + q)/2 equals TV
+    tv = float((torch.exp(lp) - torch.exp(lq)).abs().div(torch.exp(lp) + torch.exp(lq)).mean())
+    l2 = gmm_l2_distance(mu_p, S_p, w_p, mu_q, S_q, w_q)
+    qq = gmm_l2_distance(mu_q, S_q, w_q, mu_q, S_q, w_q * 0)     # = ||q||^2 (cross and self terms vanish)
+    return {"tv": tv, "l2_rel": float(l2 / qq) if qq > 0 else float("nan"), "l2": float(l2)}
 
 
 def write_tables(rows, everything, args):
@@ -212,11 +259,12 @@ def write_tables(rows, everything, args):
     with open(args.out + ".json", "w") as f:
         json.dump({"rows": rows, "scenarios": everything, "args": vars(args)}, f, indent=2)
     # markdown
-    md = ["| dim X | dim Y | method | L2 GMM of returned x_hat (mean +- std) | time / attempt (s) | in x* basin | resamplings |",
-          "|---|---|---|---|---|---|---|"]
+    md = ["| dim X | dim Y | method | TV(P(Y|x_hat), G) mean +- std | relative L2 | raw L2 GMM | time / attempt (s) | in x* basin | resamplings |",
+          "|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         rs = "" if r["resamplings"] is None else f"{r['resamplings']:.1f}"
-        md.append(f"| {r['dim_x']} | {r['dim_y']} | {r['method']} | {r['l2_mean']:.4f} +- {r['l2_std']:.4f} (n={r['n']}) | "
+        md.append(f"| {r['dim_x']} | {r['dim_y']} | {r['method']} | {r['tv_mean']:.3f} +- {r['tv_std']:.3f} (n={r['n']}) | "
+                  f"{r['l2rel_mean']:.3f} +- {r['l2rel_std']:.3f} | {r['l2_mean']:.4f} +- {r['l2_std']:.4f} | "
                   f"{r['time_mean']:.0f} | {r['hits'] or ''} | {rs} |")
     open(args.out + ".md", "w").write("\n".join(md) + "\n")
     # latex rows (booktabs body, same column order as the paper's table)
@@ -230,7 +278,8 @@ def write_tables(rows, everything, args):
             tex.append(f"\\multirow{{{sum(1 for q in rows if (q['dim_x'], q['dim_y']) == key)}}}{{*}}{{$\\dim X={r['dim_x']}$, $\\dim Y={r['dim_y']}$}}")
             last = key
         name = {"MLGD": "\\mlgd{}", "MLGD-F": "\\mlgdf{}", "PMLGD": "P\\mlgd{}", "PMLGD-F": "P\\mlgdf{}"}[r["method"]]
-        tex.append(f" & {name} & ${r['l2_mean']:.3f} \\pm {r['l2_std']:.3f}$ & ${r['time_mean']:.0f}$ \\\\")
+        tex.append(f" & {name} & ${r['tv_mean']:.3f} \\pm {r['tv_std']:.3f}$ & ${r['l2rel_mean']:.3f} \\pm {r['l2rel_std']:.3f}$ "
+                   f"& ${r['time_mean']:.0f}$ \\\\")
     open(args.out + ".tex", "w").write("\n".join(tex) + "\n")
     # appendix: model checks, hits, resamplings
     ap = ["# Table 1 appendix: networks and search diagnostics", ""]
