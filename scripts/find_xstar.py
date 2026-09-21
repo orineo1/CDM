@@ -48,7 +48,7 @@ Outer loop (Algorithm 1)
   --init randn|zeros  x_T initialisation (paper: randn)
 
 Trajectories: independent restarts or a particle population
-  --algo lgd          R = --n-attempts independent trajectories; the smallest
+  --algo lgd          R = --n-restarts independent trajectories; the smallest
                       final loss wins (default)
   --algo particles    --n-particles trajectories advance in lockstep; after each
                       step they are weighted by exp(-beta * loss) and, when the
@@ -66,7 +66,10 @@ loss from the returned x, no diffusion, optionally with a prior term
   update: x <- x - lr * (grad L_hat(x) - L * score_theta(x, t=1))
 
 Run control
-  --n-attempts R      restarts (lgd: 10) or independent populations (particles: 1)
+  --n-restarts R      lgd: trajectories per attempt, best final loss returned      (10)
+  --n-particles N     particles: population size, same role                        (10)
+  --n-attempts A      independent runs of the whole algorithm; the JSON summary is
+                      mean/std of the returned x_hat's loss over them               (1)
   --seed, --device, --final-n-cond, --out, --no-store, --progress
 
 Output: x_hat of every attempt and the best one, printed and written to --out
@@ -125,7 +128,8 @@ def parse_args():
     g.add_argument("--algo", choices=["lgd", "particles"], default="lgd",
                    help="lgd: independent trajectories, best of --n-attempts; particles: --n-particles trajectories "
                         "run in lockstep with loss-weighted resampling (one population per attempt)")
-    g.add_argument("--n-particles", type=int, default=10)
+    g.add_argument("--n-restarts", type=int, default=10, help="lgd: trajectories per attempt; the best final loss is returned")
+    g.add_argument("--n-particles", type=int, default=10, help="particles: population size (same role as --n-restarts)")
     g.add_argument("--resample-beta", type=float, default=5.0, help="particle weights exp(-beta*loss); 'none' disables")
     g.add_argument("--ess-frac", type=float, default=0.5, help="resample when ESS < ess_frac * n_particles")
     g.add_argument("--resample-every", type=int, default=1)
@@ -144,7 +148,8 @@ def parse_args():
     g.add_argument("--select", choices=["all", "uniform"], default="all")
     g.add_argument("--n-sel", type=int, default=None, help="samples that keep their gradient under --select uniform")
     g = p.add_argument_group("run control")
-    g.add_argument("--n-attempts", type=int, default=None, help="restarts (lgd, default 10) or populations (particles, default 1)")
+    g.add_argument("--n-attempts", type=int, default=1,
+                   help="independent runs of the whole algorithm (each returns one x_hat); mean/std are over these")
     g.add_argument("--seed", type=int, default=42)
     g.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     g.add_argument("--final-n-cond", type=int, default=None, help="samples for the reported final loss (4*n_cond)")
@@ -246,28 +251,24 @@ def main():
     assert prior_arch == "diffusion", "--prior must be an unconditional diffusion checkpoint"
     sampler_type = sampler_arch if args.sampler_type == "auto" else args.sampler_type
     method = ("P" if args.algo == "particles" else "") + ("MLGD-F" if sampler_type == "cm" else "MLGD")
-    if args.n_attempts is None:
-        args.n_attempts = 1 if args.algo == "particles" else 10
+    R = args.n_particles if args.algo == "particles" else args.n_restarts
     target_generator, info = load_target(args.target, dev)
     loss_fn = make_loss(args)
     print(f"[find_xstar] {method} with {args.guidance.upper()} guidance | loss={args.loss} n_cond={args.n_cond} "
           f"n_mc={args.n_mc} perturb={args.perturb} aggregate={args.aggregate} step={args.step_size} "
           f"select={args.select}{'' if args.select == 'all' else f'(n_sel={args.n_sel})'} init={args.init} eta={args.eta} "
-          f"| attempts={args.n_attempts} target={info['kind']} device={dev}"
-          + (f" | particles={args.n_particles} resample_beta={args.resample_beta} ess_frac={args.ess_frac}"
-             if args.algo == "particles" else "")
+          f"| budget R={R} {'particles' if args.algo == 'particles' else 'restarts'}, attempts={args.n_attempts} "
+          f"target={info['kind']} device={dev}"
+          + (f" | resample_beta={args.resample_beta} ess_frac={args.ess_frac}" if args.algo == "particles" else "")
           + (f" | refine: {args.refine_steps} steps lr={args.refine_lr} lambda={args.refine_lambda}"
              if args.refine_steps > 0 else ""))
 
-    attempts = []
-    for r in range(args.n_attempts):
-        seed = args.seed * 1000 + r
+    def one_trajectory(seed, run):
         cfg = make_cfg(args, prior, sampler_type, target_generator, seed)
         t0 = time.time()
-        run = optimize_guided_population if args.algo == "particles" else optimize_guided
         res = run(prior, sampler, loss_fn, cfg)
         x_hat = res["x_final"].detach().float().view(-1)
-        rec = {"attempt": r, "seed": seed, "x_hat": x_hat.cpu().tolist(), "final_loss": float(res["final_loss"]),
+        rec = {"seed": seed, "x_hat": x_hat.cpu().tolist(), "final_loss": float(res["final_loss"]),
                "best_loss": res["best_loss"], "n_steps": res["n_steps"], "time_s": time.time() - t0,
                **evaluate(x_hat, info), "trace": res["trace"]}
         if args.algo == "particles":
@@ -276,27 +277,48 @@ def main():
                         "particles": [{"x_hat": x.tolist(), "final_loss": l, **evaluate(x, info)}
                                       for x, l in zip(res["x_particles"].float().cpu(), res["final_losses"])]})
         if res.get("refine") is not None:
-            rf = res["refine"]
-            rec["refine"] = {k: (v.tolist() if torch.is_tensor(v) else v) for k, v in rf.items()}
-        attempts.append(rec)
-        extra = "  ".join(f"{k}={v:.4f}" for k, v in rec.items() if k in ("l2_gmm", "l2_to_xstar"))
-        extra += f"  steps={rec['n_steps']}"
-        if args.algo == "particles":
-            extra += f"  resamplings={rec['n_resamples']}"
-        if rec.get("refine") is not None and rec["refine"].get("final_loss_before") is not None:
-            extra += f"  loss_before_refine={rec['refine']['final_loss_before']:.5f}"
-        print(f"  [{r+1}/{args.n_attempts}] loss={rec['final_loss']:.5f}  x_hat={np.round(x_hat.cpu().numpy(), 4)}  {extra}  ({rec['time_s']:.1f}s)")
+            rec["refine"] = {k: (v.tolist() if torch.is_tensor(v) else v) for k, v in res["refine"].items()}
         if not args.no_store:
-            save_run("find_xstar", cfg, {k: v for k, v in rec.items() if k not in ("x_hat", "attempt", "trace", "particles", "refine")}, seed=seed,
-                     method=method, guidance=args.guidance, prior=args.prior, sampler=args.sampler, target=args.target)
+            save_run("find_xstar", cfg, {k: v for k, v in rec.items() if k not in ("x_hat", "trace", "particles", "refine")},
+                     seed=seed, method=method, guidance=args.guidance, prior=args.prior, sampler=args.sampler, target=args.target)
+        return rec, cfg
+
+    attempts = []
+    for a in range(args.n_attempts):
+        t_att = time.time()
+        if args.algo == "particles":
+            rec, cfg = one_trajectory(args.seed * 1000 + a, optimize_guided_population)
+            att = {"attempt": a, **rec}
+        else:   # R independent restarts, the smallest final loss wins: that is the algorithm's answer
+            runs = [one_trajectory(args.seed * 1000 + a * R + r, optimize_guided)[0] for r in range(R)]
+            best = min(runs, key=lambda q: q["final_loss"])
+            att = {"attempt": a, **{k: v for k, v in best.items() if k != "trace"},
+                   "restarts": [{k: v for k, v in q.items() if k != "trace"} for q in runs],
+                   "traces": [q["trace"] for q in runs], "time_s": sum(q["time_s"] for q in runs)}
+        att["time_s"] = time.time() - t_att
+        attempts.append(att)
+        extra = "  ".join(f"{k}={v:.4f}" for k, v in att.items() if k in ("l2_gmm", "l2_to_xstar"))
+        if args.algo == "particles":
+            extra += f"  resamplings={att['n_resamples']}"
+        if att.get("refine") is not None and att["refine"].get("final_loss_before") is not None:
+            extra += f"  loss_before_refine={att['refine']['final_loss_before']:.5f}"
+        print(f"  [{a+1}/{args.n_attempts}] loss={att['final_loss']:.5f}  x_hat={np.round(np.array(att['x_hat']), 4)}  {extra}  ({att['time_s']:.1f}s)")
 
     best = min(attempts, key=lambda a: a["final_loss"])
-    print(f"[find_xstar] best: attempt {best['attempt']+1}, loss={best['final_loss']:.5f}, x_hat={np.round(best['x_hat'], 4)}")
+    summary = {}
+    for k in ("final_loss", "l2_gmm", "l2_to_xstar", "time_s"):
+        vals = [a[k] for a in attempts if k in a]
+        if vals:
+            summary[k] = {"mean": float(np.mean(vals)), "std": float(np.std(vals)), "n": len(vals)}
+    print(f"[find_xstar] {method}: over {args.n_attempts} attempt(s) "
+          + "  ".join(f"{k} {v['mean']:.4f}+-{v['std']:.4f}" for k, v in summary.items())
+          + f" | best attempt {best['attempt']+1}: loss={best['final_loss']:.5f}, x_hat={np.round(np.array(best['x_hat']), 4)}")
     if info.get("x_star") is not None:
         print(f"[find_xstar] true x* = {np.round(info['x_star'].float().view(-1).numpy(), 4)}")
     out = args.out or os.path.splitext(args.target)[0] + "_xstar.json"
     with open(out, "w") as f:
-        json.dump({"method": method, "algo": args.algo, "guidance": args.guidance, "args": vars(args), "best": best, "attempts": attempts,
+        json.dump({"method": method, "algo": args.algo, "guidance": args.guidance, "budget": R, "args": vars(args),
+                   "summary": summary, "best": best, "attempts": attempts,
                    "x_star": None if info.get("x_star") is None else info["x_star"].float().view(-1).tolist()}, f, indent=2)
     print(f"[find_xstar] wrote {out}")
 

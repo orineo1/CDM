@@ -910,8 +910,8 @@ def gmm_l2_distance(mu_p, Sigma_p, w_p, mu_q, Sigma_q, w_q):
         for mu_i, S_i, w_i in zip(mu1, S1, w1):
             for mu_j, S_j, w_j in zip(mu2, S2, w2):
                 S_sum = S_i + S_j
-                diff = mu_i - mu_j
-                d = mu_i.shape[0]
+                diff = (mu_i - mu_j).reshape(-1)      # means may arrive as (d, 1) columns from compute_conditionals
+                d = diff.shape[0]
                 _, logdet = torch.linalg.slogdet(S_sum)
                 log_val = -0.5 * (d * math.log(2 * math.pi) + logdet
                                   + diff @ torch.linalg.inv(S_sum) @ diff)

@@ -101,6 +101,7 @@ def main():
             dist_utils.get_param_mog_with_target(
                 dim_data=args.dim, num_components=args.n_components,
                 device="cpu", conditional_modes=2, distanceOrScale="Distance",
+                uncond_dim=args.dim - args.condition_on,     # dim(Y); X is the leading condition_on dims
             )
 
     elif args.params_file:
