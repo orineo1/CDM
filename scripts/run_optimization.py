@@ -24,6 +24,10 @@ from priors import diffusion as Diffusion
 from samplers import consistency as ConsistencyModels
 from samplers import flow_matching as FlowMatching
 from legacy import Optimization
+from guidance import GuidanceConfig, optimize_guided
+from guidance.config import init_randn, init_zeros, perturb_beta_ratio, aggregate_logsumexp
+from losses.functions import MMDLoss, RBF
+from utils.dist import generate_mog_samples_not_differentiable
 
 
 def parse_args():
@@ -51,6 +55,9 @@ def parse_args():
                    help="Monte Carlo samples for LGD gradient estimation per step.")
     p.add_argument("--dflow-max-iter", type=int, default=100,
                    help="Max LBFGS iterations for D-FLOW.")
+    p.add_argument("--init", choices=["randn", "zeros"], default="randn",
+                   help="x_T initialisation of each restart (randn = independent random restarts).")
+    p.add_argument("--step-size", type=float, default=1.0, help="Guidance step zeta (LGD / LGD_CM).")
 
     # Output
     p.add_argument("--output", type=str, default=None,
@@ -130,14 +137,25 @@ def main():
         t0 = time.time()
 
         if args.method in ("LGD", "LGD_CM"):
-            x_hat, _, loss_val = Optimization.optimize_LGD(
-                model_uncond, model_cond,
-                target_means, target_variances, target_weights,
-                mu_list, Sigma_list, alpha,
-                nsamples=args.optim_samples, num_x_t=args.mc_samples,
-                loss="MMD", CM=CM, device=device,
+            # the paper's LGD configuration, through the library, with independent
+            # random restarts (the legacy optimize_LGD wrapper starts every restart at 0)
+            cfg = GuidanceConfig(
+                n_cond=args.optim_samples, n_mc=args.mc_samples,
+                init_fn=init_randn if args.init == "randn" else init_zeros, unsqueeze_init=True,
+                perturb_fn=perturb_beta_ratio, perturb_square=False, aggregate_fn=aggregate_logsumexp,
+                step_size_fn=lambda t, i, z=args.step_size: z,
+                timestep_source="range", ddim_step_style="condition_x",
+                repeat_condition=True, condition_on_slice=(not CM),
+                target_generator=lambda n, dev: generate_mog_samples_not_differentiable(
+                    n, target_means, target_variances, target_weights).to(dev),
+                compute_final_loss=True, device=device,
+                seed=None if args.seed is None else args.seed * 1000 + i,
+                tag=f"run_optimization:{args.method}",
             )
+            res = optimize_guided(model_uncond, model_cond, MMDLoss(kernel=RBF(device=device)), cfg)
+            x_hat, loss_val, trace = res["x_final"], res["final_loss"], res["trace"]
         elif args.method == "DFLOW":
+            trace = None
             x_hat, loss_val = Optimization.optimize_DFLOW(
                 model_cond, model_uncond, device,
                 target_means, target_variances, target_weights,
@@ -148,9 +166,16 @@ def main():
         elapsed = time.time() - t0
         x_val = x_hat.detach().cpu().squeeze()
         loss_scalar = loss_val.item() if hasattr(loss_val, "item") else float(loss_val)
-        results.append({"x_hat": x_val, "loss": loss_scalar, "time": elapsed})
+        rec = {"x_hat": x_val, "loss": loss_scalar, "time": elapsed, "trace": trace}
+        if x_star is not None:
+            mu_p, S_p = dist_utils.compute_conditionals(mu_list, Sigma_list, x_val.view(-1))
+            w_p = dist_utils.compute_alpha(mu_list, Sigma_list, alpha, x_val.view(-1))
+            rec["l2_gmm"] = float(dist_utils.gmm_l2_distance(mu_p, S_p, w_p, target_means, target_variances, target_weights))
+            rec["l2_to_xstar"] = float(torch.norm(x_val.view(-1) - x_star.float().view(-1)))
+        results.append(rec)
+        extra = f", L2GMM={rec['l2_gmm']:.4f}, |x-x*|={rec['l2_to_xstar']:.3f}" if "l2_gmm" in rec else ""
         print(f"  [{i+1}/{args.n_attempts}] x_hat={x_val.numpy()}, "
-              f"MMD={loss_scalar:.6f}, time={elapsed:.1f}s")
+              f"MMD={loss_scalar:.6f}{extra}, time={elapsed:.1f}s")
 
     # ---- Evaluate ----
     best = min(results, key=lambda r: r["loss"])
@@ -166,6 +191,8 @@ def main():
             target_means, target_variances, target_weights,
         )
         print(f"  L1 distance:   {l1.item():.6f}")
+        print(f"  L2 GMM:        {best['l2_gmm']:.6f}   (paper metric)")
+        print(f"  |x_hat - x*|:  {best['l2_to_xstar']:.4f}")
         print(f"  True x*:       {x_star.numpy()}")
 
     losses = [r["loss"] for r in results]
