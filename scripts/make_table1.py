@@ -66,7 +66,8 @@ def parse_args():
     g = p.add_argument_group("control")
     g.add_argument("--seed", type=int, default=42)
     g.add_argument("--device", default=None)
-    g.add_argument("--force", action="store_true", help="redo steps whose outputs exist")
+    g.add_argument("--force", action="store_true", help="redo every step, training included")
+    g.add_argument("--force-search", action="store_true", help="redo only the search methods; keep data, networks and the check")
     g.add_argument("--skip-check", action="store_true")
     g.add_argument("--collect", action="store_true", help="only rebuild the table from existing JSONs")
     g.add_argument("--no-collect", action="store_true", help="run the scenarios but do not write the table (array jobs)")
@@ -75,6 +76,8 @@ def parse_args():
 
 
 def run(cmd, args, log=None):
+    if cmd and cmd[0] == sys.executable and "-u" not in cmd[:2]:
+        cmd = [cmd[0], "-u"] + cmd[1:]        # unbuffered: progress lines reach the log as they happen
     print("  $ " + " ".join(cmd), flush=True)
     if args.dry_run:
         return 0
@@ -136,7 +139,7 @@ def prepare(setting, args):
 def search(setting, paths, log, method, args):
     py = sys.executable
     out = os.path.join(args.runs_dir, setting["name"], f"{method}.json")
-    if not args.force and os.path.exists(out):
+    if not (args.force or args.force_search) and os.path.exists(out):
         return out
     sampler = paths["cm"] if method.endswith("-F") else paths["diffusion"]
     algo = "particles" if method.startswith("P") else "lgd"
