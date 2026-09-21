@@ -74,7 +74,7 @@ import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from guidance import GuidanceConfig, optimize_guided                       # noqa: E402
+from guidance import GuidanceConfig, optimize_guided, optimize_guided_population   # noqa: E402
 from guidance.config import (init_randn, init_zeros, perturb_beta_ratio,    # noqa: E402
                              perturb_none, aggregate_logsumexp, aggregate_single)
 from priors.diffusion import DiffusionModel                                 # noqa: E402
@@ -178,6 +178,18 @@ def parse_args():
     p.add_argument("--nunits", type=int, default=128)
     p.add_argument("--n-cond", type=int, default=250)
     p.add_argument("--n-mc", type=int, default=1)
+    p.add_argument("--methods", nargs="+", default=["MLGD", "MLGD-F", "PMLGD", "PMLGD-F"],
+                   choices=["MLGD", "MLGD-F", "PMLGD", "PMLGD-F"],
+                   help="MLGD/MLGD-F: --n-restarts independent trajectories, best final loss wins; "
+                        "PMLGD/PMLGD-F: the same budget as one resampled particle population")
+    p.add_argument("--n-particles", type=int, default=None, help="population size (default: --n-restarts, same budget)")
+    p.add_argument("--resample-beta", type=float, default=5.0, help="particle weights exp(-beta*loss); 0 disables")
+    p.add_argument("--ess-frac", type=float, default=0.5)
+    p.add_argument("--resample-every", type=int, default=1)
+    p.add_argument("--weight-mode", choices=["fresh", "accumulated"], default="fresh")
+    p.add_argument("--refine-steps", type=int, default=0, help="post-refinement gradient steps, applied to every method")
+    p.add_argument("--refine-lr", type=float, default=0.05)
+    p.add_argument("--refine-lambda", type=float, default=0.0)
     p.add_argument("--n-restarts", type=int, default=10,
                    help="independent restarts per method; the best final loss is shown, all endpoints are saved")
     p.add_argument("--init", choices=["randn", "zeros"], default="randn",
@@ -300,9 +312,58 @@ def target_mixture(st):
     return filter_and_normalize(mu_t, S_t, w_t, threshold=0.001)
 
 
-def run_mlgd(st, uncond, model_cond, use_cm, args, seed):
-    mog_means, mog_vars, w = target_mixture(st)
-    cfg = GuidanceConfig(
+def _basin_halfwidth(st):
+    others = [abs(float(m[0]) - float(st.x_star[0])) for m in st.mu_list if abs(float(m[0]) - float(st.x_star[0])) > 1e-6]
+    return 0.5 * min(others) if others else 1.5
+
+
+def _eval_x(st, x_hat, mog):
+    mog_means, mog_vars, w = mog
+    mu_p, S_p = compute_conditionals(st.mu_list, st.Sigma_list, x_hat.view(1))
+    w_p = compute_alpha(st.mu_list, st.Sigma_list, st.alpha, x_hat.view(1))
+    return {"x_hat": float(x_hat), "l2_gmm": float(gmm_l2_distance(mu_p, S_p, w_p, mog_means, mog_vars, w)),
+            "l2_x": float(abs(x_hat - st.x_star[0]))}
+
+
+def run_particles(st, uncond, model_cond, use_cm, args):
+    """One resampled population with the restart budget: n_particles = n_restarts trajectories."""
+    name = "PMLGD-F" if use_cm else "PMLGD"
+    mog = target_mixture(st)
+    R = args.n_particles or args.n_restarts
+    cfg = _mlgd_cfg(st, model_cond, use_cm, args, seed=args.seed * 100, mog=mog)
+    cfg.n_particles = R
+    cfg.resample_beta = None if args.resample_beta <= 0 else args.resample_beta
+    cfg.ess_frac, cfg.resample_every, cfg.weight_mode = args.ess_frac, args.resample_every, args.weight_mode
+    cfg.tag = f"fig1_{st.name}:{name}"
+    t0 = time.time()
+    res = optimize_guided_population(uncond, model_cond, MMDLoss(kernel=RBF(device=args.device)), cfg)
+    elapsed = time.time() - t0
+    xs = res["x_particles"].detach().float().view(-1).cpu()
+    particles = [{**_eval_x(st, x, mog), "final_loss": float(l)} for x, l in zip(xs, res["final_losses"])]
+    basin = _basin_halfwidth(st)
+    hits = sum(abs(q["x_hat"] - float(st.x_star[0])) < basin for q in particles)
+    best = particles[res["best_particle"]]
+    out = {**best, "time_s": elapsed, "n_steps": res["n_steps"], "best_loss": res["best_loss"], "config": cfg.describe(),
+           "seed": cfg.seed, "n_restarts": R, "n_particles": R, "hits_xstar_basin": int(hits), "basin_halfwidth": float(basin),
+           "n_resamples": res["n_resamples"], "resample_steps": res["resample_steps"],
+           "restarts": particles, "population_trace": res["trace"],
+           "ess_per_step": [s["ess"] for s in res["trace"]]}
+    if res.get("refine") is not None:
+        rf = res["refine"]
+        out["refine"] = {"traces": rf["traces"], "x_before": rf["x_before"].view(-1).tolist(),
+                         "final_losses_before": rf["final_losses_before"],
+                         "hits_before": int(sum(abs(float(x) - float(st.x_star[0])) < basin for x in rf["x_before"].view(-1)))}
+    print(f"[{name}] best of {R} particles: x_hat={best['x_hat']:+.4f}  L2 GMM={best['l2_gmm']:.5f}  |x_hat-x*|={best['l2_x']:.4f}  "
+          f"| {hits}/{R} particles in the x* basin | {res['n_resamples']} resamplings"
+          + (f" (steps {res['resample_steps'][:6]}{'...' if len(res['resample_steps']) > 6 else ''})" if res["n_resamples"] else "")
+          + (f" | refine: {out['refine']['hits_before']}/{R} in basin before" if "refine" in out else "")
+          + f" | {elapsed:.0f}s")
+    return out
+
+
+def _mlgd_cfg(st, model_cond, use_cm, args, seed, mog):
+    mog_means, mog_vars, w = mog
+    return GuidanceConfig(
         n_cond=args.n_cond, n_mc=args.n_mc,
         init_fn=init_randn if args.init == "randn" else init_zeros, unsqueeze_init=True,
         perturb_fn=perturb_beta_ratio, perturb_square=False, aggregate_fn=aggregate_logsumexp,
@@ -311,18 +372,26 @@ def run_mlgd(st, uncond, model_cond, use_cm, args, seed):
         repeat_condition=True, condition_on_slice=(not use_cm),
         target_generator=lambda n, dev: generate_mog_samples_not_differentiable(n, mog_means, mog_vars, w).to(dev),
         compute_final_loss=True, device=args.device, seed=seed,
+        refine_steps=args.refine_steps, refine_lr=args.refine_lr, refine_lambda=args.refine_lambda,
         tag=f"fig1_{st.name}:" + ("MLGD-F" if use_cm else "MLGD"),
     )
+
+
+def run_mlgd(st, uncond, model_cond, use_cm, args, seed):
+    mog = target_mixture(st)
+    cfg = _mlgd_cfg(st, model_cond, use_cm, args, seed, mog)
     t0 = time.time()
     res = optimize_guided(uncond, model_cond, MMDLoss(kernel=RBF(device=args.device)), cfg)
     elapsed = time.time() - t0
     x_hat = res["x_final"].detach().float().view(-1)[0].cpu()
-    mu_p, S_p = compute_conditionals(st.mu_list, st.Sigma_list, x_hat.view(1))
-    w_p = compute_alpha(st.mu_list, st.Sigma_list, st.alpha, x_hat.view(1))
-    return {"x_hat": float(x_hat), "l2_gmm": float(gmm_l2_distance(mu_p, S_p, w_p, mog_means, mog_vars, w)),
-            "l2_x": float(abs(x_hat - st.x_star[0])), "final_loss": float(res["final_loss"]), "time_s": elapsed,
-            "n_steps": res["n_steps"], "best_loss": res["best_loss"], "trace": res["trace"], "config": cfg.describe(),
-            "seed": seed}
+    out = {**_eval_x(st, x_hat, mog), "final_loss": float(res["final_loss"]), "time_s": elapsed,
+           "n_steps": res["n_steps"], "best_loss": res["best_loss"], "trace": res["trace"], "config": cfg.describe(),
+           "seed": seed}
+    if res.get("refine") is not None:
+        rf = res["refine"]
+        out["refine"] = {"trace": rf["trace"], "x_before": float(rf["x_before"].view(-1)[0]),
+                         "final_loss_before": rf["final_loss_before"]}
+    return out
 
 
 def empirical_loss_curve(st, model_cond, use_cm, args, n_grid=41, n_seeds=3):
@@ -357,16 +426,20 @@ def run_mlgd_restarts(st, uncond, model_cond, use_cm, args):
     name = "MLGD-F" if use_cm else "MLGD"
     runs = [run_mlgd(st, uncond, model_cond, use_cm, args, seed=args.seed * 100 + r) for r in range(args.n_restarts)]
     best = min(runs, key=lambda r: r["final_loss"])
-    basin = 0.5 * min(abs(float(m[0]) - float(st.x_star[0])) for m in st.mu_list if abs(float(m[0]) - float(st.x_star[0])) > 1e-6) \
-        if len({float(m[0]) for m in st.mu_list}) > 1 else 1.5
+    basin = _basin_halfwidth(st)
     hits = sum(abs(r["x_hat"] - float(st.x_star[0])) < basin for r in runs)
     out = dict(best)
     out.update({"n_restarts": len(runs), "hits_xstar_basin": int(hits), "basin_halfwidth": float(basin),
-                "restarts": [{k: r[k] for k in ("seed", "x_hat", "final_loss", "l2_gmm", "l2_x", "time_s", "n_steps")} for r in runs],
+                "restarts": [{k: r[k] for k in ("seed", "x_hat", "final_loss", "l2_gmm", "l2_x", "time_s", "n_steps", "refine") if k in r}
+                             for r in runs],
                 "traces": [r["trace"] for r in runs]})
     out.pop("trace", None)
+    if "refine" in best:
+        out["hits_before_refine"] = int(sum(abs(r["refine"]["x_before"] - float(st.x_star[0])) < basin for r in runs))
     print(f"[{name}] best of {len(runs)}: x_hat={best['x_hat']:+.4f}  L2 GMM={best['l2_gmm']:.5f}  |x_hat-x*|={best['l2_x']:.4f}  "
-          f"| {hits}/{len(runs)} restarts in the x* basin | {sum(r['time_s'] for r in runs):.0f}s total")
+          f"| {hits}/{len(runs)} restarts in the x* basin"
+          + (f" ({out['hits_before_refine']}/{len(runs)} before refinement)" if "hits_before_refine" in out else "")
+          + f" | {sum(r['time_s'] for r in runs):.0f}s total")
     return out
 
 
@@ -423,11 +496,15 @@ def sim_paths(out):
 
 def simulate(st, args):
     uncond, cond, cm, train_times = get_models(st, args)
-    mlgd = run_mlgd_restarts(st, uncond, cond, use_cm=False, args=args)
-    mlgdf = run_mlgd_restarts(st, uncond, cm, use_cm=True, args=args)
+    results = {}
+    for name in args.methods:
+        use_cm = name.endswith("-F")
+        model = cm if use_cm else cond
+        results[name] = run_particles(st, uncond, model, use_cm, args) if name.startswith("P") \
+            else run_mlgd_restarts(st, uncond, model, use_cm, args)
     sweep, diag = run_beta_sweep(st, uncond, args)
     curves = {"MLGD": empirical_loss_curve(st, cond, False, args), "MLGD-F": empirical_loss_curve(st, cm, True, args)}
-    sim = {"setting": st.name, "args": vars(args), "train_times_s": train_times, "MLGD": mlgd, "MLGD-F": mlgdf,
+    sim = {"setting": st.name, "args": vars(args), "train_times_s": train_times, **results, "methods": list(args.methods),
            "empirical_loss": curves, "betas": list(args.betas),
            "beta_sweep": {str(b): {"mean": float(np.mean(s)), "std": float(np.std(s)), "n": int(len(s)), **diag[b]}
                           for b, s in sweep.items()}}
@@ -473,14 +550,25 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     import matplotlib.gridspec as gridspec
 
     betas = [float(b) for b in sim["betas"]][:4]
-    mlgd, mlgdf = sim["MLGD"], sim["MLGD-F"]
+    methods = [m for m in sim.get("methods", ["MLGD", "MLGD-F"]) if m in sim]
+    # one style per method, fixed across figures: wide translucent lines for the diffusion sampler,
+    # thin lines on top for the consistency sampler; particle variants in blue tones
+    STYLE = {"MLGD":    dict(color="tab:red",     lw=4.0, alpha=0.6, z=3),
+             "MLGD-F":  dict(color="tab:green",   lw=1.6, alpha=1.0, z=4),
+             "PMLGD":   dict(color="navy",        lw=4.0, alpha=0.5, z=3),
+             "PMLGD-F": dict(color="darkmagenta", lw=1.6, alpha=1.0, z=4)}
+    res = {m: sim[m] for m in methods}
     x_grid, px, Q = analytic_curves(st, betas)
     xlo, xhi = st.x_range
-    allx = [mlgd["x_hat"], mlgdf["x_hat"]] + [q["x_hat"] for r in (mlgd, mlgdf) for q in r.get("restarts", [])]
+    allx = [r["x_hat"] for r in res.values()] + [q["x_hat"] for r in res.values() for q in r.get("restarts", [])]
     xlo, xhi = min(xlo, min(allx) - 0.6), max(xhi, max(allx) + 0.6)
-    # one palette for the whole figure: x* black dashed, G black solid, MLGD red (wide, translucent),
-    # MLGD-F green (thin, on top), Q_beta purple, prior orange dash-dot; dashed curves are drawn last
-    c_data, c_true, c_mlgd, c_mlgdf, c_q, c_prior = "steelblue", "black", "tab:red", "tab:green", "tab:purple", "tab:orange"
+    # palette: x* black dashed, G black dashed, Q_beta purple, prior orange dash-dot; dashed curves are drawn last
+    c_data, c_true, c_q, c_prior = "steelblue", "black", "tab:purple", "tab:orange"
+    c_mlgd, c_mlgdf = STYLE["MLGD"]["color"], STYLE["MLGD-F"]["color"]
+
+    def vline(ax, m, label=None):
+        st_ = STYLE[m]
+        ax.axvline(res[m]["x_hat"], color=st_["color"], lw=st_["lw"], alpha=st_["alpha"], zorder=st_["z"], label=label)
     fs_title, fs_leg = 13, 9
     x_star = float(st.x_star[0])
 
@@ -490,7 +578,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     if layout == "lr":
         fig = plt.figure(figsize=(14, 12))
         outer = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.33)
-        left = outer[0].subgridspec(2, 1, height_ratios=[2.1, 1], hspace=0.45)
+        left = outer[0].subgridspec(2, 1, height_ratios=[2.1, 1], hspace=0.6)
         left_top = left[0].subgridspec(2, 1, height_ratios=[1.2, 1], hspace=0.08)   # joint + loss share x
         right = outer[1].subgridspec(4, 1, hspace=0.12)
         ax_joint = fig.add_subplot(left_top[0])
@@ -514,23 +602,33 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     ax_joint, ax_loss, ax_cond = top_axes
 
     def lab(name, r):
-        if r.get("n_restarts", 1) > 1:
-            return rf"{name} $\hat{{x}}$ (best of {r['n_restarts']}; {r['hits_xstar_basin']}/{r['n_restarts']} in the $x^\star$ basin)"
-        return rf"{name} $\hat{{x}}$"
+        R = r.get("n_restarts", 1)
+        if R <= 1:
+            return rf"{name} $\hat{{x}}$"
+        what = "particles" if name.startswith("P") else "restarts"
+        s_ = rf"{name}: {r['hits_xstar_basin']}/{R} {what} in the $x^\star$ basin" if len(methods) <= 2 \
+            else rf"{name}: {r['hits_xstar_basin']}/{R} in basin"
+        if name.startswith("P"):
+            s_ += f", {r.get('n_resamples', 0)} resamplings"
+        before = r.get("hits_before_refine", r.get("refine", {}).get("hits_before") if isinstance(r.get("refine"), dict) else None)
+        if before is not None:
+            s_ += f" ({before}/{R} pre-refine)"
+        return s_
 
     # ---- left, top: the joint ------------------------------------------------
     ax = ax_joint
     set_seed(0)
     xy = generate_mog_samples_not_differentiable(5000, st.mu_list, st.Sigma_list, st.alpha).cpu().numpy()
     ax.scatter(xy[:, 0], xy[:, 1], s=7, alpha=0.3, color=c_data)
-    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=4, alpha=0.6, label=lab("MLGD", mlgd), zorder=3)
-    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, label=lab("MLGD-F", mlgdf), zorder=4)
+    for m in methods:
+        vline(ax, m, lab(m, res[m]))
     ax.axvline(x_star, color=c_true, ls="--", lw=2, label=r"true $x^\star$", zorder=5)
     y0, y1 = ax.get_ylim()
-    for r, c, off in [(mlgd, c_mlgd, 0.0), (mlgdf, c_mlgdf, 0.035)]:
-        xs = [q["x_hat"] for q in r.get("restarts", [])]
+    for k, m in enumerate(methods):   # every restart / particle endpoint as a tick, one row per method
+        xs = [q["x_hat"] for q in res[m].get("restarts", [])]
         if xs:
-            ax.scatter(xs, [y0 + off * (y1 - y0)] * len(xs), marker="|", s=110, color=c, lw=1.5, zorder=5, clip_on=False)
+            ax.scatter(xs, [y0 + 0.035 * k * (y1 - y0)] * len(xs), marker="|", s=110, color=STYLE[m]["color"],
+                       lw=1.5, zorder=5, clip_on=False)
     ax.set_xlim(xlo, xhi); ax.set_ylabel("y")
     ax.set_title(r"joint $\mathcal{P}(X, Y)$ and the recovered $\hat{x}$", fontsize=fs_title); ax.grid(alpha=0.2)
     if layout == "lr":
@@ -556,15 +654,17 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         ax.annotate(rf"$x={cx:g}$", (float(y[j]), float(dk[j])), xytext=(0, 4), textcoords="offset points",
                     ha="center", va="bottom", fontsize=fs_leg, color=c_decoy[k % len(c_decoy)])
     ax.fill_between(y, gy, color=c_true, alpha=0.08, zorder=1)
-    for r, c, lw, a, z, name in [(mlgd, c_mlgd, 4, 0.6, 3, "MLGD"), (mlgdf, c_mlgdf, 1.6, 1.0, 4, "MLGD-F")]:
+    for name in methods:
+        r, st_ = res[name], STYLE[name]
         p = cond_params(st, torch.tensor(r["x_hat"]))
-        ax.plot(y, mixture_density_1d(y, p).detach(), color=c, lw=lw, alpha=a, zorder=z,
+        ax.plot(y, mixture_density_1d(y, p).detach(), color=st_["color"], lw=st_["lw"], alpha=st_["alpha"], zorder=st_["z"],
                 label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={max(r['l2_gmm'], 0.0):.4f}$")
     # the target is drawn last (dashed, like x*) so it stays visible where a recovered x-hat matches it exactly
     ax.plot(y, gy, color=c_true, ls="--", lw=2, label=r"target $\mathcal{G}(Y)$", zorder=5)
     ax.set_xlim(ylo, yhi); ax.set_ylim(0, 1.22 * ax.get_ylim()[1] / 1.05); ax.set_xlabel("y")   # headroom for the peak labels
     ax.set_title(r"induced conditional $\mathcal{P}(Y\mid X=x)$ vs. the target, on $y$", fontsize=fs_title)
-    ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3, frameon=False); ax.grid(alpha=0.2)
+    ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3 if len(methods) <= 2 else 2,
+              frameon=False); ax.grid(alpha=0.2)
 
     # ---- left, bottom: the loss landscape L(x) --------------------------------
     ax = ax_loss
@@ -576,6 +676,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     if "empirical_loss" in sim:   # the sample loss the optimiser sees (MMD), mean +- sd over seeds, own scale
         ax2 = ax.twinx()
         for name, c in [("MLGD", c_mlgd), ("MLGD-F", c_mlgdf)]:
+            if name not in sim["empirical_loss"]:
+                continue
             e = sim["empirical_loss"][name]
             xe, v = np.array(e["x"]), np.array(e["values"])
             mu_e, sd_e = v.mean(0), v.std(0)
@@ -585,8 +687,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         ax2.tick_params(labelsize=fs_leg)
         n_c = sim["empirical_loss"]["MLGD"]["n_cond"]
         ax.plot([], [], color="0.5", lw=1.2, label=rf"$\hat{{\mathcal{{L}}}}(x)$ (MMD, $n_{{\rm cond}}={n_c}$; right axis)")
-    ax.axvline(mlgd["x_hat"], color=c_mlgd, lw=4, alpha=0.6, label=lab("MLGD", mlgd), zorder=3)
-    ax.axvline(mlgdf["x_hat"], color=c_mlgdf, lw=1.6, label=lab("MLGD-F", mlgdf), zorder=4)
+    for m in methods:
+        vline(ax, m, lab(m, res[m]))
     ax.axvline(x_star, color=c_true, ls="--", lw=2, label=r"true $x^\star$", zorder=5)
     ax.set_xlim(xlo, xhi); ax.set_ylim(0, 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max()); ax.set_xlabel("x")
     ax.set_ylabel(r"$\mathcal{L}(x) = \mathcal{D}\left(\mathcal{P}(Y\mid X=x),\,\mathcal{G}\right)$")

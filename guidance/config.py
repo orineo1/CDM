@@ -180,6 +180,22 @@ class GuidanceConfig:
     target_generator: Optional[Callable] = None
     resample_target_per_mc: bool = True
 
+    # --- particle population (optimize_guided_population) ---
+    # R trajectories run in lockstep; after each step the particles are weighted by
+    # exp(-resample_beta * loss) and resampled when the effective sample size drops below
+    # ess_frac * R. resample_beta=None: independent trajectories (no resampling).
+    n_particles: int = 1
+    resample_beta: Optional[float] = None
+    ess_frac: float = 0.5
+    resample_every: int = 1              # only consider resampling every k steps
+    weight_mode: str = "fresh"           # "fresh": w = exp(-beta L_t); "accumulated": telescoped over steps
+
+    # --- post-refinement: plain gradient steps on the plug-in loss from the returned x,
+    #     no diffusion; optional prior term lambda * score_theta(x, t=1) ---
+    refine_steps: int = 0
+    refine_lr: float = 0.05
+    refine_lambda: float = 0.0
+
     # --- bookkeeping ---
     device: str = "cuda"
     progress: bool = False

@@ -11,4 +11,4 @@ from .config import (  # noqa: F401
     aggregate_logsumexp, aggregate_mean, aggregate_single,
     update_ddim_minus_grad,
 )
-from .core import optimize_guided  # noqa: F401
+from .core import optimize_guided, optimize_guided_population, refine  # noqa: F401

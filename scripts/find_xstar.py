@@ -5,7 +5,8 @@ This is the paper's method as one command. Give it a prior over X (a trained
 unconditional diffusion checkpoint), a conditional sampler for Y | X (a trained
 consistency-model or conditional-diffusion checkpoint) and a target G(Y); it
 runs guided reverse diffusion over X with the distributional loss as guidance,
-several restarts, and returns the best x_hat.
+as independent restarts or as a resampled particle population, optionally
+polishes the answer with a few gradient steps, and returns the best x_hat.
 
     python scripts/find_xstar.py --prior runs/mog4d/models/model_unconditional.pt \
         --sampler runs/mog4d/models/model_conditional.pt --target runs/mog4d/data.pt \
@@ -46,8 +47,26 @@ Outer loop (Algorithm 1)
   --guidance-cutoff-t T   no guidance for t < T (MNIST used 200)
   --init randn|zeros  x_T initialisation (paper: randn)
 
+Trajectories: independent restarts or a particle population
+  --algo lgd          R = --n-attempts independent trajectories; the smallest
+                      final loss wins (default)
+  --algo particles    --n-particles trajectories advance in lockstep; after each
+                      step they are weighted by exp(-beta * loss) and, when the
+                      effective sample size drops below --ess-frac * N, resampled
+                      (systematic), so trajectories stuck in a poor basin are
+                      replaced by copies of better ones while the noise can still
+                      spread the copies. Same cost as N restarts. The best particle
+                      by final loss is returned, all particles are written out.
+  --n-particles N     (10)     --resample-beta B  (5.0; 0 disables resampling)
+  --ess-frac F        (0.5)    --resample-every k (1)    --weight-mode fresh|accumulated
+
+Post-refinement (optional, either --algo): K plain gradient steps on the plug-in
+loss from the returned x, no diffusion, optionally with a prior term
+  --refine-steps K (0)  --refine-lr (0.05)  --refine-lambda L (0: none)
+  update: x <- x - lr * (grad L_hat(x) - L * score_theta(x, t=1))
+
 Run control
-  --n-attempts R      independent restarts; the smallest final loss wins (10)
+  --n-attempts R      restarts (lgd: 10) or independent populations (particles: 1)
   --seed, --device, --final-n-cond, --out, --no-store, --progress
 
 Output: x_hat of every attempt and the best one, printed and written to --out
@@ -68,7 +87,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
 sys.path.insert(0, HERE)
 
-from guidance import GuidanceConfig, optimize_guided                                   # noqa: E402
+from guidance import GuidanceConfig, optimize_guided, optimize_guided_population      # noqa: E402
 from guidance.config import (init_randn, init_zeros, perturb_beta_ratio,               # noqa: E402
                              perturb_beta_prod_ratio_sq, perturb_sqrt_beta_prod, perturb_none,
                              aggregate_logsumexp, aggregate_mean, aggregate_single)
@@ -103,6 +122,18 @@ def parse_args():
     g.add_argument("--eta", type=float, default=0.0)
     g.add_argument("--guidance-cutoff-t", type=int, default=None)
     g.add_argument("--init", choices=["randn", "zeros"], default="randn")
+    g.add_argument("--algo", choices=["lgd", "particles"], default="lgd",
+                   help="lgd: independent trajectories, best of --n-attempts; particles: --n-particles trajectories "
+                        "run in lockstep with loss-weighted resampling (one population per attempt)")
+    g.add_argument("--n-particles", type=int, default=10)
+    g.add_argument("--resample-beta", type=float, default=5.0, help="particle weights exp(-beta*loss); 'none' disables")
+    g.add_argument("--ess-frac", type=float, default=0.5, help="resample when ESS < ess_frac * n_particles")
+    g.add_argument("--resample-every", type=int, default=1)
+    g.add_argument("--weight-mode", choices=["fresh", "accumulated"], default="fresh")
+    g = p.add_argument_group("post-refinement (any --algo)")
+    g.add_argument("--refine-steps", type=int, default=0, help="gradient steps on the plug-in loss from the returned x")
+    g.add_argument("--refine-lr", type=float, default=0.05)
+    g.add_argument("--refine-lambda", type=float, default=0.0, help="weight of the prior score term")
     g = p.add_argument_group("inner estimator")
     g.add_argument("--n-cond", type=int, default=250)
     g.add_argument("--n-target", type=int, default=None)
@@ -113,7 +144,7 @@ def parse_args():
     g.add_argument("--select", choices=["all", "uniform"], default="all")
     g.add_argument("--n-sel", type=int, default=None, help="samples that keep their gradient under --select uniform")
     g = p.add_argument_group("run control")
-    g.add_argument("--n-attempts", type=int, default=10)
+    g.add_argument("--n-attempts", type=int, default=None, help="restarts (lgd, default 10) or populations (particles, default 1)")
     g.add_argument("--seed", type=int, default=42)
     g.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     g.add_argument("--final-n-cond", type=int, default=None, help="samples for the reported final loss (4*n_cond)")
@@ -187,8 +218,12 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
         repeat_condition=True, condition_on_slice=(sampler_type == "diffusion"),
         cond_output_transform=make_subsampler(args),
         target_generator=gen, compute_final_loss=True,
+        n_particles=args.n_particles, resample_beta=(None if args.resample_beta is None or args.resample_beta <= 0
+                                                       else args.resample_beta),
+        ess_frac=args.ess_frac, resample_every=args.resample_every, weight_mode=args.weight_mode,
+        refine_steps=args.refine_steps, refine_lr=args.refine_lr, refine_lambda=args.refine_lambda,
         device=args.device, seed=seed, progress=args.progress,
-        tag=f"find_xstar:{args.guidance}:{'MLGD-F' if sampler_type == 'cm' else 'MLGD'}",
+        tag=f"find_xstar:{args.guidance}:{args.algo}:{'MLGD-F' if sampler_type == 'cm' else 'MLGD'}",
     )
 
 
@@ -210,30 +245,49 @@ def main():
     sampler, sampler_arch = load_model(args.sampler, dev)
     assert prior_arch == "diffusion", "--prior must be an unconditional diffusion checkpoint"
     sampler_type = sampler_arch if args.sampler_type == "auto" else args.sampler_type
-    method = "MLGD-F" if sampler_type == "cm" else "MLGD"
+    method = ("P" if args.algo == "particles" else "") + ("MLGD-F" if sampler_type == "cm" else "MLGD")
+    if args.n_attempts is None:
+        args.n_attempts = 1 if args.algo == "particles" else 10
     target_generator, info = load_target(args.target, dev)
     loss_fn = make_loss(args)
     print(f"[find_xstar] {method} with {args.guidance.upper()} guidance | loss={args.loss} n_cond={args.n_cond} "
           f"n_mc={args.n_mc} perturb={args.perturb} aggregate={args.aggregate} step={args.step_size} "
           f"select={args.select}{'' if args.select == 'all' else f'(n_sel={args.n_sel})'} init={args.init} eta={args.eta} "
-          f"| attempts={args.n_attempts} target={info['kind']} device={dev}")
+          f"| attempts={args.n_attempts} target={info['kind']} device={dev}"
+          + (f" | particles={args.n_particles} resample_beta={args.resample_beta} ess_frac={args.ess_frac}"
+             if args.algo == "particles" else "")
+          + (f" | refine: {args.refine_steps} steps lr={args.refine_lr} lambda={args.refine_lambda}"
+             if args.refine_steps > 0 else ""))
 
     attempts = []
     for r in range(args.n_attempts):
         seed = args.seed * 1000 + r
         cfg = make_cfg(args, prior, sampler_type, target_generator, seed)
         t0 = time.time()
-        res = optimize_guided(prior, sampler, loss_fn, cfg)
+        run = optimize_guided_population if args.algo == "particles" else optimize_guided
+        res = run(prior, sampler, loss_fn, cfg)
         x_hat = res["x_final"].detach().float().view(-1)
         rec = {"attempt": r, "seed": seed, "x_hat": x_hat.cpu().tolist(), "final_loss": float(res["final_loss"]),
                "best_loss": res["best_loss"], "n_steps": res["n_steps"], "time_s": time.time() - t0,
                **evaluate(x_hat, info), "trace": res["trace"]}
+        if args.algo == "particles":
+            rec.update({"best_particle": res["best_particle"], "n_resamples": res["n_resamples"],
+                        "resample_steps": res["resample_steps"],
+                        "particles": [{"x_hat": x.tolist(), "final_loss": l, **evaluate(x, info)}
+                                      for x, l in zip(res["x_particles"].float().cpu(), res["final_losses"])]})
+        if res.get("refine") is not None:
+            rf = res["refine"]
+            rec["refine"] = {k: (v.tolist() if torch.is_tensor(v) else v) for k, v in rf.items()}
         attempts.append(rec)
         extra = "  ".join(f"{k}={v:.4f}" for k, v in rec.items() if k in ("l2_gmm", "l2_to_xstar"))
         extra += f"  steps={rec['n_steps']}"
+        if args.algo == "particles":
+            extra += f"  resamplings={rec['n_resamples']}"
+        if rec.get("refine") is not None and rec["refine"].get("final_loss_before") is not None:
+            extra += f"  loss_before_refine={rec['refine']['final_loss_before']:.5f}"
         print(f"  [{r+1}/{args.n_attempts}] loss={rec['final_loss']:.5f}  x_hat={np.round(x_hat.cpu().numpy(), 4)}  {extra}  ({rec['time_s']:.1f}s)")
         if not args.no_store:
-            save_run("find_xstar", cfg, {k: v for k, v in rec.items() if k not in ("x_hat", "attempt", "trace")}, seed=seed,
+            save_run("find_xstar", cfg, {k: v for k, v in rec.items() if k not in ("x_hat", "attempt", "trace", "particles", "refine")}, seed=seed,
                      method=method, guidance=args.guidance, prior=args.prior, sampler=args.sampler, target=args.target)
 
     best = min(attempts, key=lambda a: a["final_loss"])
@@ -242,7 +296,7 @@ def main():
         print(f"[find_xstar] true x* = {np.round(info['x_star'].float().view(-1).numpy(), 4)}")
     out = args.out or os.path.splitext(args.target)[0] + "_xstar.json"
     with open(out, "w") as f:
-        json.dump({"method": method, "guidance": args.guidance, "args": vars(args), "best": best, "attempts": attempts,
+        json.dump({"method": method, "algo": args.algo, "guidance": args.guidance, "args": vars(args), "best": best, "attempts": attempts,
                    "x_star": None if info.get("x_star") is None else info["x_star"].float().view(-1).tolist()}, f, indent=2)
     print(f"[find_xstar] wrote {out}")
 
