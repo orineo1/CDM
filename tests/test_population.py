@@ -99,3 +99,20 @@ def test_linear_resample_schedule_ramps_and_runs():
     betas = [s["resample_beta"] for s in pop["trace"]]
     assert betas[0] < betas[-1] and abs(betas[-1] - 2.0) < 1e-9
     assert pop["x_particles"].shape == (3, 1)
+
+
+def test_exact_conditional_sampler_matches_analytic_conditional():
+    from samplers.exact import ExactConditionalSampler
+    from utils.dist import compute_conditionals, compute_alpha
+    torch.manual_seed(0)
+    mu = [torch.tensor([0., 1., 0.5]), torch.tensor([2., -1., 1.])]
+    S = [torch.tensor([[1., .3, .2], [.3, 1., .1], [.2, .1, 1.]]), torch.eye(3) * 0.5]
+    w = torch.tensor([0.5, 0.5])
+    smp = ExactConditionalSampler(mu, S, w, condition_on=1)
+    x = torch.tensor([0.3], requires_grad=True)
+    y, _, _ = smp.sample(20000, condition_x=x.view(1, -1).repeat(20000, 1), device="cpu")
+    m, Sg = compute_conditionals(mu, S, x.detach().view(-1)); a = compute_alpha(mu, S, w, x.detach().view(-1))
+    mean_true = sum(float(ai) * mi.view(-1) for ai, mi in zip(a, m))
+    assert torch.allclose(y.mean(0), mean_true, atol=0.05)
+    y.mean().backward()
+    assert x.grad is not None and torch.isfinite(x.grad).all()

@@ -41,13 +41,15 @@ import numpy as np
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(REPO, "scripts")
 METHODS = ["MLGD", "MLGD-F", "PMLGD", "PMLGD-F"]
+ALL_METHODS = METHODS + ["MLGD-X", "PMLGD-X"]     # -X: oracle exact conditional sampler
 DEFAULT_SETTINGS = ["1x1", "1x5", "1x10", "5x1", "5x5", "5x10", "10x1", "10x5", "10x10"]
 
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--settings", nargs="+", default=DEFAULT_SETTINGS, help="'<dimX>x<dimY>' or 'file:<params.txt>'")
-    p.add_argument("--methods", nargs="+", default=METHODS, choices=METHODS)
+    p.add_argument("--methods", nargs="+", default=METHODS, choices=ALL_METHODS)
+    p.add_argument("--tag", default="", help="suffix for the method JSONs and row labels, e.g. _refine")
     p.add_argument("--runs-dir", default="runs/table1v2")
     p.add_argument("--out", default="results/table1")
     g = p.add_argument_group("data and training")
@@ -146,10 +148,10 @@ def prepare(setting, args):
 
 def search(setting, paths, log, method, args):
     py = sys.executable
-    out = os.path.join(args.runs_dir, setting["name"], f"{method}.json")
+    out = os.path.join(args.runs_dir, setting["name"], f"{method}{args.tag}.json")
     if not (args.force or args.force_search) and os.path.exists(out):
         return out
-    sampler = paths["cm"] if method.endswith("-F") else paths["diffusion"]
+    sampler = paths["cm"] if method.endswith("-F") else ("exact" if method.endswith("-X") else paths["diffusion"])
     algo = "particles" if method.startswith("P") else "lgd"
     cmd = [py, os.path.join(SCRIPTS, "find_xstar.py"), "--prior", paths["prior"], "--sampler", sampler, "--target", paths["data"],
            "--algo", algo, "--n-restarts", str(args.budget), "--n-particles", str(args.budget),
@@ -176,7 +178,7 @@ def collect(settings, args):
         if os.path.exists(cp):
             entry["check"] = json.load(open(cp))
         for m in args.methods:
-            fp = os.path.join(d, f"{m}.json")
+            fp = os.path.join(d, f"{m}{args.tag}.json")
             if not os.path.exists(fp):
                 continue
             r = json.load(open(fp))
@@ -285,10 +287,24 @@ def write_tables(rows, everything, args):
                 tex.append("\\midrule")
             tex.append(f"\\multirow{{{sum(1 for q in rows if (q['dim_x'], q['dim_y']) == key)}}}{{*}}{{$\\dim X={r['dim_x']}$, $\\dim Y={r['dim_y']}$}}")
             last = key
-        name = {"MLGD": "\\mlgd{}", "MLGD-F": "\\mlgdf{}", "PMLGD": "P\\mlgd{}", "PMLGD-F": "P\\mlgdf{}"}[r["method"]]
+        name = {"MLGD": "\\mlgd{}", "MLGD-F": "\\mlgdf{}", "PMLGD": "P\\mlgd{}", "PMLGD-F": "P\\mlgdf{}",
+                "MLGD-X": "\\mlgd{} (oracle $\\fphi$)", "PMLGD-X": "P\\mlgd{} (oracle $\\fphi$)"}[r["method"]]
         tex.append(f" & {name} & ${r['tv_mean']:.3f} \\pm {r['tv_std']:.3f}$ & ${r['l2rel_mean']:.3f} \\pm {r['l2rel_std']:.3f}$ "
                    f"& ${r['time_mean']:.0f}$ \\\\")
     open(args.out + ".tex", "w").write("\n".join(tex) + "\n")
+    # compact rows for the main text: one line per scenario, TV per method (mean +- std)
+    crows, seen = [], []
+    for r in rows:
+        key = (r["dim_x"], r["dim_y"])
+        if key not in seen:
+            seen.append(key)
+    for key in seen:
+        cells = []
+        for m in args.methods:
+            rr = next((q for q in rows if (q["dim_x"], q["dim_y"]) == key and q["method"] == m), None)
+            cells.append("--" if rr is None else f"${rr['tv_mean']:.2f} \\pm {rr['tv_std']:.2f}$")
+        crows.append(f"({key[0]}, {key[1]}) & " + " & ".join(cells) + " \\\\")
+    open(args.out + "_compact.tex", "w").write("\n".join(crows) + "\n")
     # network-quality rows for the appendix table (same order as the main table)
     mrows = []
     for name, e in everything.items():
@@ -330,7 +346,7 @@ def write_tables(rows, everything, args):
         ap.append("")
     open(args.out + "_appendix.md", "w").write("\n".join(ap))
     print("\n".join(md))
-    print(f"[table] wrote {args.out}.json / .md / .tex / _models.tex / _appendix.md")
+    print(f"[table] wrote {args.out}.json / .md / .tex / _compact.tex / _models.tex / _appendix.md")
 
 
 def main():

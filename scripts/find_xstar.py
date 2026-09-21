@@ -14,7 +14,9 @@ polishes the answer with a few gradient steps, and returns the best x_hat.
 
 Inputs
   --prior         checkpoint from scripts/train_models.py --model unconditional
-  --sampler       checkpoint from scripts/train_models.py --model conditional
+  --sampler       checkpoint from scripts/train_models.py --model conditional, or 'exact':
+                  the analytic conditional of the target file's mixture as an oracle f_phi
+                  (differentiable by reparametrisation) to measure the search without sampler error
   --sampler-type  cm (few-step consistency model: MLGD-F) | diffusion (full
                   conditional diffusion: MLGD) | auto (read from the checkpoint)
   --target        a .pt from scripts/generate_data.py (target as a Gaussian
@@ -113,7 +115,7 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = p.add_argument_group("inputs")
     g.add_argument("--prior", required=True)
-    g.add_argument("--sampler", required=True)
+    g.add_argument("--sampler", required=True, help="conditional checkpoint, or 'exact' for the analytic conditional (oracle)")
     g.add_argument("--sampler-type", choices=["auto", "cm", "diffusion"], default="auto")
     g.add_argument("--target", required=True)
     g = p.add_argument_group("algorithm")
@@ -251,10 +253,17 @@ def main():
     args = parse_args()
     dev = args.device
     prior, prior_arch = load_model(args.prior, dev)
-    sampler, sampler_arch = load_model(args.sampler, dev)
+    if args.sampler == "exact":   # oracle: the analytic conditional of the target file's mixture, no sampler error
+        from samplers.exact import ExactConditionalSampler
+        _, info0 = load_target(args.target, "cpu")
+        assert info0.get("mu_list") is not None, "--sampler exact needs a target file with the mixture"
+        c0 = torch.load(args.target, map_location="cpu", weights_only=False)["condition_on"]
+        sampler, sampler_arch = ExactConditionalSampler(info0["mu_list"], info0["Sigma_list"], info0["alpha"], c0), "exact"
+    else:
+        sampler, sampler_arch = load_model(args.sampler, dev)
     assert prior_arch == "diffusion", "--prior must be an unconditional diffusion checkpoint"
     sampler_type = sampler_arch if args.sampler_type == "auto" else args.sampler_type
-    method = ("P" if args.algo == "particles" else "") + ("MLGD-F" if sampler_type == "cm" else "MLGD")
+    method = ("P" if args.algo == "particles" else "") + {"cm": "MLGD-F", "exact": "MLGD-X"}.get(sampler_type, "MLGD")
     R = args.n_particles if args.algo == "particles" else args.n_restarts
     target_generator, info = load_target(args.target, dev)
     loss_fn = make_loss(args)
