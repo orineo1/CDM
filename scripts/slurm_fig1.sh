@@ -25,7 +25,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p logs results
 # environment: a venv with CUDA torch (no modules needed when the torch wheel bundles CUDA)
-VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/GlobalConditional_venv}
+VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
 if [ -f "$VENV/bin/activate" ]; then source "$VENV/bin/activate"; fi
 
 N_RESTARTS=${N_RESTARTS:-25}

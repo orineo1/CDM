@@ -38,13 +38,13 @@ PREREQUISITES
 4. Create a virtual environment
 --------------------------------------------------------------------------------
 
-  python3 -m venv GlobalConditional_venv
-  source GlobalConditional_venv/bin/activate
+  python3 -m venv CDM_venv
+  source CDM_venv/bin/activate
 
   Verify:
 
-    which python                 # should point to GlobalConditional_venv/bin/python
-    which pip                    # should point to GlobalConditional_venv/bin/pip
+    which python                 # should point to CDM_venv/bin/python
+    which pip                    # should point to CDM_venv/bin/pip
 
 --------------------------------------------------------------------------------
 5. Install dependencies
@@ -68,7 +68,7 @@ PREREQUISITES
 --------------------------------------------------------------------------------
 
   cd ~/GlobalConditional
-  source GlobalConditional_venv/bin/activate
+  source CDM_venv/bin/activate
   python scripts/run_experiment.py --device cpu --epochs 1 --n-attempts 1
 
   This should complete in under a minute and confirm everything works.
@@ -91,7 +91,7 @@ PREREQUISITES
 
   module load python/3.10
   module load cuda/12.1
-  source ~/GlobalConditional/GlobalConditional_venv/bin/activate
+  source /sci/labs/orzuk/orzuk/venvs/CDM_venv/bin/activate
   cd ~/GlobalConditional
 
   python scripts/run_experiment.py --device cuda --epochs 20 --n-attempts 25
@@ -127,7 +127,7 @@ PREREQUISITES
 
   module load python/3.10
   module load cuda/12.1
-  source ~/GlobalConditional/GlobalConditional_venv/bin/activate
+  source /sci/labs/orzuk/orzuk/venvs/CDM_venv/bin/activate
   cd ~/GlobalConditional
 
   python scripts/run_experiment.py --device cuda --epochs 20 --n-attempts 25
