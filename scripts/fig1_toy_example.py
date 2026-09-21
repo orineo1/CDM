@@ -628,7 +628,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         vline(ax, m, lab(m, res[m]))
     ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
     y0, y1 = ax.get_ylim()
-    ax.annotate(r"$x^\star$", (x_star, y1), xytext=(4, -4), textcoords="offset points", ha="left", va="top",
+    ax.annotate(r"$x^*$", (x_star, y1), xytext=(-4, -4), textcoords="offset points", ha="right", va="top",
                 fontsize=fs_title - 1, zorder=6)
     for k, m in enumerate(methods):   # every restart / particle endpoint as a tick, one row per method
         xs = [q["x_hat"] for q in res[m].get("restarts", [])]
@@ -659,7 +659,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         j = int(np.argmax(dk))
         # label placement alternates so labels do not sit on other curves: above, right of, left of the peak
         place = [dict(xytext=(0, 4), ha="center", va="bottom"), dict(xytext=(26, -16), ha="left", va="top"),
-                 dict(xytext=(-8, 2), ha="right", va="bottom")][k % 3]
+                 dict(xytext=(-16, 2), ha="right", va="bottom")][k % 3]
         ax.annotate(rf"$x={cx:g}$", (float(y[j]), float(dk[j])), textcoords="offset points",
                     fontsize=fs_leg, color=c_decoy[k % len(c_decoy)], **place)
     ax.fill_between(y, gy, color=c_true, alpha=0.08, zorder=1)
@@ -671,7 +671,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
                 label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={max(r['l2_gmm'], 0.0):.4f}$")
     # the target is drawn last (dashed, like x*) so it stays visible where a recovered x-hat matches it exactly
     ax.plot(y, gy, color=c_true, ls="--", lw=2, zorder=5)
-    ax.set_xlim(ylo, yhi); ax.set_ylim(0, min(0.6, 1.1 * ax.get_ylim()[1] / 1.05)); ax.set_xlabel("y")
+    ax.set_xlim(ylo, yhi); ax.set_ylim(0, min(0.61, 1.1 * ax.get_ylim()[1] / 1.05)); ax.set_xlabel("y"); ax.set_ylabel("density")
     ax.set_title(r"induced conditional $\mathcal{P}(Y\mid X=x)$ vs. the target, on $y$", fontsize=fs_title)
     ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3 if len(methods) <= 2 else 2,
               frameon=False); ax.grid(alpha=0.2)
@@ -719,7 +719,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
         ax.axvline(x_star, color=c_true, ls="--", lw=1.8, zorder=4)
         if i == 0:
-            ax.annotate(r"$x^\star$", (x_star, ymax), xytext=(4, -4), textcoords="offset points", ha="left", va="top",
+            ax.annotate(r"$x^*$", (x_star, ymax), xytext=(-4, -4), textcoords="offset points", ha="right", va="top",
                         fontsize=fs_title - 1)
         ax.plot(x_grid, px, color=c_prior, ls="-.", lw=2.2, label=r"prior $\mathcal{P}(x)$", zorder=5)   # drawn last
         ax.set_xlim(xlo, xhi); ax.set_ylim(0, ymax); ax.grid(alpha=0.15)
@@ -732,7 +732,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
         else:
             ax.set_title(rf"CDMS samples, $\beta = {beta:g}$", fontsize=fs_title)
         if sweep_ylabel(i):
-            ax.set_ylabel(r"$\mathcal{Q}_\beta(x)$")
+            ax.set_ylabel("density")
         if sweep_xlabel(i):
             ax.set_xlabel("x")
         if i == len(betas) - 1:   # legend order: prior, Q_beta, guided samples, x*
