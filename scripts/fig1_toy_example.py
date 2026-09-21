@@ -608,7 +608,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     else:
         fig = plt.figure(figsize=(16, 7.5))
         outer = gridspec.GridSpec(2, 1, figure=fig, height_ratios=[1.15, 1], hspace=0.7)
-        top = outer[0].subgridspec(1, 3, wspace=0.28)
+        top = outer[0].subgridspec(1, 3, wspace=0.42)
         bot = outer[1].subgridspec(1, 4, wspace=0.28)
         top_axes = [fig.add_subplot(top[i]) for i in range(3)]
         sweep_axes = [fig.add_subplot(bot[i]) for i in range(4)]
@@ -734,7 +734,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
             ax.set_ylabel("density")
         if sweep_xlabel(i):
             ax.set_xlabel("x")
-        if i == len(betas) - 1:   # legend order: prior, Q_beta, guided samples, x*
+        if i == (len(betas) - 1 if layout == "lr" else 0):   # legend: last (stacked) or first (row) panel, where there is room
             h, l = ax.get_legend_handles_labels()
             order = [l.index(k) for k in (r"prior $\mathcal{P}(x)$", r"$\mathcal{Q}_\beta(x)$", "guided samples")]
             ax.legend([h[j] for j in order], [l[j] for j in order], fontsize=fs_leg - 1, loc="upper right", frameon=False)
