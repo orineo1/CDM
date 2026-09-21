@@ -24,7 +24,9 @@
 #SBATCH --error=logs/fig1-%j.err
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# sbatch runs a copy of this script from the spool dir, so locate the repo via the submit dir
+cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
+[ -f scripts/fig1_toy_example.py ] || { echo "run sbatch from the repo root"; exit 1; }
 mkdir -p logs results
 # environment: a venv with CUDA torch (no modules needed when the torch wheel bundles CUDA)
 VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}

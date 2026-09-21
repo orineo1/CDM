@@ -499,18 +499,23 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
     G = cond_params(st, st.x_star[0])
     gy = mixture_density_1d(y, G).detach()
     others = sorted({round(float(m[0]), 3) for m in st.mu_list} - {round(x_star, 3)})
-    greys = ["0.3", "0.5", "0.65", "0.75"]
-    for k, cx in enumerate(others):   # faint: what a wrong x induces
+    c_decoy = ["tab:brown", "tab:pink", "tab:cyan", "tab:olive"]
+    for k, cx in enumerate(others):   # what a wrong x induces: dotted, own colour, labelled at its peak
         pk = cond_params(st, torch.tensor(cx))
-        ax.plot(y, mixture_density_1d(y, pk).detach(), color=greys[k % len(greys)], ls=":", lw=1.4, zorder=1,
+        dk = mixture_density_1d(y, pk).detach().numpy()
+        ax.plot(y, dk, color=c_decoy[k % len(c_decoy)], ls=":", lw=1.6, zorder=1,
                 label=rf"$\mathcal{{P}}(Y\mid X={cx:g})$")
+        j = int(np.argmax(dk))
+        ax.annotate(rf"$x={cx:g}$", (float(y[j]), float(dk[j])), xytext=(0, 4), textcoords="offset points",
+                    ha="center", va="bottom", fontsize=fs_leg, color=c_decoy[k % len(c_decoy)])
     ax.fill_between(y, gy, color=c_true, alpha=0.08, zorder=1)
-    ax.plot(y, gy, color=c_true, lw=2.2, label=r"target $\mathcal{G}(Y)$", zorder=2)
     for r, c, lw, a, z, name in [(mlgd, c_mlgd, 4, 0.6, 3, "MLGD"), (mlgdf, c_mlgdf, 1.6, 1.0, 4, "MLGD-F")]:
         p = cond_params(st, torch.tensor(r["x_hat"]))
         ax.plot(y, mixture_density_1d(y, p).detach(), color=c, lw=lw, alpha=a, zorder=z,
                 label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={max(r['l2_gmm'], 0.0):.4f}$")
-    ax.set_xlim(ylo, yhi); ax.set_xlabel("y")
+    # the target is drawn last (dashed, like x*) so it stays visible where a recovered x-hat matches it exactly
+    ax.plot(y, gy, color=c_true, ls="--", lw=2, label=r"target $\mathcal{G}(Y)$", zorder=5)
+    ax.set_xlim(ylo, yhi); ax.set_ylim(0, 1.22 * ax.get_ylim()[1] / 1.05); ax.set_xlabel("y")   # headroom for the peak labels
     ax.set_title(r"induced conditional $\mathcal{P}(Y\mid X=x)$ vs. the target, on $y$", fontsize=fs_title)
     ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3, frameon=False); ax.grid(alpha=0.2)
 
