@@ -1,3 +1,4 @@
+import math
 import torch
 import numpy as np
 from scipy.optimize import fsolve
@@ -894,3 +895,30 @@ def wasserstein_1d_torch(x_vals, pdf1, pdf2):
         return torch.tensor(99.0)  # Return large distance instead of NaN
 
     return result
+
+
+def gmm_l2_distance(mu_p, Sigma_p, w_p, mu_q, Sigma_q, w_q):
+    """Exact squared L2 distance between two Gaussian mixtures.
+
+    ||p - q||^2 = <p,p> - 2<p,q> + <q,q>, with every Gaussian-Gaussian
+    inner product in closed form: <N(m1,S1), N(m2,S2)> = N(m1; m2, S1+S2).
+    Ported from conditional-matching-paper/simulations/src/dist_utils.py; this
+    is the evaluation metric of the paper's synthetic experiments (App. B.2).
+    """
+    def inner(mu1, S1, w1, mu2, S2, w2):
+        total = 0.0
+        for mu_i, S_i, w_i in zip(mu1, S1, w1):
+            for mu_j, S_j, w_j in zip(mu2, S2, w2):
+                S_sum = S_i + S_j
+                diff = mu_i - mu_j
+                d = mu_i.shape[0]
+                _, logdet = torch.linalg.slogdet(S_sum)
+                log_val = -0.5 * (d * math.log(2 * math.pi) + logdet
+                                  + diff @ torch.linalg.inv(S_sum) @ diff)
+                total += float(w_i) * float(w_j) * torch.exp(log_val).item()
+        return total
+
+    pp = inner(mu_p, Sigma_p, w_p, mu_p, Sigma_p, w_p)
+    qq = inner(mu_q, Sigma_q, w_q, mu_q, Sigma_q, w_q)
+    pq = inner(mu_p, Sigma_p, w_p, mu_q, Sigma_q, w_q)
+    return pp - 2 * pq + qq
