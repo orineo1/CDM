@@ -137,9 +137,13 @@ def _final_loss(model_cond, loss_function, cfg, x):
         return loss_function(pred_samples, target_samples).detach()
 
 
-def _prior_score(model_uncond, x, t=1):
-    """Approximate grad log P(x) from the noise predictor at the smallest noise level:
-    score_t(x) = -eps_theta(x, t) / sqrt(1 - abar_t), with x taken as x_t (abar_1 ~ 1)."""
+def _prior_score(model_uncond, x, t=None):
+    """Approximate grad log P(x) from the noise predictor at a small noise level:
+    score_t(x) = -eps_theta(x, t) / sqrt(1 - abar_t), with x taken as x_t (abar_t ~ 1).
+    t defaults to a tenth of the schedule: at t = 1 the network's relative error is worst
+    (scripts/check_models.py), while at t ~ T/10 it is ~1e-2 and abar_t is still ~1."""
+    if t is None:
+        t = max(1, int(round(0.1 * int(model_uncond.diffusion_steps))))
     t_batch = torch.full([x.shape[0], 1], t, device=x.device)
     eps = model_uncond(x, t_batch, None)
     return -eps / torch.sqrt(1 - model_uncond.baralphas[t])

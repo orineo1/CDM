@@ -96,6 +96,7 @@ python scripts/run_optimization.py --data runs/mog4d/data.pt --model-dir runs/mo
 | Figure | Command |
 |---|---|
 | Fig. 1, toy example: joint, induced conditional vs. target, CDMS beta-sweep | `python scripts/fig1_toy_example.py` |
+| Model check: score network vs. exact noised-mixture score, unguided samples vs. P(X), conditional sampler vs. exact P(Y\|X=x) at x*, the cluster centres and over x | `python scripts/check_models.py --setting hard` or `--prior ... --sampler ... --data ...` |
 | App. G subsampling control on the 10D setting | `python scripts/control_subsample.py --sim-dir /path/to/conditional-matching-paper/simulations --n-restarts 25` |
 
 `fig1_toy_example.py` trains its three small networks on first use (cached under
