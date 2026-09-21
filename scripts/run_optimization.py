@@ -19,11 +19,11 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 import torch
-import dist_utils
-import Diffusion
-import ConsistencyModels
-import FlowMatching
-import Optimization
+from utils import dist as dist_utils
+from priors import diffusion as Diffusion
+from samplers import consistency as ConsistencyModels
+from samplers import flow_matching as FlowMatching
+from legacy import Optimization
 
 
 def parse_args():

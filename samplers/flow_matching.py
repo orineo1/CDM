@@ -5,8 +5,8 @@ from flow_matching.solver import Solver, ODESolver
 from torch import nn, Tensor
 from tqdm import tqdm
 from torch.distributions import Independent, Normal
-from FM_Solver_Extension_module import add_compute_likelihood_allow_grad
-from NN_utils import GenericNN,TimeEmbedding
+from samplers.fm_solver import add_compute_likelihood_allow_grad
+from utils.nn import GenericNN,TimeEmbedding
 
 
 class FMModel(nn.Module):

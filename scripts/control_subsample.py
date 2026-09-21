@@ -28,7 +28,7 @@ worse than uniform_detach, the unrescaled gradient was gaining from shrinkage.
 
 Usage (one GPU):
 
-    python oz/control_subsample.py --sim-dir /path/to/conditional-matching-paper/simulations \
+    python scripts/control_subsample.py --sim-dir /path/to/conditional-matching-paper/simulations \
         --n-restarts 25 --out results/control_subsample_10d.json
 
 Quick pass: --n-restarts 10, or --configs all_250 uniform_detach all_125.
@@ -48,9 +48,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from guidance import (GuidanceConfig, optimize_guided, init_randn, init_zeros,  # noqa: E402
                       perturb_beta_ratio, aggregate_logsumexp)
-from LossFunctions import MMDLoss, RBF                                          # noqa: E402
+from losses.functions import MMDLoss, RBF                                          # noqa: E402
 from gcio.results import save_run                                               # noqa: E402
-import dist_utils                                                               # noqa: E402
+from utils import dist as dist_utils  # noqa: E402
 
 # name: (n_cond, k_grad, zeta, rescale_by_n_over_k, grad_loss)
 CONFIGS = {

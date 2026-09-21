@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import ot
-import dist_utils
+from utils import dist as dist_utils
 #### MMD Loss #####
 
 class RBF(nn.Module):

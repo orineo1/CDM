@@ -22,11 +22,11 @@ def test_imports():
     import guidance.core
     import guidance.config
     import gcio.results
-    import Optimization
-    import Optimization_legacy
-    import LossFunctions
-    import Diffusion
-    import ConsistencyModels
+    from legacy import Optimization
+    from legacy import Optimization_legacy
+    from losses import functions as LossFunctions
+    from priors import diffusion as Diffusion
+    from samplers import consistency as ConsistencyModels
 
     assert hasattr(guidance, "optimize_guided")
     assert hasattr(guidance, "GuidanceConfig")
@@ -83,9 +83,9 @@ def test_logsumexp_is_a_softmin_not_a_mean():
 def test_end_to_end_tiny():
     """Run the core end to end on a tiny model. Values are meaningless
     (untrained); we only require it completes and returns finite numbers."""
-    from Diffusion import DiffusionModel
-    from ConsistencyModels import ConsistencyModel
-    from LossFunctions import MMDLoss, RBF
+    from priors.diffusion import DiffusionModel
+    from samplers.consistency import ConsistencyModel
+    from losses.functions import MMDLoss, RBF
     from guidance import GuidanceConfig, optimize_guided, init_randn, perturb_beta_ratio
 
     torch.manual_seed(SEED)

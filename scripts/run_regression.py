@@ -42,8 +42,8 @@ REL_TOL = 0.05
 
 
 def build_models(device, seed, nunits=128, diffusion_steps=100):
-    from Diffusion import DiffusionModel
-    from ConsistencyModels import ConsistencyModel
+    from priors.diffusion import DiffusionModel
+    from samplers.consistency import ConsistencyModel
 
     torch.manual_seed(seed)
     if device == "cuda":
@@ -116,8 +116,8 @@ def main():
                     help="run both paths and compare them directly")
     args = ap.parse_args()
 
-    import Optimization
-    import Optimization_legacy
+    from legacy import Optimization
+    from legacy import Optimization_legacy
 
     if args.compare:
         print("Running LEGACY:")

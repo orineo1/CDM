@@ -1,12 +1,12 @@
 import torch
 from torch import nn
 import ot
-import dist_utils
+from utils import dist as dist_utils
 import torch
 import numpy as np
 from functools import partial
 from tqdm import tqdm
-import LossFunctions
+from losses import functions as LossFunctions
 import pandas as pd
 
 def evaluate_conditional_model(

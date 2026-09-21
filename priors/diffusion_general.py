@@ -175,7 +175,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import trange
-from NN_utils import GenericNN, TimeEmbedding  # Assuming you've defined this elsewhere
+from utils.nn import GenericNN, TimeEmbedding  # Assuming you've defined this elsewhere
 
 
 class DiffusionModel(nn.Module):

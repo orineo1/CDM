@@ -34,10 +34,10 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import Optimization
-import Optimization_legacy
-from Diffusion import DiffusionModel
-from ConsistencyModels import ConsistencyModel
+from legacy import Optimization
+from legacy import Optimization_legacy
+from priors.diffusion import DiffusionModel
+from samplers.consistency import ConsistencyModel
 
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

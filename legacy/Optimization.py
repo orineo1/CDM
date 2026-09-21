@@ -1,12 +1,12 @@
 
 import importlib
-import Diffusion
-from LossFunctions import MMDLoss,RBF
-from dist_utils import generate_mog_samples,generate_mog_samples_not_differentiable
-import ConsistencyModels
-import  FlowMatching
-from ConsistencyModels import ConsistencyModel
-import dist_utils
+from priors import diffusion as Diffusion
+from losses.functions import MMDLoss,RBF
+from utils.dist import generate_mog_samples,generate_mog_samples_not_differentiable
+from samplers import consistency as ConsistencyModels
+from samplers import flow_matching as FlowMatching
+from samplers.consistency import ConsistencyModel
+from utils import dist as dist_utils
 import torch.nn.functional as F
 import torch
 import torch.optim as optim_cond

@@ -23,9 +23,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 import torch
 import torch.nn as nn
-import Diffusion
-import ConsistencyModels
-import FlowMatching
+from priors import diffusion as Diffusion
+from samplers import consistency as ConsistencyModels
+from samplers import flow_matching as FlowMatching
 
 
 def parse_args():
@@ -123,8 +123,10 @@ def train_conditional(X_train_full, args, nfeatures, condition_on, device):
 
     if args.architecture == "cm":
         print(f"\n--- Training conditional consistency model (iCT) P(Y|X) ---")
+        # iCT models Y | X only: its feature dimension is dim(Y) = nfeatures - condition_on
+        # (the conditional diffusion model below models the full joint and slices Y later)
         model = ConsistencyModels.ConsistencyModeliCT(
-            nfeatures=nfeatures, condition_on=condition_on,
+            nfeatures=nfeatures - condition_on, condition_on=condition_on,
             nunits=args.nunits, depth=args.nblocks, device=device,
         )
         print(f"    Data: {X_train_full.shape[0]} samples, {args.epochs} epochs, "
@@ -172,6 +174,15 @@ def train_conditional(X_train_full, args, nfeatures, condition_on, device):
     return model
 
 
+def _n_blocks(net):
+    """Number of residual blocks of a GenericNN, robust to the attribute name
+    (pre-refactor `blocks`, post-refactor `res_blocks`)."""
+    import torch.nn as nn
+    for attr in ("blocks", "res_blocks"):
+        if hasattr(net, attr):
+            return len(getattr(net, attr))
+    return sum(isinstance(m, nn.Linear) for m in net.modules()) - 1
+
 def save_model(model, path, architecture, config_extra=None):
     """Save model in a uniform format."""
     checkpoint = {
@@ -183,7 +194,7 @@ def save_model(model, path, architecture, config_extra=None):
         checkpoint["config"] = {
             "nfeatures": model.nfeatures,
             "nunits": model.nunits,
-            "nblocks": len(model.net.blocks),
+            "nblocks": _n_blocks(model.net),
             "condition": model.condition,
             "condition_on": model.condition_on,
             "diffusion_steps": model.diffusion_steps,
@@ -195,7 +206,7 @@ def save_model(model, path, architecture, config_extra=None):
             "nfeatures": model.nfeatures,
             "nunits": model.nunits,
             "condition_on": model.condition_on,
-            "nblocks": len(model.vf.blocks),
+            "nblocks": _n_blocks(model.vf),
         }
     if config_extra:
         checkpoint.update(config_extra)

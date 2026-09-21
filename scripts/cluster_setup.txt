@@ -69,7 +69,7 @@ PREREQUISITES
 
   cd ~/GlobalConditional
   source GlobalConditional_venv/bin/activate
-  python oz/run_experiment.py --device cpu --epochs 1 --n-attempts 1
+  python scripts/run_experiment.py --device cpu --epochs 1 --n-attempts 1
 
   This should complete in under a minute and confirm everything works.
 
@@ -94,7 +94,7 @@ PREREQUISITES
   source ~/GlobalConditional/GlobalConditional_venv/bin/activate
   cd ~/GlobalConditional
 
-  python oz/run_experiment.py --device cuda --epochs 20 --n-attempts 25
+  python scripts/run_experiment.py --device cuda --epochs 20 --n-attempts 25
   ---- cut here ----
 
   Submit:
@@ -130,7 +130,7 @@ PREREQUISITES
   source ~/GlobalConditional/GlobalConditional_venv/bin/activate
   cd ~/GlobalConditional
 
-  python oz/run_experiment.py --device cuda --epochs 20 --n-attempts 25
+  python scripts/run_experiment.py --device cuda --epochs 20 --n-attempts 25
   ---- cut here ----
 
   Submit with: qsub job.sh
@@ -156,28 +156,28 @@ PREREQUISITES
 --------------------------------------------------------------------------------
 
   Default (2D MoG, LGD-CM, quick):
-    python oz/run_experiment.py
+    python scripts/run_experiment.py
 
   Full run:
-    python oz/run_experiment.py --epochs 20 --n-attempts 25
+    python scripts/run_experiment.py --epochs 20 --n-attempts 25
 
   Using D-FLOW instead:
-    python oz/run_experiment.py --method DFLOW
+    python scripts/run_experiment.py --method DFLOW
 
   Using plain LGD (diffusion conditional):
-    python oz/run_experiment.py --method LGD --architecture diffusion --epochs 20
+    python scripts/run_experiment.py --method LGD --architecture diffusion --epochs 20
 
   Using a params file:
-    python oz/run_experiment.py --params-file SimulationParameters/mog_2d_full.txt
+    python scripts/run_experiment.py --params-file SimulationParameters/mog_2d_full.txt
 
   Random 10D MoG:
-    python oz/run_experiment.py --random-mog --dim 10 --n-components 4 --condition-on 1
+    python scripts/run_experiment.py --random-mog --dim 10 --n-components 4 --condition-on 1
 
   Reproducible run:
-    python oz/run_experiment.py --seed 42
+    python scripts/run_experiment.py --seed 42
 
   Compare likelihood vs D-FLOW (all-in-one):
-    python oz/compare_methods.py --n-attempts 5 --direct --architecture fm --epochs 10
+    python scripts/compare_methods.py --n-attempts 5 --direct --architecture fm --epochs 10
 
 --------------------------------------------------------------------------------
 Cluster-specific values you need to fill in

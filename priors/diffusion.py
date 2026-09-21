@@ -2,7 +2,7 @@
 import torch.optim as optim
 import torch
 import torch.nn as nn
-from NN_utils import GenericNN,TimeEmbedding  # Assuming you've defined this elsewhere
+from utils.nn import GenericNN,TimeEmbedding  # Assuming you've defined this elsewhere
 from tqdm import tqdm
 
 

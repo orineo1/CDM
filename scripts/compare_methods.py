@@ -34,11 +34,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import torch
 import numpy as np
 
-import dist_utils
-import FlowMatching
-import Optimization
+from utils import dist as dist_utils
+from samplers import flow_matching as FlowMatching
+from legacy import Optimization
 from likelihood_optimizer import optimize_likelihood, optimize_likelihood_direct
-from LossFunctions import MMDLoss, RBF
+from losses.functions import MMDLoss, RBF
 
 
 def parse_args():

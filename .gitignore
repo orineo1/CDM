@@ -23,3 +23,4 @@ results/*.png
 checkpoints/toy/
 results/*.log
 results/fig1_*.json
+runs/

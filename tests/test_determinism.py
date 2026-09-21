@@ -16,9 +16,9 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from Diffusion import DiffusionModel
-from ConsistencyModels import ConsistencyModel
-from LossFunctions import MMDLoss, RBF
+from priors.diffusion import DiffusionModel
+from samplers.consistency import ConsistencyModel
+from losses.functions import MMDLoss, RBF
 from guidance import GuidanceConfig, optimize_guided, init_randn, perturb_beta_ratio
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

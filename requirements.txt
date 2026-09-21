@@ -5,6 +5,11 @@ numpy>=1.24
 # Optimal transport (utils.dist, losses.functions)
 POT>=0.9
 
+# Flow-matching sampler and its ODE solver (samplers/flow_matching, scripts/likelihood_optimizer)
+flow_matching>=1.0
+torchdiffeq>=0.2
+scipy>=1.10
+
 # Diffusion schedulers (MNIST: DDIMScheduler)
 diffusers>=0.27
 transformers>=4.38
