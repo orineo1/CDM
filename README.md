@@ -23,7 +23,8 @@ pip install -r requirements.txt            # CPU is enough for the synthetic exa
 
 `scripts/find_xstar.py` is the method. It takes a prior over `X`, a conditional
 sampler for `Y|X` and a target `G(Y)`, runs guided reverse diffusion with the
-distributional loss as guidance, and returns the best `x_hat` over several restarts:
+distributional loss as guidance, as independent restarts or as a resampled particle
+population, and returns the best `x_hat`:
 
 ```bash
 python scripts/find_xstar.py \
@@ -47,7 +48,9 @@ file, which describes `G` as a mixture and also carries `x*` for evaluation, or 
 | `--select all\|uniform`, `--n-sel` | backpropagate through all samples or a random subset | all |
 | `--n-mc`, `--perturb`, `--aggregate` | the outer-loop Monte-Carlo estimator | preset by `--guidance` |
 | `--step-size`, `--zeta`, `--eta`, `--guidance-cutoff-t`, `--init` | step rule, DDIM stochasticity, initialisation | 1.0, 1.0, 0, none, randn |
-| `--n-attempts`, `--seed`, `--device`, `--final-n-cond` | restarts and reporting | 10, 42, auto, 4 n_cond |
+| `--algo lgd\|particles` | independent restarts (best final loss wins), or one population of `--n-particles` trajectories run in lockstep and resampled by `exp(-beta * loss)` whenever the effective sample size drops below `--ess-frac` of the population (`--resample-beta`, `--resample-every`, `--weight-mode`) | lgd |
+| `--refine-steps`, `--refine-lr`, `--refine-lambda` | post-refinement for either algorithm: plain gradient steps on the plug-in loss from the returned `x_hat`, no diffusion, with an optional prior-score term | 0 |
+| `--n-attempts`, `--seed`, `--device`, `--final-n-cond` | restarts (lgd) or populations (particles) and reporting | 10 / 1, 42, auto, 4 n_cond |
 
 Every attempt prints its `x_hat`, final loss and, when `x*` is known, the
 distance to it and the exact L2 distance between `P(Y|X=x_hat)` and `G`; the
@@ -98,9 +101,19 @@ python scripts/run_optimization.py --data runs/mog4d/data.pt --model-dir runs/mo
 `fig1_toy_example.py` trains its three small networks on first use (cached under
 `checkpoints/toy/<setting>/`), writes the simulation to `results/fig1_<setting>_sim.json`
 and `_sweep.npz`, and draws the figure from those files. Re-running only redraws;
-`--rerun-sim` recomputes. `--setting {bimodal,paper,mog2d}` picks the joint,
-`--quick` is a one-minute smoke test, `--uncond/--cond/--cm {auto,train,load}`
-control each network. CPU: about 5 minutes with cached models, 9 with training.
+`--rerun-sim` recomputes. `--setting {hard,bimodal,paper,mog2d}` picks the joint
+(`hard`: four tilted clusters in `x`, one of which induces the target; the others
+are decoys with a different number, width or position of modes). `--methods`
+chooses among `MLGD`, `MLGD-F` (independent restarts, `--n-restarts`) and
+`PMLGD`, `PMLGD-F` (one resampled particle population with the same budget,
+`--resample-beta`, `--ess-frac`); `--refine-steps` adds post-refinement to every
+method. The figure shows the joint with every recovered `x_hat`, the population
+loss `L(x)` next to the sample loss the optimiser sees, the induced conditionals
+against the target, and the beta-sweep against the analytic `Q_beta`
+(`--n-beta-samples`, `--betas`, `--layout lr|tb`). `--quick` is a smoke test,
+`--uncond/--cond/--cm {auto,train,load}` control each network. On a GPU the
+`hard` setting with four methods and ten restarts takes about 8 minutes;
+`scripts/slurm_fig1.sh` is the cluster job.
 `control_subsample.py` needs the paper repository's 10D checkpoints, downloaded
 from HuggingFace on first use.
 
