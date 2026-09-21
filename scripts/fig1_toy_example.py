@@ -498,7 +498,9 @@ def make_figure(st, sim, sweep, out_png):
         ax.set_title(rf"$\beta = {beta:g}$", fontsize=fs_title); ax.grid(alpha=0.15)
         if i == 0:
             ax.set_ylabel(r"$\mathcal{Q}_\beta(x)$")
-            ax.legend(fontsize=fs_leg - 1, loc="upper left", framealpha=0.9)
+        if i == len(betas) - 1:
+            # the last panel (largest beta) has the most empty space: mass has left the decoys
+            ax.legend(fontsize=fs_leg - 1, loc="upper right", frameon=False)
 
     fig.savefig(out_png, dpi=200, bbox_inches="tight")
     print(f"[figure] wrote {out_png}")
