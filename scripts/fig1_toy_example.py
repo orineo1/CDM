@@ -164,6 +164,8 @@ def parse_args():
     p.add_argument("--out", default=None, help="figure path; default results/fig1_<setting>.png")
     p.add_argument("--rerun-sim", action="store_true",
                    help="run the simulation again even if <out>_sim.json exists (default: plot from cache)")
+    p.add_argument("--rerun-sweep", action="store_true",
+                   help="recompute only the beta sweep (and the loss curves) from the cached run; methods are kept")
     p.add_argument("--layout", choices=["lr", "tb"], default="lr",
                    help="lr: left column (joint, conditionals, loss) + right 2x2 beta sweep; tb: top 1x3 + bottom 1x4")
     for name, what in [("uncond", "score network for P(X)"), ("cond", "conditional diffusion sampler for Y|X (MLGD)"),
@@ -194,7 +196,7 @@ def parse_args():
                    help="independent restarts per method; the best final loss is shown, all endpoints are saved")
     p.add_argument("--init", choices=["randn", "zeros"], default="randn",
                    help="x_T initialisation; the paper says N(0,I), the legacy code used zeros")
-    p.add_argument("--betas", type=float, nargs="+", default=[0.0, 0.5, 2.0, 8.0])
+    p.add_argument("--betas", type=float, nargs="+", default=[0.0, 2.0, 8.0, 32.0])
     p.add_argument("--n-beta-samples", type=int, default=2000, help="guided trajectories per beta, run as one batch")
     p.add_argument("--quick", action="store_true", help="tiny run to check the pipeline")
     a = p.parse_args()
@@ -502,18 +504,31 @@ def simulate(st, args):
         model = cm if use_cm else cond
         results[name] = run_particles(st, uncond, model, use_cm, args) if name.startswith("P") \
             else run_mlgd_restarts(st, uncond, model, use_cm, args)
+    sim = {"setting": st.name, "args": vars(args), "train_times_s": train_times, **results, "methods": list(args.methods)}
+    return _sweep_and_save(st, uncond, cond, cm, args, sim)
+
+
+def _sweep_and_save(st, uncond, cond, cm, args, sim):
     sweep, diag = run_beta_sweep(st, uncond, args)
     curves = {"MLGD": empirical_loss_curve(st, cond, False, args), "MLGD-F": empirical_loss_curve(st, cm, True, args)}
-    sim = {"setting": st.name, "args": vars(args), "train_times_s": train_times, **results, "methods": list(args.methods),
-           "empirical_loss": curves, "betas": list(args.betas),
-           "beta_sweep": {str(b): {"mean": float(np.mean(s)), "std": float(np.std(s)), "n": int(len(s)), **diag[b]}
-                          for b, s in sweep.items()}}
+    sim.update({"empirical_loss": curves, "betas": list(args.betas),
+                "beta_sweep": {str(b): {"mean": float(np.mean(s)), "std": float(np.std(s)), "n": int(len(s)), **diag[b]}
+                               for b, s in sweep.items()}})
     pj, pn = sim_paths(args.out)
     with open(pj, "w") as f:
         json.dump(sim, f, indent=2)
     np.savez(pn, betas=np.array(args.betas), **{f"beta_{b}": s for b, s in sweep.items()})
     print(f"[sim] wrote {pj} and {pn}")
     return sim, sweep
+
+
+def rerun_sweep(st, args):
+    """Keep the cached method results, recompute the beta sweep and the loss curves."""
+    cached = load_sim(args)
+    assert cached is not None, "--rerun-sweep needs a cached simulation"
+    sim, _ = cached
+    uncond, cond, cm, _ = get_models(st, args)
+    return _sweep_and_save(st, uncond, cond, cm, args, sim)
 
 
 def load_sim(args):
@@ -721,8 +736,11 @@ def main():
     st = make_setting(args.setting)
     print(f"[setup] setting={st.name} device={args.device} seed={args.seed} quick={args.quick}")
 
-    cached = None if args.rerun_sim else load_sim(args)
-    sim, sweep = cached if cached is not None else simulate(st, args)
+    if args.rerun_sweep:   # takes precedence over --rerun-sim: the methods are kept from the cache
+        sim, sweep = rerun_sweep(st, args)
+    else:
+        cached = None if args.rerun_sim else load_sim(args)
+        sim, sweep = cached if cached is not None else simulate(st, args)
     make_figure(st, sim, sweep, args.out, layout=args.layout)
 
 
