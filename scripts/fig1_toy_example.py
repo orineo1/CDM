@@ -465,7 +465,7 @@ def make_figure(st, sim, sweep, out_png):
             ax.scatter(xs, [y0 + off * (y1 - y0)] * len(xs), marker="|", s=120, color=c, lw=1.5, zorder=5, clip_on=False)
     ax.set_xlim(xlo, xhi); ax.set_xlabel("x"); ax.set_ylabel("y")
     ax.set_title(r"joint $\mathcal{P}(X, Y)$", fontsize=fs_title)
-    ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False); ax.grid(alpha=0.2)
+    ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=2, frameon=False); ax.grid(alpha=0.2)
 
     # top right: conditionals vs target (on y)
     ax = fig.add_subplot(gs[0, 2:4])

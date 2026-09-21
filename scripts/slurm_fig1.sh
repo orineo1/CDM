@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Figure 1 (toy example) on the cluster: all settings, with restarts.
 #
-#   sbatch scripts/slurm_fig1.sh                 # everything below
+#   sbatch --partition=<gpu partition> scripts/slurm_fig1.sh      # everything below
 #   sbatch scripts/slurm_fig1.sh hard            # one setting
 #   N_RESTARTS=50 sbatch scripts/slurm_fig1.sh   # more restarts
 #
@@ -13,7 +13,7 @@
 #   scp -r cluster:GlobalConditional/results/fig1_* results/
 #
 #SBATCH --job-name=cdm-fig1
-#SBATCH --partition=gpu            # <- your GPU partition
+#SBATCH --partition=gpu            # override: sbatch --partition=<name> scripts/slurm_fig1.sh
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
@@ -24,9 +24,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 mkdir -p logs results
-# environment: adapt to the cluster (see scripts/cluster_setup.txt)
-# module load python/3.10 cuda/12.1
-# source GlobalConditional_venv/bin/activate
+# environment: a venv with CUDA torch (no modules needed when the torch wheel bundles CUDA)
+VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/GlobalConditional_venv}
+if [ -f "$VENV/bin/activate" ]; then source "$VENV/bin/activate"; fi
 
 N_RESTARTS=${N_RESTARTS:-25}
 SETTINGS=${1:-"hard bimodal paper"}
