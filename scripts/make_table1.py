@@ -217,13 +217,23 @@ def collect(settings, args):
                         pts += [q["x_hat"] for q in a.get("restarts", a.get("particles", [a]))]
                     hits = int(sum(np.linalg.norm(np.array(p_) - xs) < half for p_ in pts)); total = len(pts)
             entry[m]["hits"] = None if hits is None else f"{hits}/{total}"
+            # scale-free success rate: fraction of all trajectories whose induced conditional is within TV < 0.5 of G
+            succ = None
+            if data is not None and "target_means" in data["raw"]:
+                pts = []
+                for a in r["attempts"]:
+                    pts += [q["x_hat"] for q in a.get("restarts", a.get("particles", [a]))]
+                tvs = [scale_free_distances(data, p_, n_mc=3000, seed=i)["tv"] for i, p_ in enumerate(pts)]
+                succ = f"{sum(t < 0.5 for t in tvs)}/{len(tvs)}"
+                entry[m]["tv_all_trajectories"] = tvs
+            entry[m]["success_tv"] = succ
             s = summ
             tv = s.get("tv", {"mean": float("nan"), "std": float("nan")})
             rel = s.get("l2_rel", {"mean": float("nan"), "std": float("nan")})
             rows.append({"setting": st["name"], "dim_x": st.get("dim_x"), "dim_y": st.get("dim_y"), "method": m,
                          "tv_mean": tv["mean"], "tv_std": tv["std"], "l2rel_mean": rel["mean"], "l2rel_std": rel["std"],
                          "l2_mean": s["l2_gmm"]["mean"], "l2_std": s["l2_gmm"]["std"], "n": s["l2_gmm"]["n"],
-                         "time_mean": s["time_s"]["mean"], "hits": entry[m]["hits"],
+                         "time_mean": s["time_s"]["mean"], "hits": entry[m]["hits"], "success": entry[m]["success_tv"],
                          "resamplings": (np.mean([a["n_resamples"] for a in r["attempts"]]) if m.startswith("P") else None)})
         everything[st["name"]] = entry
     return rows, everything
@@ -277,13 +287,13 @@ def write_tables(rows, everything, args):
     with open(args.out + ".json", "w") as f:
         json.dump({"rows": rows, "scenarios": everything, "args": vars(args)}, f, indent=2)
     # markdown
-    md = ["| dim X | dim Y | method | TV(P(Y|x_hat), G) mean +- std | relative L2 | raw L2 GMM | time / attempt (s) | in x* basin | resamplings |",
-          "|---|---|---|---|---|---|---|---|---|"]
+    md = ["| dim X | dim Y | method | TV(P(Y|x_hat), G) mean +- std | relative L2 | raw L2 GMM | time / attempt (s) | trajectories with TV<0.5 | in x* basin | resamplings |",
+          "|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         rs = "" if r["resamplings"] is None else f"{r['resamplings']:.1f}"
         md.append(f"| {r['dim_x']} | {r['dim_y']} | {r['method']} | {r['tv_mean']:.3f} +- {r['tv_std']:.3f} (n={r['n']}) | "
                   f"{r['l2rel_mean']:.3f} +- {r['l2rel_std']:.3f} | {r['l2_mean']:.4f} +- {r['l2_std']:.4f} | "
-                  f"{r['time_mean']:.0f} | {r['hits'] or ''} | {rs} |")
+                  f"{r['time_mean']:.0f} | {r['success'] or ''} | {r['hits'] or ''} | {rs} |")
     open(args.out + ".md", "w").write("\n".join(md) + "\n")
     # latex rows (booktabs body, same column order as the paper's table)
     tex = []
@@ -349,7 +359,7 @@ def write_tables(rows, everything, args):
                     ap.append(f"- {k}: {c[k]['metric_at_points']} at x* {at:.3f}; SWD over random x {c[k]['swd_norm_random_x_mean']:.3f}")
         for m in args.methods:
             if m in e:
-                ap.append(f"- {m}: {e[m]['n_attempts']} attempts x budget {e[m]['budget']}; in x* basin {e[m]['hits']}; "
+                ap.append(f"- {m}: {e[m]['n_attempts']} attempts x budget {e[m]['budget']}; trajectories with TV<0.5: {e[m].get('success_tv')}; in x* basin {e[m]['hits']}; "
                           f"per-attempt L2 {[round(a['l2_gmm'], 4) for a in e[m]['attempts']]}")
         ap.append("")
     open(args.out + "_appendix.md", "w").write("\n".join(ap))
