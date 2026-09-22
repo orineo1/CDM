@@ -227,11 +227,17 @@ def collect(settings, args):
                 succ = f"{sum(t < 0.5 for t in tvs)}/{len(tvs)}"
                 entry[m]["tv_all_trajectories"] = tvs
             entry[m]["success_tv"] = succ
+            # whitened distance ||x_hat - x*|| of the returned answers (mixtures are standardized, so this is in sd units of X)
+            if r.get("x_star") is not None:
+                dd = [float(np.linalg.norm(np.array(a["x_hat"]) - np.array(r["x_star"]))) for a in r["attempts"]]
+                summ["dist"] = {"mean": float(np.mean(dd)), "std": float(np.std(dd)), "n": len(dd)}
             s = summ
             tv = s.get("tv", {"mean": float("nan"), "std": float("nan")})
             rel = s.get("l2_rel", {"mean": float("nan"), "std": float("nan")})
+            dist = s.get("dist", {"mean": float("nan"), "std": float("nan")})
             rows.append({"setting": st["name"], "dim_x": st.get("dim_x"), "dim_y": st.get("dim_y"), "method": m,
                          "tv_mean": tv["mean"], "tv_std": tv["std"], "l2rel_mean": rel["mean"], "l2rel_std": rel["std"],
+                         "dist_mean": dist["mean"], "dist_std": dist["std"],
                          "l2_mean": s["l2_gmm"]["mean"], "l2_std": s["l2_gmm"]["std"], "n": s["l2_gmm"]["n"],
                          "time_mean": s["time_s"]["mean"], "hits": entry[m]["hits"], "success": entry[m]["success_tv"],
                          "resamplings": (np.mean([a["n_resamples"] for a in r["attempts"]]) if m.startswith("P") else None)})
@@ -287,11 +293,12 @@ def write_tables(rows, everything, args):
     with open(args.out + ".json", "w") as f:
         json.dump({"rows": rows, "scenarios": everything, "args": vars(args)}, f, indent=2)
     # markdown
-    md = ["| dim X | dim Y | method | TV(P(Y|x_hat), G) mean +- std | relative L2 | raw L2 GMM | time / attempt (s) | trajectories with TV<0.5 | in x* basin | resamplings |",
-          "|---|---|---|---|---|---|---|---|---|---|"]
+    md = ["| dim X | dim Y | method | TV(P(Y|x_hat), G) mean +- std | ||x_hat-x*|| (sd units) | relative L2 | raw L2 GMM | time / attempt (s) | trajectories with TV<0.5 | in x* basin | resamplings |",
+          "|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         rs = "" if r["resamplings"] is None else f"{r['resamplings']:.1f}"
         md.append(f"| {r['dim_x']} | {r['dim_y']} | {r['method']} | {r['tv_mean']:.3f} +- {r['tv_std']:.3f} (n={r['n']}) | "
+                  f"{r['dist_mean']:.3f} +- {r['dist_std']:.3f} | "
                   f"{r['l2rel_mean']:.3f} +- {r['l2rel_std']:.3f} | {r['l2_mean']:.4f} +- {r['l2_std']:.4f} | "
                   f"{r['time_mean']:.0f} | {r['success'] or ''} | {r['hits'] or ''} | {rs} |")
     open(args.out + ".md", "w").write("\n".join(md) + "\n")
@@ -307,8 +314,8 @@ def write_tables(rows, everything, args):
             last = key
         name = {"MLGD": "\\mlgd{}", "MLGD-F": "\\mlgdf{}", "PMLGD": "P\\mlgd{}", "PMLGD-F": "P\\mlgdf{}",
                 "MLGD-X": "\\mlgd{} (oracle $\\fphi$)", "PMLGD-X": "P\\mlgd{} (oracle $\\fphi$)"}[r["method"]]
-        tex.append(f" & {name} & ${r['tv_mean']:.3f} \\pm {r['tv_std']:.3f}$ & ${r['l2rel_mean']:.3f} \\pm {r['l2rel_std']:.3f}$ "
-                   f"& ${r['time_mean']:.0f}$ \\\\")
+        tex.append(f" & {name} & ${r['tv_mean']:.3f} \\pm {r['tv_std']:.3f}$ & ${r['dist_mean']:.3f} \\pm {r['dist_std']:.3f}$ "
+                   f"& ${r['l2rel_mean']:.3f} \\pm {r['l2rel_std']:.3f}$ & ${r['time_mean']:.0f}$ \\\\")
     open(args.out + ".tex", "w").write("\n".join(tex) + "\n")
     # compact rows for the main text: one line per scenario, TV per method (mean +- std)
     crows, seen = [], []
