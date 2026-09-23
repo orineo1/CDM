@@ -84,8 +84,13 @@ def guided_smc(st, model, beta, N, args, corrected):
         x_new = mu_q + sigma * noise
         if corrected and beta > 0:
             logG_t = -beta * L
-            # log p(x_new | x) - log q(x_new | x): same variance, means mu_p and mu_q
-            log_pq = ((x_new - mu_q) ** 2 - (x_new - mu_p) ** 2).sum(1) / (2 * sigma ** 2)
+            # log p(x_new | x) - log q(x_new | x): same variance, means mu_p and mu_q. At the last step
+            # (bar-alpha_0 = 1) the transition is deterministic and the ratio is not defined; the guidance
+            # shift there is negligible, so the step contributes no transition weight.
+            if float(sigma) > 1e-6:
+                log_pq = ((x_new - mu_q) ** 2 - (x_new - mu_p) ** 2).sum(1) / (2 * sigma ** 2)
+            else:
+                log_pq = torch.zeros(N, device=dev)
             # G_{t-1} at the new state needs the loss at its Tweedie estimate: computed at the next step;
             # accumulate the transition ratio now and the potential ratio when the next loss is known
             logw = logw + log_pq
