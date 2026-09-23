@@ -99,6 +99,18 @@ python scripts/run_optimization.py --data runs/mog4d/data.pt --model-dir runs/mo
 | Model check: score network vs. exact noised-mixture score, unguided samples vs. P(X), conditional sampler vs. exact P(Y\|X=x) at x*, the cluster centres and over x | `python scripts/check_models.py --setting hard` or `--prior ... --sampler ... --data ...` |
 | Table 1, all scenarios: data, networks, model check, the four search algorithms, and the table (`--settings 5x5 10x1 ...` for a subset; `scripts/slurm_table1.sh` runs one scenario per SLURM array task) | `python scripts/make_table1.py` |
 | App. G subsampling control on the 10D setting | `python scripts/control_subsample.py --sim-dir /path/to/conditional-matching-paper/simulations --n-restarts 25` |
+| Witness vs. uniform gradient subsampling in the Table 1 format: TV of both rules at every (`--n-cond-list`, `--k-fracs`) point, reusing Table 1's data and networks (`scripts/slurm_witness_vs_uniform.sh` per scenario) | `python scripts/witness_vs_uniform_table.py` |
+
+`witness_vs_uniform_table.py` keeps the loss value on all `n_cond` conditional samples but the
+gradient on only `k = k/n * n_cond` of them (`find_xstar.py --select uniform|witness --n-sel k`):
+`uniform` picks them at random, `witness` proportionally to the MMD witness `|w(y_i)|` (the loss's
+kernel, scored against the loss's own target batch) mixed with `--witness-floor` of uniform
+(default 0), by systematic PPS sampling. With `--rescale ht` (the table's default) each kept
+gradient is divided by its inclusion probability (Horvitz-Thompson), so both rules give an
+unbiased estimate of the full gradient (`utils/witness.py`, `tests/test_witness.py`). Defaults:
+`--n-cond-list 250 --k-fracs 0.5 --rules uniform witness`. With floor 0, a sample with a
+near-zero witness score is rarely picked but then weighted by up to `1/pi`, which can be large;
+`--witness-floor 0.1`-`0.3` bounds it.
 
 `fig1_toy_example.py` trains its three small networks on first use (cached under
 `checkpoints/toy/<setting>/`), writes the simulation to `results/fig1_<setting>_sim.json`

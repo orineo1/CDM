@@ -36,8 +36,13 @@ Inner estimator (Algorithm 2)
   --loss mmd|swd      MMD with a multi-bandwidth RBF kernel, or sliced Wasserstein
   --rbf-kernels K --rbf-mul F   RBF mixture: K bandwidths, geometric factor F
   --swd-projections P
-  --select all|uniform --n-sel k   backpropagate through all n_cond samples,
-                      or through a uniform random subset of k (rest detached)
+  --select all|uniform|witness --n-sel k   backpropagate through all n_cond samples, or
+                      through k of them (rest detached): a uniform random subset, or rows drawn
+                      proportionally to the MMD witness |w(y_i)| (utils/witness.py), scored
+                      against the same target batch the loss uses
+  --witness-floor F   witness: mix F of the uniform distribution into the selection  (0.0)
+  --rescale none|ht   Horvitz-Thompson: divide each kept row's gradient by its inclusion
+                      probability, so the subsampled gradient is unbiased for the full one (none)
 
 Outer loop (Algorithm 1)
   --n-mc M            Monte-Carlo perturbations of the Tweedie point (lgd: 3, dps: 1)
@@ -102,6 +107,7 @@ from guidance.config import (init_randn, init_zeros, perturb_beta_ratio,        
                              perturb_beta_prod_ratio_sq, perturb_sqrt_beta_prod, perturb_none,
                              aggregate_logsumexp, aggregate_mean, aggregate_single)
 from losses.functions import MMDLoss, RBF, sliced_wasserstein_distance                  # noqa: E402
+from utils import witness as W                                                          # noqa: E402
 from utils.dist import (generate_mog_samples_not_differentiable, compute_conditionals,  # noqa: E402
                         compute_alpha, gmm_l2_distance)
 from gcio.results import save_run                                                       # noqa: E402
@@ -160,8 +166,12 @@ def parse_args():
     g.add_argument("--rbf-kernels", type=int, default=5)
     g.add_argument("--rbf-mul", type=float, default=2.0)
     g.add_argument("--swd-projections", type=int, default=100)
-    g.add_argument("--select", choices=["all", "uniform"], default="all")
-    g.add_argument("--n-sel", type=int, default=None, help="samples that keep their gradient under --select uniform")
+    g.add_argument("--select", choices=["all", "uniform", "witness"], default="all")
+    g.add_argument("--n-sel", type=int, default=None, help="samples that keep their gradient under --select uniform|witness")
+    g.add_argument("--witness-floor", type=float, default=0.0,
+                   help="witness: selection p_i = floor/n + (1 - floor) |w_i| / sum |w|")
+    g.add_argument("--rescale", choices=["none", "ht"], default="none",
+                   help="ht: kept rows' gradients divided by their inclusion probabilities (Horvitz-Thompson)")
     g = p.add_argument_group("run control")
     g.add_argument("--n-attempts", type=int, default=1,
                    help="independent runs of the whole algorithm (each returns one x_hat); mean/std are over these")
@@ -175,7 +185,7 @@ def parse_args():
     for k, v in PRESETS[a.guidance].items():
         if getattr(a, k) is None:
             setattr(a, k, v)
-    if a.select == "uniform" and a.n_sel is None:
+    if a.select != "all" and a.n_sel is None:
         a.n_sel = a.n_cond // 2
     return a
 
@@ -206,18 +216,28 @@ def make_loss(args):
     return lambda X, Y: sliced_wasserstein_distance(X, Y, num_projections=args.swd_projections)
 
 
-def make_subsampler(args):
-    """--select uniform: keep the gradient on n_sel random samples, detach the rest
-    (the loss value still uses all of them)."""
+def make_subsampler(args, target_generator):
+    """--select uniform|witness: keep the gradient on n_sel of the samples, detach the rest (the
+    loss value still uses all of them); --rescale ht divides the kept gradients by their inclusion
+    probabilities. Returns (transform, target_generator). For witness the transform draws the
+    target batch itself to score the samples and hands that same batch to the loss: the core
+    always calls the target generator right after the conditional draw."""
     if args.select == "all":
-        return None
+        return None, target_generator
+    pending = []
+    kernel = RBF(n_kernels=args.rbf_kernels, mul_factor=args.rbf_mul, device=args.device)
 
     def keep_subset(y):
-        n = y.shape[0]
-        keep = torch.zeros(n, dtype=torch.bool, device=y.device)
-        keep[torch.randperm(n, device=y.device)[:args.n_sel]] = True
-        return torch.where(keep[:, None], y, y.detach())
-    return keep_subset
+        target = None
+        if args.select == "witness":
+            target = target_generator(y.shape[0], y.device)
+            pending[:] = [target]
+        keep, pi = W.select(y, args.n_sel, args.select, target=target, kernel=kernel, floor=args.witness_floor)
+        return W.reweight(y, keep, pi, args.rescale)
+
+    def gen(n, dev):
+        return pending.pop().to(dev) if pending else target_generator(n, dev)
+    return keep_subset, (gen if args.select == "witness" else target_generator)
 
 
 def make_cfg(args, prior, sampler_type, target_generator, seed):
@@ -229,6 +249,7 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
     aggregate = aggregate_single if args.n_mc == 1 and args.perturb == "none" else \
         {"logsumexp": aggregate_logsumexp, "mean": aggregate_mean}[args.aggregate]
     gen = target_generator if not args.n_target else (lambda n, d, g=target_generator: g(args.n_target, d))
+    transform, gen = make_subsampler(args, gen)
     return GuidanceConfig(
         n_cond=args.n_cond, n_mc=args.n_mc, final_n_cond=args.final_n_cond or 4 * args.n_cond,
         init_fn=init_randn if args.init == "randn" else init_zeros, unsqueeze_init=True,
@@ -237,7 +258,7 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
         update_fn=(AdamGuidance(*args.adam_betas) if args.guidance_optim == "adam" else update_ddim_minus_grad),
         timestep_source="range", ddim_step_style="condition_x", eta=args.eta,
         repeat_condition=True, condition_on_slice=(sampler_type == "diffusion"),
-        cond_output_transform=make_subsampler(args),
+        cond_output_transform=transform,
         target_generator=gen, compute_final_loss=True,
         n_particles=args.n_particles, resample_beta=(None if args.resample_beta is None or args.resample_beta <= 0
                                                        else args.resample_beta),
@@ -281,7 +302,7 @@ def main():
     loss_fn = make_loss(args)
     print(f"[find_xstar] {method} with {args.guidance.upper()} guidance | loss={args.loss} n_cond={args.n_cond} "
           f"n_mc={args.n_mc} perturb={args.perturb} aggregate={args.aggregate} step={args.step_size} "
-          f"select={args.select}{'' if args.select == 'all' else f'(n_sel={args.n_sel})'} init={args.init} eta={args.eta} "
+          f"select={args.select}{'' if args.select == 'all' else f'(n_sel={args.n_sel}, rescale={args.rescale}' + (f', floor={args.witness_floor}' if args.select == 'witness' else '') + ')'} init={args.init} eta={args.eta} "
           f"| budget R={R} {'particles' if args.algo == 'particles' else 'restarts'}, attempts={args.n_attempts} "
           f"target={info['kind']} device={dev}"
           + (f" | resample_beta={args.resample_beta} ess_frac={args.ess_frac}" if args.algo == "particles" else "")
