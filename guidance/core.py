@@ -172,6 +172,8 @@ def refine(model_uncond, model_cond, loss_function, cfg, x0):
                 score = _prior_score(model_uncond, x.detach())
             prior_norm = float(score.norm())
             grad = grad - cfg.refine_lambda * score
+        if not torch.isfinite(grad).all():
+            break
         x.grad = grad
         opt.step()
         trace.append({"k": k, "loss": float(loss_val.detach()), "grad_norm": float(grad.norm()),
@@ -232,8 +234,15 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
     trace = []                      # per-step diagnostics, returned with the result
     t_start = time.time()
 
+    diverged = False
     for i, t in _make_iterator(model_uncond, cfg):
-        x_t, info = _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best)
+        x_next, info = _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best)
+        if not torch.isfinite(x_next).all():      # diverged: keep the last finite state, mark the run
+            diverged = True
+            trace.append({"i": i, "t": int(t) if not torch.is_tensor(t) else float(t), **info,
+                          "elapsed_s": time.time() - t_start, "diverged": True})
+            break
+        x_t = x_next
         n_steps += 1
         trace.append({"i": i, "t": int(t) if not torch.is_tensor(t) else float(t),
                       **info, "elapsed_s": time.time() - t_start})
@@ -258,6 +267,8 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
 
     # ---- final loss, evaluated fresh at the returned x ----
     final_loss = _final_loss(model_cond, loss_function, cfg, x_t) if cfg.compute_final_loss else None
+    if diverged and final_loss is not None:
+        final_loss = torch.full_like(final_loss, float("inf"))   # never selected as the best restart
 
     x_final = x_t.detach().clone()
     if device == "cuda":
@@ -266,6 +277,7 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
     return {
         "x_final": x_final,
         "final_loss": final_loss,
+        "diverged": diverged,
         "best_loss": best["loss"],
         "best_x0": best["x0"],
         "n_steps": n_steps,

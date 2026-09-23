@@ -256,6 +256,8 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
 
 def evaluate(x_hat, info):
     out = {}
+    if not torch.isfinite(x_hat).all():
+        return {"l2_gmm": float("inf"), "l2_to_xstar": float("inf"), "diverged": True}
     if info.get("x_star") is not None:
         out["l2_to_xstar"] = float(torch.norm(x_hat.cpu() - info["x_star"].float().view(-1)))
     if info.get("mu_list") is not None and info.get("target") is not None:
