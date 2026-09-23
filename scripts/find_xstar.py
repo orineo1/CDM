@@ -203,7 +203,11 @@ def load_target(path, device):
 def make_loss(args):
     if args.loss == "mmd":
         return MMDLoss(kernel=RBF(n_kernels=args.rbf_kernels, mul_factor=args.rbf_mul, device=args.device))
-    return lambda X, Y: sliced_wasserstein_distance(X, Y, num_projections=args.swd_projections)
+    # differentiable sliced Wasserstein (torch sort); for dim(Y) = 1 it is the exact W1 whose gradient
+    # does not vanish at long range, unlike the MMD between well-separated narrow modes
+    from losses.sliced import SupportAwareSlicedWassersteinLoss
+    swd = SupportAwareSlicedWassersteinLoss(device=args.device, n_projections=args.swd_projections)
+    return lambda X, Y: swd.sliced_wasserstein_distance(X, Y, n_projections=args.swd_projections)
 
 
 def make_subsampler(args):
