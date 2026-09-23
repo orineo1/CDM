@@ -5,16 +5,20 @@ from utils import dist as dist_utils
 #### MMD Loss #####
 
 class RBF(nn.Module):
-    def __init__(self, n_kernels=5, mul_factor=2.0, bandwidth=None, device='cpu'):
+    def __init__(self, n_kernels=5, mul_factor=2.0, bandwidth=None, device='cpu', detach_bandwidth=True):
         super().__init__()
         self.device = device
         self.bandwidth_multipliers = (mul_factor ** (torch.arange(n_kernels, device=device) - n_kernels // 2))
         self.bandwidth = bandwidth
+        # the data-dependent bandwidth is a constant of the kernel, not a function to differentiate:
+        # with detach_bandwidth=False (legacy behaviour) the gradient also flows through it
+        self.detach_bandwidth = detach_bandwidth
 
     def get_bandwidth(self, L2_distances):
         if self.bandwidth is None:
             n_samples = L2_distances.shape[0]
-            return L2_distances.sum() / (n_samples ** 2 - n_samples)
+            bw = L2_distances.sum() / (n_samples ** 2 - n_samples)
+            return bw.detach() if self.detach_bandwidth else bw
         return self.bandwidth
 
     def forward(self, X):

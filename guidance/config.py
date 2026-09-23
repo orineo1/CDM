@@ -210,6 +210,11 @@ class GuidanceConfig:
     target_generator: Optional[Callable] = None
     resample_target_per_mc: bool = True
 
+    # --- conditional-sample schedule over the reverse process ---
+    # "constant": n_cond at every step; "linear": n_cond_min at the first step, n_cond at the last
+    n_cond_schedule: str = "constant"
+    n_cond_min: int = 50
+
     # --- particle population (optimize_guided_population) ---
     # R trajectories run in lockstep; after each step the particles are weighted by
     # exp(-resample_beta * loss) and resampled when the effective sample size drops below

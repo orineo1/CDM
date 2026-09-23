@@ -84,6 +84,7 @@ and the exact L2 distance between P(Y | X = x_hat) and G are reported too.
 Each attempt is appended to results/runs.jsonl unless --no-store.
 """
 import argparse
+import math
 import json
 import os
 import sys
@@ -136,6 +137,8 @@ def parse_args():
                    help="adam: Adam-style guidance push (moments across the reverse steps, AdamDPS-like); "
                         "the step size is then a displacement in x units")
     g.add_argument("--adam-betas", type=float, nargs=2, default=[0.9, 0.999])
+    g.add_argument("--step-decay", type=float, default=1.0,
+                   help="cosine decay of the step size over the reverse process down to this fraction of --step-size (1: none)")
     g.add_argument("--algo", choices=["lgd", "particles"], default="lgd",
                    help="lgd: independent trajectories, best of --n-attempts; particles: --n-particles trajectories "
                         "run in lockstep with loss-weighted resampling (one population per attempt)")
@@ -161,6 +164,11 @@ def parse_args():
     g.add_argument("--rbf-mul", type=float, default=2.0)
     g.add_argument("--swd-projections", type=int, default=100)
     g.add_argument("--select", choices=["all", "uniform"], default="all")
+    g.add_argument("--bandwidth-grad", action="store_true",
+                   help="legacy: let the gradient flow through the data-dependent RBF bandwidth (default: detached)")
+    g.add_argument("--n-cond-schedule", choices=["constant", "linear"], default="constant",
+                   help="linear: conditional samples ramp from --n-cond-min at the first reverse step to --n-cond at the last")
+    g.add_argument("--n-cond-min", type=int, default=50)
     g.add_argument("--n-sel", type=int, default=None, help="samples that keep their gradient under --select uniform")
     g = p.add_argument_group("run control")
     g.add_argument("--n-attempts", type=int, default=1,
@@ -202,7 +210,8 @@ def load_target(path, device):
 
 def make_loss(args):
     if args.loss == "mmd":
-        return MMDLoss(kernel=RBF(n_kernels=args.rbf_kernels, mul_factor=args.rbf_mul, device=args.device))
+        return MMDLoss(kernel=RBF(n_kernels=args.rbf_kernels, mul_factor=args.rbf_mul, device=args.device,
+                                  detach_bandwidth=not args.bandwidth_grad))
     # differentiable sliced Wasserstein (torch sort); for dim(Y) = 1 it is the exact W1 whose gradient
     # does not vanish at long range, unlike the MMD between well-separated narrow modes
     from losses.sliced import SupportAwareSlicedWassersteinLoss
@@ -228,7 +237,9 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
     if args.step_size == "beta_t":
         step_fn = lambda t, i, z=args.zeta: z * float(prior.betas[t])     # noqa: E731
     else:
-        step_fn = lambda t, i, z=float(args.step_size): z                # noqa: E731
+        z0, f = float(args.step_size), float(args.step_decay)
+        T = int(prior.diffusion_steps)
+        step_fn = lambda t, i, z0=z0, f=f, T=T: z0 * (f + (1 - f) * 0.5 * (1 + math.cos(math.pi * min(i, T - 1) / max(T - 1, 1))))   # noqa: E731
     perturb = PERTURB[args.perturb] if args.n_mc > 1 or args.perturb != "none" else perturb_none
     aggregate = aggregate_single if args.n_mc == 1 and args.perturb == "none" else \
         {"logsumexp": aggregate_logsumexp, "mean": aggregate_mean}[args.aggregate]
@@ -243,6 +254,7 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
         repeat_condition=True, condition_on_slice=(sampler_type == "diffusion"),
         cond_output_transform=make_subsampler(args),
         target_generator=gen, compute_final_loss=True,
+        n_cond_schedule=args.n_cond_schedule, n_cond_min=args.n_cond_min,
         n_particles=args.n_particles, resample_beta=(None if args.resample_beta is None or args.resample_beta <= 0
                                                        else args.resample_beta),
         ess_frac=args.ess_frac, resample_every=args.resample_every, weight_mode=args.weight_mode,

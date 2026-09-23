@@ -83,12 +83,21 @@ def _draw_conditional(model_cond, x0_sample, cfg):
     return samples
 
 
-def _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best, slot=0):
+def _n_cond_at(cfg, i, n_total):
+    """Conditional samples for reverse step i (0-based) under cfg.n_cond_schedule."""
+    if cfg.n_cond_schedule == "linear" and n_total > 1:
+        return int(round(cfg.n_cond_min + (cfg.n_cond - cfg.n_cond_min) * i / (n_total - 1)))
+    return cfg.n_cond
+
+
+def _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best, slot=0, n_total=None):
     """One guided reverse-diffusion step for one state x_t.
 
     Tweedie estimate, MC perturbations, inner loss (Algorithm 2), gradient with respect to
     x_t, DDIM step minus the guidance push. `best` is a dict {loss, x0} updated in place with
     the lowest inner loss seen so far. Consumes random numbers in the legacy order."""
+    if n_total is not None and cfg.n_cond_schedule != "constant":
+        cfg = _EvalView(cfg, _n_cond_at(cfg, i, n_total))
     device = cfg.device
     x_t = x_t.detach().clone().requires_grad_(True)
 
@@ -235,8 +244,9 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
     t_start = time.time()
 
     diverged = False
+    n_total = len(list(_iter_timesteps(model_uncond, cfg)))
     for i, t in _make_iterator(model_uncond, cfg):
-        x_next, info = _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best)
+        x_next, info = _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best, n_total=n_total)
         if not torch.isfinite(x_next).all():      # diverged: keep the last finite state, mark the run
             diverged = True
             trace.append({"i": i, "t": int(t) if not torch.is_tensor(t) else float(t), **info,
@@ -328,7 +338,7 @@ def optimize_guided_population(model_uncond, model_cond, loss_function, cfg: Gui
     for i, t in _make_iterator(model_uncond, cfg):
         losses, gnorms, step = [], [], 0.0
         for r in range(R):
-            xs[r], info = _guided_step(model_uncond, model_cond, loss_function, cfg, xs[r], t, i, bests[r], slot=r)
+            xs[r], info = _guided_step(model_uncond, model_cond, loss_function, cfg, xs[r], t, i, bests[r], slot=r, n_total=n_total)
             losses.append(info["loss"]); gnorms.append(info["grad_norm"]); step = info["step"]
         L = torch.tensor(losses)
         ess, resampled, ancestors = float(R), False, None
