@@ -14,10 +14,10 @@ and the population is resampled when its effective sample size drops below a fra
 weighted terminal population targets P(x0) G_0(x0) = Q_beta(x0). Everything here is exact except
 the trained score network, so the figure isolates the sampler's bias and its correction.
 
-    python scripts/fig_smc_correction.py --setting hard --n-particles 2000 --device cuda
+    python scripts/fig_smc_correction.py --setting hard --n-particles 2000 --n-repeats 10 --max-shift 0.5 --device cuda
 
 Writes results/fig_smc_<setting>.png (per beta: Q_beta, prior, plain guided histogram, corrected
-histogram) and results/fig_smc_<setting>.json (TV between each histogram and Q_beta, ESS trace,
+histogram; --n-repeats independent populations are pooled) and results/fig_smc_<setting>.json (TV between each histogram and Q_beta, ESS trace,
 number of resampling events).
 """
 import argparse
@@ -45,7 +45,14 @@ def parse_args():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--betas", type=float, nargs="+", default=[0.0, 2.0, 8.0, 16.0])
     p.add_argument("--n-particles", type=int, default=2000)
+    p.add_argument("--n-repeats", type=int, default=1,
+                   help="independent populations per beta; their samples are pooled (averages out the mode\n"
+                        "proportions that a single population fixes at its first resamplings)")
     p.add_argument("--ess-frac", type=float, default=0.5)
+    p.add_argument("--max-shift", type=float, default=None,
+                   help="corrected arm only: bound the guidance shift of the proposal to this many sigma_t (the "
+                        "weights still target Q_beta; a bounded shift keeps the transition ratio p/q from becoming "
+                        "heavy-tailed where beta * grad L is many sigma). The plain arm is never clipped.")
     p.add_argument("--bins", type=int, default=80)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--out", default=None)
@@ -78,8 +85,10 @@ def guided_smc(st, model, beta, N, args, corrected):
         ab_prev = ab[t - 1]
         sigma = torch.sqrt((1 - ab_prev) / (1 - ab[t])) * torch.sqrt(1 - ab[t] / ab_prev)   # eta = 1
         mu_p = torch.sqrt(ab_prev) * x0 + torch.sqrt(torch.clamp(1 - ab_prev - sigma ** 2, min=0)) * eps
-        s_t = beta * float(model.betas[t])
-        mu_q = mu_p - s_t * g
+        shift = beta * float(model.betas[t]) * g
+        if corrected and args.max_shift is not None and float(sigma) > 0:
+            shift = shift.clamp(-args.max_shift * sigma, args.max_shift * sigma)
+        mu_q = mu_p - shift
         noise = torch.randn_like(x)
         x_new = mu_q + sigma * noise
         if corrected and beta > 0:
@@ -138,12 +147,17 @@ def main():
     model.eval()
     x_grid, px, Q = f1.analytic_curves(st, args.betas)
     lo, hi = st.x_range
-    out = {"setting": args.setting, "n_particles": args.n_particles, "betas": args.betas, "per_beta": {}}
+    out = {"setting": args.setting, "n_particles": args.n_particles, "n_repeats": args.n_repeats, "max_shift": args.max_shift, "ess_frac": args.ess_frac, "betas": args.betas, "per_beta": {}}
     runs = {}
     for beta in args.betas:
         t0 = time.time()
-        plain, _, _ = guided_smc(st, model, beta, args.n_particles, args, corrected=False)
-        corr, ess, n_res = guided_smc(st, model, beta, args.n_particles, args, corrected=True)
+        plain_runs, corr_runs, ess, n_res = [], [], [], 0
+        for _ in range(args.n_repeats):
+            pl, _, _ = guided_smc(st, model, beta, args.n_particles, args, corrected=False)
+            co, e, nr = guided_smc(st, model, beta, args.n_particles, args, corrected=True)
+            plain_runs.append(pl); corr_runs.append(co); ess += e; n_res += nr
+        plain, corr = np.concatenate(plain_runs), np.concatenate(corr_runs)
+        n_res = n_res / args.n_repeats
         tv_plain = tv_hist_vs_curve(plain, x_grid, Q[beta], lo, hi, args.bins)
         tv_corr = tv_hist_vs_curve(corr, x_grid, Q[beta], lo, hi, args.bins)
         runs[beta] = (plain, corr)
@@ -151,7 +165,7 @@ def main():
                                       "ess_min": (min(ess) if ess else None), "ess_final": (ess[-1] if ess else None),
                                       "time_s": time.time() - t0}
         print(f"[smc] beta={beta:g}: TV(hist, Q_beta) plain {tv_plain:.3f} -> corrected {tv_corr:.3f} | "
-              f"{n_res} resamplings, min ESS {min(ess) if ess else float('nan'):.0f} | {time.time()-t0:.0f}s")
+              f"{n_res:.0f} resamplings/population, min ESS {min(ess) if ess else float('nan'):.0f} | {time.time()-t0:.0f}s")
     stem = args.out or os.path.join("results", f"fig_smc_{args.setting}")
     os.makedirs(os.path.dirname(stem) or ".", exist_ok=True)
     with open(stem + ".json", "w") as f:
