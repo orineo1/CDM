@@ -14,7 +14,7 @@ and the population is resampled when its effective sample size drops below a fra
 weighted terminal population targets P(x0) G_0(x0) = Q_beta(x0). Everything here is exact except
 the trained score network, so the figure isolates the sampler's bias and its correction.
 
-    python scripts/fig_smc_correction.py --setting hard --n-particles 2000 --n-repeats 10 --max-shift 0.5 --device cuda
+    python scripts/fig_smc_correction.py --setting hard --n-particles 2000 --n-repeats 10 --max-shift 0.25 --ess-frac 1.0 --device cuda
 
 Writes results/fig_smc_<setting>.png (per beta: Q_beta, prior, plain guided histogram, corrected
 histogram; --n-repeats independent populations are pooled) and results/fig_smc_<setting>.json (TV between each histogram and Q_beta, ESS trace,
