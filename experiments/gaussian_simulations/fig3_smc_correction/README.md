@@ -5,18 +5,17 @@
 | | |
 |---|---|
 | Script | `scripts/fig_smc_correction.py` (smoke first trains the toy networks via `fig1_toy_example.py --quick`) |
-| Full tier | 4 betas x 10 pooled populations x 2,000 particles x 2 arms |
+| Full configuration | 4 betas x 10 pooled populations x 2,000 particles x 2 arms |
 | GPU | optional — a CPU variant of the reference output exists |
-| Smoke tier | CPU, ~1 min |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~1 min |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
-Both tiers pass four betas: the script exits non-zero on a single `--betas` value (see `../SMOKE-RUNS.md`).
+Both configurations pass four betas; the script requires more than one `--betas` value.
 
 Outputs go to `outputs/`, which is gitignored and ships empty.
 

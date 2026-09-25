@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/check_models.py` (smoke also uses `generate_data.py` and `train_models.py`) |
-| Full tier | one check per scenario, once the 27 networks exist |
+| Full configuration | one check per scenario, once the 27 networks exist |
 | GPU | yes |
-| Smoke tier | CPU, ~1 min |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~1 min |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 The full tier reads trained scenarios from `RUNS_DIR` (default `runs/table1v2`).
 

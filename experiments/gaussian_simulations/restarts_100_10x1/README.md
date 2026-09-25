@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/make_table1.py --settings 10x1 --budget 100` |
-| Full tier | one cell at 10x budget, 3 runs, 3 methods |
+| Full configuration | one cell at 10x budget, 3 runs, 3 methods |
 | GPU | yes |
-| Smoke tier | CPU, ~20 s |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~20 s |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 Outputs go to `outputs/`, which is gitignored and ships empty.
 

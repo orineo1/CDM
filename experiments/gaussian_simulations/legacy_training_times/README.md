@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/generate_data.py --params-file` + `scripts/train_models.py` |
-| Full tier | 9 trainings |
+| Full configuration | 9 trainings |
 | GPU | yes |
-| Smoke tier | CPU, ~10 s |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~10 s |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 `train_models.py` emits no timing, so `run.sh` times each invocation with the shell. `SimulationParameters/` has no 5D file.
 

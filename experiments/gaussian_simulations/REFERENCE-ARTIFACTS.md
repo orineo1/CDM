@@ -1,16 +1,16 @@
-# Missing artifacts — `experiments/gaussian_simulations/`
+# Reference artifacts — `experiments/gaussian_simulations/`
 
-A plain inventory of what is absent from the repository. Checked 2026-09-25 against
-`orineo1/GlobalConditional` `master` `9ddf570` and `orineo1/conditional-matching-paper`
-(all 70 remote branches). No inference is drawn here beyond what is or is not on disk.
+Which reference artifacts for these experiments are in the repository, and which are not.
+The sources are `orineo1/GlobalConditional` `master` `9ddf570` and
+`orineo1/conditional-matching-paper`.
 
-## What `GlobalConditional`'s `results/` contains at `9ddf570`
+## Present: `GlobalConditional`'s `results/` at `9ddf570`
 
 Twelve `checks__*.json`; `fig_smc_hard.json`; `fig_smc_hard_cpu.json`;
 `legacy_pasted_2d.json`; `runs.jsonl`; `smc_sweep/`; and six `table1_*.md`
 (`10x1_r100`, `detach`, `long`, `v3`, `w1_5x1`, `wide`).
 
-## Absent files
+## Absent, referenced elsewhere
 
 | file | referenced by |
 |---|---|
@@ -21,9 +21,9 @@ Twelve `checks__*.json`; `fig_smc_hard.json`; `fig_smc_hard_cpu.json`;
 | `iclr2027/tables/table1_models_rows.tex` | paper, Table 5 |
 | `iclr2027/tables/table1_ablation_rows.tex` | paper, Table 8 |
 
-None of the four `.tex` fragments is present anywhere on this machine.
+None of the four `.tex` fragments is in either code repository.
 
-## Absent per experiment
+## Per experiment
 
 | experiment | generating script | reference artifact in repo |
 |---|---|---|
@@ -47,20 +47,17 @@ None of the four `.tex` fragments is present anywhere on this machine.
 | `tv_sensitivity_calibration` | **no script in either repository** | none |
 | `prior_draw_baseline` | **no script in either repository** | none |
 
-## Notes on locating producers
+## Notes
 
 - `infeasible_target`: the scenario constants and an implementation of the same experiment
   are at `orineo1/conditional-matching-paper` `main` `fc4389d`,
   `simulations/notebooks/Exp_nonstar_mmd_target_ablation.ipynb`. `config/nonstar_params.txt`
-  transcribes the constants. INVENTORY SIM-07 records this row as having no producer in
-  either repository; that search did not cover this branch.
-- `ncond_ramp` and `step_rule_sweep` are recorded in the inventory as script-MISSING. The
-  flags exist (`--n-cond-schedule linear`, `--n-cond-min`, `--step-decay`,
-  `--guidance-optim adam`, `--step-size`); only a driver loop was absent, and the
-  relevant `run.sh` is now that loop.
-- `tv_sensitivity_calibration` and `prior_draw_baseline`: `git grep` over `simulations/`
-  on all 70 branches for `sensitivity`, `delta u`, `prior_draw` and the quoted values
-  returns zero hits.
+  transcribes the constants.
+- `ncond_ramp` and `step_rule_sweep` have no upstream driver script. The flags they need
+  exist (`--n-cond-schedule linear`, `--n-cond-min`, `--step-decay`,
+  `--guidance-optim adam`, `--step-size`); the relevant `run.sh` is the driver loop.
+- `tv_sensitivity_calibration` and `prior_draw_baseline` have no producing script in
+  either repository; their numbers are transcribed from the paper only.
 - `appendix_g_subsampling`: `conditional-matching-paper` `main` `fc4389d` additionally
   carries `simulations/scripts/run_backsel_witness_sweep.py`,
   `backsel_state_gradient_variance.py` and `src/witness_utils.py` on this same 10D setting.

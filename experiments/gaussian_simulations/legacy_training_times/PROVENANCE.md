@@ -10,6 +10,6 @@ Paper Table 10. The settings come from `orineo1/conditional-matching-paper` `CLE
 |---|---|---|---|---|
 | `PUBLISHED.md` | — | — | — | transcribed from `paper.txt` |
 
-## What was produced locally
+## Outputs
 
-Nothing. `outputs/` is empty and gitignored.
+`outputs/` is gitignored and holds only what a local run writes.

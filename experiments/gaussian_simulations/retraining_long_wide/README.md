@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/make_table1.py` (`--epochs` / `--nunits`, one runs-dir per arm) |
-| Full tier | 24 trainings + 8 grids |
+| Full configuration | 24 trainings + 8 grids |
 | GPU | yes |
-| Smoke tier | CPU, ~30 s |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~30 s |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 Outputs go to `outputs/`, which is gitignored and ships empty.
 

@@ -10,6 +10,6 @@ Paper App. B.3 and G. `orineo1/conditional-matching-paper` `main` `fc4389d` also
 |---|---|---|---|---|
 | `PUBLISHED.md` | — | — | — | transcribed from `paper.txt` |
 
-## What was produced locally
+## Outputs
 
-Nothing. `outputs/` is empty and gitignored.
+`outputs/` is gitignored and holds only what a local run writes.

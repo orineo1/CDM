@@ -5,18 +5,17 @@
 | | |
 |---|---|
 | Script | `scripts/generate_data.py`, `scripts/train_models.py`, `scripts/find_xstar.py` |
-| Full tier | 2 trainings (20,000 batches) + 3 arms x 25 restarts |
+| Full configuration | 2 trainings (20,000 batches) + 3 arms x 25 restarts |
 | GPU | yes |
-| Smoke tier | CPU, ~15 s |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~15 s |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
-The scenario is `config/nonstar_params.txt`. The pointwise arms use `find_xstar.py --loss l2` (see `../CHANGES-TO-LIBRARY.md`).
+The scenario is `config/nonstar_params.txt`. The pointwise arms use `find_xstar.py --loss l2`.
 
 Outputs go to `outputs/`, which is gitignored and ships empty.
 

@@ -16,4 +16,4 @@
 | 0.3  | 0.60 | 0.78 |
 
 Transcribed from `paper.txt`. No script in this repository produces these numbers; see
-`../../MISSING-RESULTS.md`.
+`../../REFERENCE-ARTIFACTS.md`.

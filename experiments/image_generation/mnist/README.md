@@ -14,8 +14,9 @@ MLGD-F searches for an image whose induced angle distribution matches a target
 | `mnist_cdm/` | the MNIST-specific code all three import (not an experiment) |
 
 Each experiment directory has the same shape: `README.md`, `run.sh` with a
-`smoke` and a `full` tier, `config/`, `results/` (imported reference numbers)
-and `outputs/` (whatever a local run wrote -- never a result).
+reduced `smoke` configuration and the full one, `config/`, `results/` (imported
+reference numbers) and `outputs/` (whatever a local run wrote -- never a
+result).
 
 ## What is MNIST-specific and what is shared
 

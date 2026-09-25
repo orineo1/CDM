@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/make_table1.py` with `--extra "--loss swd"` |
-| Full tier | two cells |
+| Full configuration | two cells |
 | GPU | yes |
-| Smoke tier | CPU, ~30 s |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~30 s |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 Outputs go to `outputs/`, which is gitignored and ships empty.
 

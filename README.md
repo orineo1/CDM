@@ -119,8 +119,10 @@ against the target, and the beta-sweep against the analytic `Q_beta`
 `control_subsample.py` needs the paper repository's 10D checkpoints, downloaded
 from HuggingFace on first use.
 
-Scripts for the remaining figures (2D/5D/10D tables, MNIST, Stable Diffusion)
-will follow the same pattern.
+`experiments/` holds one directory per paper table and figure — the Gaussian
+simulations, the MNIST rotated-digits task and the Stable Diffusion experiment —
+each with the exact command, its requirements and the published reference
+numbers. Start at `experiments/gaussian_simulations/README.md`.
 
 ## Using the optimizer from Python
 
@@ -133,10 +135,9 @@ out = optimize_guided(model_uncond, model_cond, loss_fn, GuidanceConfig(...))
 `GuidanceConfig` holds every knob as an explicit strategy: initialisation,
 Tweedie perturbation, aggregation over Monte-Carlo perturbations, step-size rule,
 DDIM step style and stochasticity (`eta`), target sampling, and gradient
-subsampling through `cond_output_transform`. The original function-per-variant
-entry points (`optimize_LGD`, `optimize_DPS`, `optimize_LGD_CM`, `optimize_LGD_cfg`,
-`optimize_DFLOW`, `optimize_LGD_latent`) live in `legacy/Optimization.py` with
-their original signatures.
+subsampling through `cond_output_transform`. The function-per-variant entry
+points (`optimize_LGD`, `optimize_DPS`, `optimize_LGD_CM`, `optimize_LGD_cfg`,
+`optimize_DFLOW`, `optimize_LGD_latent`) live in `legacy/Optimization.py`.
 
 ## Layout
 
@@ -148,12 +149,14 @@ models/         the frozen networks: diffusion.py (discrete-time DiffusionModel)
 losses/         MMD/RBF, circular, sliced Wasserstein
 utils/          networks, mixtures and the exact L2 between GMMs, evaluation, superposition
 gcio/           run persistence (results/runs.jsonl)
-likelihood/     the likelihood-based optimizer and its representative points (D-FLOW comparison),
-                moved out of scripts/ because they are libraries, not entry points
-legacy/         function-per-variant entry points and the pre-refactor reference. Frozen in LOGIC
-                only -- its import lines were updated for the models/ move (item 1)
+likelihood/     the likelihood-based optimizer and its representative points (D-FLOW comparison);
+                libraries, not entry points, which is why they are not in scripts/
+legacy/         function-per-variant entry points, and the frozen reference the equivalence
+                tests compare against
 scripts/        all command-line entry points (find_xstar.py is the method), test runners, cluster templates
-tests/          smoke, equivalence, determinism, population, refactor guards (see tests/README.md)
+experiments/    one directory per paper experiment: what it produces, the command, the reference numbers
+sdxl/           the Stable Diffusion experiment's own code (pipelines, HED, CLIP); see sdxl/README.md
+tests/          smoke, equivalence, determinism, population, targeted guards (see tests/README.md)
 notebooks/      exploratory notebooks (not maintained; the scripts supersede them)
 SimulationParameters/   the paper's fixed MoG settings
 MnistModels/    a small pretrained MNIST checkpoint
@@ -167,12 +170,12 @@ python scripts/run_regression.py --legacy --update-golden   # baseline against p
 python scripts/run_regression.py                            # check against it
 ```
 
-`tests/test_equivalence.py` checks each refactored optimizer against the frozen
-reference in `legacy/Optimization_legacy.py` on fixed seeds. The same suite runs
-on GitHub Actions for every push. Read `tests/README.md` before trusting a green
-run: both arms of that comparison import the same `models/`, `losses/` and
-`utils/`, so it proves agreement, not correctness, and `run_regression.py` is not
-currently a working Tier 3 backstop either.
+`tests/test_equivalence.py` checks each optimizer in `guidance/` against the
+frozen reference in `legacy/Optimization_legacy.py` on fixed seeds. The same
+suite runs on GitHub Actions for every push. `tests/README.md` says what that
+gate covers: both arms of the comparison import the same `models/`, `losses/`
+and `utils/`, so it establishes agreement rather than correctness, and
+`run_regression.py` is a stub rather than a Tier 3 backstop.
 
 ## Results
 
@@ -181,24 +184,24 @@ currently a working Tier 3 backstop either.
 `load_runs(...)` / `to_dataframe(...)` read it back. It exists so a published
 table can be regenerated from data instead of pasted from console output.
 
-**It is only half wired in.** Three entry points call `save_run`:
-`scripts/run_regression.py`, `scripts/find_xstar.py` (unless `--no-store`) and
-`scripts/control_subsample.py`. The other scripts do not — they write their own
+**It is wired into some entry points, not all.** Four entry points call `save_run`:
+`scripts/run_regression.py`, `scripts/find_xstar.py` (unless `--no-store`),
+`scripts/control_subsample.py` and
+`experiments/image_generation/mnist/table2_mlgdf/run_mlgdf.py`. The other scripts do not — they write their own
 JSON next to their output (`find_xstar.py --out`, `make_table1.py`
 `<out>.json/.md/.tex`), and that is what the tables are actually built from:
 `make_table1.py` reads the per-run `<METHOD>.json` files under `--runs-dir`, and
 in fact invokes `find_xstar.py` with `--no-store`. The one reader of the store in
 the repo is `notebooks/CompareMethods-Final.ipynb`.
 
-`results/runs.jsonl` is also in `.gitignore`, so a fresh clone starts with an
-empty store. Nothing published is reproducible from it today.
-
+`results/runs.jsonl` is in `.gitignore`, so a fresh clone starts with an empty
+store, and no published number can be regenerated from it as things stand.
 Wiring the remaining entry points into the store — and making `make_table1.py`
-build from it rather than from loose JSON — is open work, not a done thing.
+build from it rather than from loose JSON — is open work.
 `checks/check_gcio_claims.py` pins the caller count so this paragraph and the
-code cannot drift apart again.
+code stay in agreement.
 
-<!-- gcio-callers: scripts/run_regression.py scripts/find_xstar.py scripts/control_subsample.py -->
+<!-- gcio-callers: scripts/run_regression.py scripts/find_xstar.py scripts/control_subsample.py experiments/image_generation/mnist/table2_mlgdf/run_mlgdf.py -->
 
 ## Cluster
 

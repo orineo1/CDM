@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/make_table1.py` (drives `generate_data.py`, `train_models.py`, `check_models.py`, `find_xstar.py`) |
-| Full tier | 9 scenarios x 4 methods x 5 runs |
+| Full configuration | 9 scenarios x 4 methods x 5 runs |
 | GPU | yes |
-| Smoke tier | CPU, ~1 min |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~1 min |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 Or on a cluster: `sbatch scripts/slurm_table1.sh`.
 

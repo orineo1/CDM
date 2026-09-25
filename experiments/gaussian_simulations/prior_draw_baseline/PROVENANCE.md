@@ -2,7 +2,7 @@
 
 ## Specification
 
-Paper text. There is no counterpart in `conditional-matching-paper`: `git grep PMLGD` over all 70 remote branches returns zero hits, and `simulations/` has no particle population, no resampling, no `n_cond` schedule and no step decay.
+Paper text. There is no counterpart in `conditional-matching-paper`, whose `simulations/` has no particle population, no resampling, no `n_cond` schedule and no step decay.
 
 ## Files in `results/`
 
@@ -10,6 +10,6 @@ Paper text. There is no counterpart in `conditional-matching-paper`: `git grep P
 |---|---|---|---|---|
 | `PUBLISHED.md` | — | — | — | transcribed from `paper.txt` |
 
-## What was produced locally
+## Outputs
 
-Nothing. `outputs/` is empty and gitignored.
+`outputs/` is gitignored and holds only what a local run writes.

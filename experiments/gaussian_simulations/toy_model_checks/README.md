@@ -5,18 +5,17 @@
 | | |
 |---|---|
 | Script | `scripts/check_models.py --setting` (smoke first trains the toy networks via `fig1_toy_example.py --quick`) |
-| Full tier | two settings |
+| Full configuration | two settings |
 | GPU | yes |
-| Smoke tier | CPU, ~1 min |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~1 min |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
-The paper does not name the setting; the full tier runs both `hard` and `paper`.
+The paper does not name the setting; the full configuration runs both `hard` and `paper`.
 
 Outputs go to `outputs/`, which is gitignored and ships empty.
 

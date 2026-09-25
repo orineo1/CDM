@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""MLGD-F on the MNIST rotated-digits task (paper Table 2, inventory MN-01).
+"""MLGD-F on the MNIST rotated-digits task (paper Table 2).
 
 One target, N seeds. The loop is `guidance.core.optimize_guided`; this script
 only builds the models, the target and the config, and records what comes back.

@@ -1,7 +1,6 @@
 # Published reference -- MNIST rotated digits (paper Table 2)
 
-Declared reference for this experiment. These are the numbers **as published**;
-they were not recomputed here.
+Declared reference for this experiment. These are the numbers **as published**.
 
 Source: the paper, Table 2, `\label{tab:mnist}`
 (`main.tex` in the paper source; caption: "MNIST rotated-digits task (15

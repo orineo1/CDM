@@ -1,9 +1,9 @@
 # `sdxl/` — the Stable Diffusion experiment's own code
 
-SD-specific code, copied in so the repo is self-contained. Nothing here points at
-another repository at runtime.
+SD-specific code, carried here so the repository is self-contained. Nothing here points
+at another repository at runtime.
 
-Ported from `orineo1/conditional-matching-paper`, branch
+Source: `orineo1/conditional-matching-paper`, branch
 `claude/sd-shared-controlnet-hvt-uniform`, commit `cb8bc91`, path
 `SD_cond_SD_controlnet/`.
 
@@ -26,17 +26,17 @@ pipelines, which is correct and expected for this experiment.
 
 ## What is CALLED from the shared packages, not duplicated
 
-**MMD is not implemented here.** `losses.functions.compute_mmd` is the port of the
-paper repo's `SD_cond_SD_controlnet/src/metrics.py::compute_mmd` — SD's own kernel
+**MMD is not implemented here.** `losses.functions.compute_mmd` is the paper repo's
+`SD_cond_SD_controlnet/src/metrics.py::compute_mmd` — SD's own kernel
 (single median-heuristic bandwidth, generalised exponent `exp(-(||a-b||²/2bw²)^alpha)`)
 and SD's own `sqrt(|MMD²| + 1e-8)` return are part of that function, so there is nothing
 SD-specific left to build. `sdxl/mmd.py::sd_mmd` is a thin alias that keeps the name the
-pipeline code uses; `mmd_report` is now a pass-through, kept so existing call sites read
-unchanged. `estimate_bandwidth` and `compute_witness_scores` stay here.
+pipeline code uses; `mmd_report` is a pass-through onto it. `estimate_bandwidth` and
+`compute_witness_scores` live here.
 
 SWD is *not* aliased onto the shared one: `losses.functions.sliced_wasserstein_distance`
-is a different estimator with a different signature and return type, so SD's is carried
-in `metrics.py`.
+is a different estimator with a different signature and return type, so SD's own lives in
+`metrics.py`.
 
 ## Check
 

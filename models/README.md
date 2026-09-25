@@ -20,8 +20,8 @@ Map to the SD experiment: **`X` = the scribble** (the thing being optimised),
 path (MLGD). `scripts/fig1_toy_example.py:275-277` builds both from the same class and
 passes the conditional one to `optimize_guided` as `model_cond` (line 386).
 
-Putting that class inside a package named `priors/` would have named it for one of the
-two roles it plays. That is the whole reason Item 1 moved it up a level.
+Putting that class inside a package named `priors/` would name it for one of the two
+roles it plays, which is why it sits at `models/` level instead.
 
 `models/priors/` therefore contains **only an `__init__.py` of re-exports**. It is kept
 because it is the `P(X)` name in the paper's split and the counterpart to
@@ -46,13 +46,12 @@ there is none in this repo.**
 outside `models/__init__.py` and `models/priors/__init__.py`, which only re-export it.
 As far as the paper is concerned it is dead code — flagged, not deleted.
 
-It also carries a pre-existing in-module alias `DiffusionModelSDE = DiffusionModel`
-(`diffusion_general.py:468`, present before this refactor), so the continuous-time class
-now answers to three names: `models.diffusion_general.DiffusionModel`,
+It also carries an in-module alias `DiffusionModelSDE = DiffusionModel`
+(`diffusion_general.py:468`), so the continuous-time class answers to three names: `models.diffusion_general.DiffusionModel`,
 `...DiffusionModelSDE`, and `models.DiffusionModelCT`.
 
-The notebooks import a top-level `DiffusionGeneral` module that no longer exists in the
-repo; `notebooks/` is unmaintained.
+The notebooks import a top-level `DiffusionGeneral` module that does not exist in this
+repository; `notebooks/` is unmaintained.
 
 ## `models/samplers/`
 

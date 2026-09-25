@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/make_table1.py --settings 10x1 --epochs 50000 --force` |
-| Full tier | one retraining + one cell |
+| Full configuration | one retraining + one cell |
 | GPU | yes |
-| Smoke tier | CPU, ~1 min |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~1 min |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 `--force` retrains all three networks, not the conditional alone.
 

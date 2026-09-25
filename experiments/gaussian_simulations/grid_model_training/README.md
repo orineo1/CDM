@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/generate_data.py` + `scripts/train_models.py` |
-| Full tier | 27 trainings |
+| Full configuration | 27 trainings |
 | GPU | yes |
-| Smoke tier | CPU, ~10 s |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~10 s |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 `table1_main_grid` performs these trainings itself when its runs-dir is empty; this directory runs the training stage alone.
 

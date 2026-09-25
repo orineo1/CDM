@@ -13,4 +13,4 @@
 | (10, 10) | ~ 1.0 |
 
 Transcribed from `paper.txt`. No script in this repository produces these numbers; see
-`../../MISSING-RESULTS.md`.
+`../../REFERENCE-ARTIFACTS.md`.

@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/make_table1.py` (`--guidance-optim sgd|adam` + `--step-size`) |
-| Full tier | 3 cells x the values in `config/zeta_grid.txt` x 3 runs |
+| Full configuration | 3 cells x the values in `config/zeta_grid.txt` x 3 runs |
 | GPU | yes |
-| Smoke tier | CPU, ~20 s |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~20 s |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 `config/zeta_grid.txt` is read by `run.sh full`.
 

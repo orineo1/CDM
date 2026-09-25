@@ -1,7 +1,6 @@
 # Table 3 — `tab:sd_results`
 
-Published numbers, transcribed from the paper. **Imported, not reproduced.**
-Nothing in this repository re-ran them.
+Published numbers, transcribed from the paper.
 
 Distributional targets, N = 2,000 images; best per scenario in bold in the paper.
 MMD = (MMD²)^(1/2); ΔMMD is the relative improvement over the source scribble.

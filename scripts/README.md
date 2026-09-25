@@ -42,8 +42,8 @@ top-level `likelihood/` package (`likelihood/optimizer.py`,
 
 | File | What it does |
 | --- | --- |
-| `run_regression.py` | Tier 3: does the refactored code still reproduce the published numbers? |
-| `run_all_tests.sh` | Cluster entry point for Tiers 0-2 (`pytest tests/`). |
+| `run_regression.py` | Tier 3: compares a run against a recorded baseline (see `tests/README.md`). |
+| `run_all_tests.sh` | Runs the Tier 0-2 test suite (`pytest tests/`). |
 | `slurm_fig1.sh` | Figure 1 on the cluster, all settings, with restarts. |
 | `slurm_table1.sh` | Table 1 on the cluster: one array task per scenario, then a collect job. |
 | `cluster_setup.txt` | Cluster setup instructions. |
@@ -57,7 +57,6 @@ themselves:
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 ```
 
-This boilerplate (and the `# noqa: E402` it forces on every import below it) is deliberate
-for now: packaging changes install instructions and touches all of these files, so it is
-deferred to a separate change rather than folded into a reorganisation. Run scripts as
+This boilerplate (and the `# noqa: E402` it forces on every import below it) is the
+consequence of there being no package install step. Run scripts as
 `python scripts/<name>.py` from the repo root.

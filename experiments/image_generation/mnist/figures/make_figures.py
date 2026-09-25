@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """MNIST figures: the top-k digit panel, the per-seed rows, and the polar /
 cartesian histograms of P(Y | X = x_hat) against the target density
-(paper Figure 5 and Figures 6-8; inventory MN-02 and MN-03).
+(paper Figure 5 and Figures 6-8).
 
 Reads the `.pkl` run records written by `table2_mlgdf/run_mlgdf.py`.
 

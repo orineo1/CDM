@@ -6,7 +6,7 @@ Paper Section 5.2 (`sec:exp:mnist`), Table 2 (`tab:mnist`), Table 13
 
 ## Code
 
-Ported from `orineo1/conditional-matching-paper`:
+Source: `orineo1/conditional-matching-paper`:
 
 | what | path in the source repo |
 |---|---|
@@ -17,7 +17,6 @@ Ported from `orineo1/conditional-matching-paper`:
 | dataset construction | `MNIST/src/dataset.py` |
 
 Branch and commit: **`main`, MNIST tree at `7c856e2`** ("fix path to new dir").
-The repository tip at the time of the port was `841417c`.
 
 Why this branch:
 - `change-dir-HF-mnist_v2` @ `a298e21` has a **byte-identical** `MNIST/` tree
@@ -26,7 +25,7 @@ Why this branch:
 - `MNIST-CLEAN` @ `7b12001` is older: it predates the HuggingFace `subfolder="MNIST"`
   fix and the `REPO_ROOT` / `PYTHONPATH` handling (3 files, 6 lines).
 - `TFG_in_MNIST` @ `7613b2e` is `main` plus a TFG guidance extension
-  (+90 lines in `run_mlgdf.py`, a later experiment, not the paper's MLGD-F).
+  (a separate experiment, not the paper's MLGD-F).
 - `gread-search-mnist` @ `6b5af8b` is the hyperparameter-search branch; it
   carries grid-search drivers and committed artifacts (below), not the runner.
 - `MNIST-EXP` does not exist as a branch; the paper's `\repomnist` points at
@@ -57,6 +56,6 @@ numbers themselves.
   repository; it is fetched from HuggingFace.
 - No run record is committed on `main`; `MNIST/results/` does not exist there.
 
-## What was produced locally
-`outputs/` only, by the smoke tier, and it was deleted afterwards. The directory
-is empty. Nothing in `outputs/` is a published number.
+## Outputs
+`outputs/` is gitignored and holds only what a local run writes; nothing in it is
+a published number.

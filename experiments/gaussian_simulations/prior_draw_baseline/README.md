@@ -5,10 +5,9 @@
 | | |
 |---|---|
 | Script | **none in either repository** |
-| Full tier | — |
+| Full configuration | — |
 | GPU | no — analytic |
-| Smoke tier | — |
-| Tier run here | none — no producer |
+| Reduced configuration (`smoke`) | — |
 
 ## Run
 

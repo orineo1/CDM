@@ -1,7 +1,6 @@
 # Published reference -- MNIST figures
 
 Declared reference for this experiment: the figures as they appear in the paper.
-Nothing was re-rendered here.
 
 | paper float | label | what it shows | file named in the paper source |
 |---|---|---|---|

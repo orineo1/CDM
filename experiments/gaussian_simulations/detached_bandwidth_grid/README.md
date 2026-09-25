@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/make_table1.py` |
-| Full tier | one grid per arm |
+| Full configuration | one grid per arm |
 | GPU | yes |
-| Smoke tier | CPU, ~1 min |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~1 min |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 Detached is the library default; `--extra=--bandwidth-grad` selects the non-detached arm. Note the `=`: argparse refuses a lone `-flag` as a value.
 

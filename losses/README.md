@@ -7,7 +7,7 @@ consumed by `guidance/`; nothing in here knows about diffusion.
 
 | file | what is in it |
 |---|---|
-| `functions.py` | `compute_mmd` (ported from the paper repo), `RBF` kernel, `MMDLoss`, and the functional SWD pair `sliced_wasserstein_distance` / `compute_swd` |
+| `functions.py` | `compute_mmd` (the paper's, see below), `RBF` kernel, `MMDLoss`, and the functional SWD pair `sliced_wasserstein_distance` / `compute_swd` |
 | `sliced.py` | `SupportAwareSlicedWassersteinLoss` — the SWD used by the MNIST rotation experiment |
 | `circular.py` | angle <-> `(cos, sin)` conversion and a MoG-on-the-circle density evaluator |
 | `__init__.py` | imports the three submodules; exports no symbols of its own |
@@ -39,13 +39,13 @@ The file names do not predict the contents. Concretely:
   `bandwidth is None`) is treated as a constant of the kernel. `False` is the legacy
   behaviour and lets the gradient flow through it as well.
 
-`MMDLoss()` with no kernel no longer constructs an `RBF`; it calls `compute_mmd`, which
+`MMDLoss()` with no kernel does not construct an `RBF`; it calls `compute_mmd`, which
 builds its own single-bandwidth kernel (see below). The mixture above is what every
-existing call site injects explicitly, `MMDLoss(kernel=RBF(...))`.
+call site injects explicitly, `MMDLoss(kernel=RBF(...))`.
 
 ## The MMD is the paper's, not a local one
 
-`compute_mmd` in `functions.py` is a verbatim port of
+`compute_mmd` in `functions.py` is
 
     conditional-matching-paper  SD_cond_SD_controlnet/src/metrics.py :: compute_mmd
 
@@ -74,7 +74,6 @@ else; `guidance/` does not need to change.
 
 ## Known messiness
 
-SWD is split across `functions.py` and `sliced.py`, `circular.py` is filed here but holds
-helpers rather than a loss, and two blocks of commented-out dead code (an old training
-example and a superseded `sliced_wasserstein_distance`) were deleted from `functions.py`.
-This is known, not a trap; the layout was left as-is deliberately.
+SWD is split across `functions.py` and `sliced.py`, and `circular.py` is filed here but
+holds helpers rather than a loss. The layout is deliberate; the section above says where
+to look for each distance.

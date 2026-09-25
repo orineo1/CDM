@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/control_subsample.py` |
-| Full tier | 6 configurations x 25 restarts |
+| Full configuration | 6 configurations x 25 restarts |
 | GPU | yes |
-| Smoke tier | CPU, ~1.5 min |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~1.5 min |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 Needs `CMP_SIM_DIR` pointing at `conditional-matching-paper/simulations`; downloads two checkpoints from HuggingFace on first use. Witness configurations are not run in either tier.
 

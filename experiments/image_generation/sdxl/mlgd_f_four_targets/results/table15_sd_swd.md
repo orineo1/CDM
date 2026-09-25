@@ -1,7 +1,6 @@
 # Table 15 — `tab:sd_swd`
 
-Published numbers, transcribed from the paper. **Imported, not reproduced.**
-Nothing in this repository re-ran them.
+Published numbers, transcribed from the paper.
 
 MMD and SWD across all four target scenarios (N = 2,000 images). SWD is computed on the
 same images as Table 3 and is not part of the optimisation objective. ΔSWD (%) is

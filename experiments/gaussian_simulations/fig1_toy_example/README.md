@@ -5,16 +5,15 @@
 | | |
 |---|---|
 | Script | `scripts/fig1_toy_example.py` |
-| Full tier | four beta values x 2,000 trajectories, plus the four methods |
+| Full configuration | four beta values x 2,000 trajectories, plus the four methods |
 | GPU | yes |
-| Smoke tier | CPU, ~1 min (the script's own `--quick`) |
-| Tier run here | smoke |
+| Reduced configuration (`smoke`) | CPU, ~1 min (the script's own `--quick`) |
 
 ## Run
 
 ```
-bash run.sh smoke
-bash run.sh full
+bash run.sh smoke   # reduced configuration, for a quick run
+bash run.sh full    # the full configuration
 ```
 Or on a cluster: `sbatch scripts/slurm_fig1.sh`. Toy networks are cached under `outputs/ckpt/<setting>/`.
 

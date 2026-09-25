@@ -1,7 +1,6 @@
 # Published reference -- MNIST model training
 
-Declared reference: the configuration and timings **as published**. Nothing was
-retrained here.
+Declared reference: the configuration and timings **as published**.
 
 ## Unconditional DDPM prior (paper Table 11 architecture, Table 12 training)
 

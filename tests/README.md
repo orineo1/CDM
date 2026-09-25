@@ -5,45 +5,35 @@ Four tiers, cheapest first. `scripts/run_all_tests.sh` runs Tiers 0-2.
 | file | tier | what it establishes |
 |---|---|---|
 | `test_smoke.py` | 0 | the packages import and one tiny run completes |
-| `test_equivalence.py` | 1 | the refactored optimizers match `legacy/Optimization_legacy.py` on fixed seeds — **the merge gate** |
+| `test_equivalence.py` | 1 | the optimizers in `guidance/` match `legacy/Optimization_legacy.py` on fixed seeds — **the merge gate** |
 | `test_determinism.py` | 2 | the same seed twice gives the same answer |
 | `test_population.py` | — | particle/refinement plumbing, structure only (the file says outright that its values are meaningless) |
-| `test_refactor_guards.py` | 0.5 | one pinned defect per reorganisation item (added by this PR) |
-| `scripts/run_regression.py` | 3 | *intended* to compare against published numbers — **see below, it does not currently work** |
+| `test_refactor_guards.py` | 0.5 | narrow guards that inspect an object directly, one per defect they pin |
+| `scripts/run_regression.py` | 3 | *intended* to compare against published numbers — see below |
 
 All of the above are CPU-only, seconds, tiny untrained models, no downloads.
 
-## Read this before trusting a green run
+## What a green run does and does not mean
 
-### Tier 1 proves agreement, not correctness
+### Tier 1 establishes agreement, not correctness
 
-`test_equivalence.py` compares the refactored path against the frozen
-`legacy/Optimization_legacy.py`. But **both arms import the same modules under
+`test_equivalence.py` compares `guidance/` against the frozen
+`legacy/Optimization_legacy.py`. **Both arms import the same modules under
 `models/`, `losses/` and `utils/`.** A defect in a shared dependency is present
 identically on both sides, the difference cancels, and the gate stays green.
 
-Item 4 of the reorganisation is the worked example. `models/samplers/consistency.py`
-imported `GenericNN` and `TimeEmbedding` from `utils.nn` and then redefined both
-further down the file with smaller, different implementations; Python resolves
-module globals at call time, so `ConsistencyModel` built the *local* network and
-the import was dead. The equivalence gate exercises that exact code — it imports
-`ConsistencyModel`, instantiates it, and runs with `CM=True` — and was green
-throughout. After the fix both arms shifted by exactly the same amount and the
-gate reported `rel_diff=0.0000%`.
-
-So: a green Tier 1 says the two implementations agree. It says nothing about
+So a green Tier 1 says the two implementations agree. It says nothing about
 whether they are right. Defects of the "both sides are wrong in the same way"
 shape need a test that inspects the object rather than diffing two arms —
 `test_refactor_guards.py` is that kind of test.
 
-### Tier 3 is not currently a backstop either
+### Tier 3 is a stub
 
-The docs point at `scripts/run_regression.py` as the check that catches what
-Tier 1 cannot, because it compares against externally recorded published numbers.
-Two things make that untrue today (verified 2026-09-25 at `ba71795`):
+`scripts/run_regression.py` is meant to be the check Tier 1 cannot be, by
+comparing against externally recorded published numbers. Two things stand in the
+way:
 
-1. **There is no baseline.** `tests/golden/` is empty and untracked
-   (`git ls-files tests/golden` returns nothing), so a plain
+1. **There is no baseline.** `tests/golden/` is empty and untracked, so a plain
    `python scripts/run_regression.py` runs the five seeds and then exits **2**
    with `No baseline at .../tests/golden/synthetic_2d.json`. A fresh clone has
    nothing to compare against, and nothing in CI creates one.
@@ -61,5 +51,4 @@ Tier 3 as a stub, not as coverage.
 
 Anything in `tests/` runs in CI on every push, so keep new tests CPU-only,
 seconds, deterministic and download-free. `test_refactor_guards.py` is
-deliberately narrow: one guard per fixed defect, each demonstrated to fail on the
-pre-fix tree, not a general expansion of coverage.
+deliberately narrow: one guard per defect, not a general expansion of coverage.
