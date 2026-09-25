@@ -33,7 +33,7 @@ cleared before each run, and has been cleared again since — the tree ships emp
 **17 run, 0 fail, 2 have nothing to run.**
 
 `table1_main_grid`, `infeasible_target` and `swd_loss_control` were re-run after commit
-`4e0e603` (Item 12 changed `MMDLoss`) and after the environment's torch moved 2.12.0 →
+`c5e4266` and `9564617` (item 12 changed `MMDLoss`) and after the environment's torch moved 2.12.0 →
 2.14.0. All three still run.
 
 ## Failures encountered during development, and their cause

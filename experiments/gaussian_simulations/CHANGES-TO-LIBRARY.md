@@ -21,8 +21,8 @@ squared-error objective rather than a distributional one.
 the new branch is reachable only by passing the new value. `python -m pytest tests/ -q`:
 24 passed before and after.
 
-`losses/functions.py` was subsequently committed as part of `4e0e603` (Item 12), so the
-addition now lives in that commit; `scripts/find_xstar.py` remains uncommitted here.
+`pointwise_squared_error` in `losses/functions.py` was committed as part of `c5e4266`;
+the `--loss l2` dispatch in `scripts/find_xstar.py` was committed with item 9 (`72d3b8f`).
 
 ## Things left alone
 
