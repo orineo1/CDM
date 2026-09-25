@@ -166,12 +166,36 @@ python scripts/run_regression.py                            # check against it
 
 `tests/test_equivalence.py` checks each refactored optimizer against the frozen
 reference in `legacy/Optimization_legacy.py` on fixed seeds. The same suite runs
-on GitHub Actions for every push.
+on GitHub Actions for every push. Read `tests/README.md` before trusting a green
+run: both arms of that comparison import the same `models/`, `losses/` and
+`utils/`, so it proves agreement, not correctness, and `run_regression.py` is not
+currently a working Tier 3 backstop either.
 
 ## Results
 
-Runs call `gcio.results.save_run(...)` and tables are built from the store,
-`results/runs.jsonl`.
+`gcio` is a small run store: `save_run(...)` appends one JSON object per run to
+`results/runs.jsonl` (override the path with `GC_RESULTS_STORE`), and
+`load_runs(...)` / `to_dataframe(...)` read it back. It exists so a published
+table can be regenerated from data instead of pasted from console output.
+
+**It is only half wired in.** Three entry points call `save_run`:
+`scripts/run_regression.py`, `scripts/find_xstar.py` (unless `--no-store`) and
+`scripts/control_subsample.py`. The other scripts do not — they write their own
+JSON next to their output (`find_xstar.py --out`, `make_table1.py`
+`<out>.json/.md/.tex`), and that is what the tables are actually built from:
+`make_table1.py` reads the per-run `<METHOD>.json` files under `--runs-dir`, and
+in fact invokes `find_xstar.py` with `--no-store`. The one reader of the store in
+the repo is `notebooks/CompareMethods-Final.ipynb`.
+
+`results/runs.jsonl` is also in `.gitignore`, so a fresh clone starts with an
+empty store. Nothing published is reproducible from it today.
+
+Wiring the remaining entry points into the store — and making `make_table1.py`
+build from it rather than from loose JSON — is open work, not a done thing.
+`checks/check_gcio_claims.py` pins the caller count so this paragraph and the
+code cannot drift apart again.
+
+<!-- gcio-callers: scripts/run_regression.py scripts/find_xstar.py scripts/control_subsample.py -->
 
 ## Cluster
 
