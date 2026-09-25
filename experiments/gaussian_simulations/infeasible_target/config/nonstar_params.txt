@@ -1,0 +1,33 @@
+# nonstar / infeasible-target scenario -- paper Table 9 (tab:nonstar_results) and Figure 4.
+#
+# SPEC SOURCE (not code, parameters):
+#   repo   github.com/orineo1/conditional-matching-paper
+#   branch main   commit fc4389d
+#   path   simulations/notebooks/Exp_nonstar_mmd_target_ablation.ipynb, config cell:
+#          X_BI, X_UNI = -2.0, 2.0 ; SIGMA_X, SIGMA_Y = 0.7, 0.2 ; Y_STAR = 4.0 ;
+#          ZERO_SIGMA_EPS = 1e-6 ; components (x_bi,2), (x_bi,4), (x_uni,3), w = 1/4,1/4,1/2
+#   The same scenario is stated in the paper at main.tex (App. B.9).
+#
+# Read by scripts/generate_data.py --params-file.
+
+# Joint P(X, Y): X is the leading dimension (condition_on = 1), Y the trailing one.
+mu_list = [
+    torch.tensor([-2.0, 2.0]),
+    torch.tensor([-2.0, 4.0]),
+    torch.tensor([ 2.0, 3.0]),
+]
+
+Sigma_list = [
+    torch.diag(torch.tensor([0.7 ** 2, 0.2 ** 2])),
+    torch.diag(torch.tensor([0.7 ** 2, 0.2 ** 2])),
+    torch.diag(torch.tensor([0.7 ** 2, 0.2 ** 2])),
+]
+
+alpha = torch.tensor([0.25, 0.25, 0.50])
+
+# Target G(Y): a point mass at y* = 4, floored so the covariance stays invertible.
+# No x realises it -- that is the point of the experiment, hence x_star is None.
+target_means     = torch.tensor([[4.0]])
+target_variances = torch.tensor([[[1e-6]]])
+target_weights   = torch.tensor([1.0])
+x_star = None

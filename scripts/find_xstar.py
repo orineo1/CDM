@@ -33,7 +33,8 @@ Which algorithm (presets; any individual knob below overrides the preset)
 Inner estimator (Algorithm 2)
   --n-cond N          conditional samples per step for the loss         (250)
   --n-target M        target samples per step                       (= n_cond)
-  --loss mmd|swd      MMD with a multi-bandwidth RBF kernel, or sliced Wasserstein
+  --loss mmd|swd|l2   MMD with a multi-bandwidth RBF kernel, sliced Wasserstein, or the
+                      pointwise squared-error baseline (paper Table 9's non-distributional arm)
   --rbf-kernels K --rbf-mul F   RBF mixture: K bandwidths, geometric factor F
   --swd-projections P
   --select all|uniform --n-sel k   backpropagate through all n_cond samples,
@@ -159,7 +160,7 @@ def parse_args():
     g = p.add_argument_group("inner estimator")
     g.add_argument("--n-cond", type=int, default=250)
     g.add_argument("--n-target", type=int, default=None)
-    g.add_argument("--loss", choices=["mmd", "swd"], default="mmd")
+    g.add_argument("--loss", choices=["mmd", "swd", "l2"], default="mmd")
     g.add_argument("--rbf-kernels", type=int, default=5)
     g.add_argument("--rbf-mul", type=float, default=2.0)
     g.add_argument("--swd-projections", type=int, default=100)
@@ -212,6 +213,10 @@ def make_loss(args):
     if args.loss == "mmd":
         return MMDLoss(kernel=RBF(n_kernels=args.rbf_kernels, mul_factor=args.rbf_mul, device=args.device,
                                   detach_bandwidth=not args.bandwidth_grad))
+    if args.loss == "l2":
+        # pointwise squared error -- NOT a distributional loss. Table 9's baseline arm.
+        from losses.functions import pointwise_squared_error
+        return pointwise_squared_error
     # differentiable sliced Wasserstein (torch sort); for dim(Y) = 1 it is the exact W1 whose gradient
     # does not vanish at long range, unlike the MMD between well-separated narrow modes
     from losses.sliced import SupportAwareSlicedWassersteinLoss

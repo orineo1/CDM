@@ -1,0 +1,15 @@
+# The published configuration of the Gaussian grid (paper App. B.4 + B.5).
+# This file is a record. The flags that actually run are literal in ../run.sh.
+scenarios          = 1x1 1x5 1x10 5x1 5x5 5x10 10x1 10x5 10x10
+mixture            = random 4-component MoG, two components share the x-part of their mean
+data               = generate_data.py --random-mog --standardize, 20000 samples
+training           = train_models.py --fresh-samples, 10000 batches of 1024, MLP 3 x 128
+loss               = MMD, multi-bandwidth RBF (--rbf-kernels 5 --rbf-mul 2.0)
+n_cond             = 250
+diffusion steps T  = 100
+trajectories       = 10 (restarts for MLGD/MLGD-F, particles for PMLGD/PMLGD-F)
+resampling         = exp(-5 * loss), ESS < 0.5 * N
+guidance push      = Adam form, step 0.05
+refinement         = 100 steps, lr 0.02, 1000 samples/step
+runs per cell      = 5
+seed               = 42
