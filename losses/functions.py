@@ -37,14 +37,34 @@ class MMDLoss(nn.Module):
         self.to(device)
 
     def forward(self, X, Y):
+        """Unbiased (U-statistic) squared MMD -- the paper's Eq. 2 (eq:mmd-ustat-def).
+
+        Until 2026-09-25 this method computed the V-statistic: `.mean()` over the
+        full within-sample blocks, diagonal included, denominator n^2. The repo now
+        uses one estimator everywhere, the U-statistic.
+
+        The estimator below drops the diagonal from each within-sample block and
+        divides by n(n-1) / m(m-1); the cross term keeps its 1/(nm). This matches the
+        paper's Eq. 2 and the SD pipeline, which already used the U-statistic
+        (conditional-matching-paper SD_cond_SD_controlnet/src/metrics.py:159).
+        Being unbiased it can return a small negative value; that is correct, and
+        callers must not clamp it. The return value is squared MMD (no sqrt).
+        """
         X = X.to(self.device)
         Y = Y.to(self.device)
         K = self.kernel(torch.vstack([X, Y]))
 
-        X_size = X.shape[0]
-        XX = K[:X_size, :X_size].mean()
-        XY = K[:X_size, X_size:].mean()
-        YY = K[X_size:, X_size:].mean()
+        n = X.shape[0]
+        m = Y.shape[0]
+        K_XX = K[:n, :n]
+        K_YY = K[n:, n:]
+        K_XY = K[:n, n:]
+
+        # drop the diagonal: k(x_i, x_i) is not a sample of E k(x, x')
+        zero = K.sum() * 0.0  # keeps the graph/device/dtype when a block is degenerate
+        XX = (K_XX.sum() - K_XX.diagonal().sum()) / (n * (n - 1)) if n > 1 else zero
+        YY = (K_YY.sum() - K_YY.diagonal().sum()) / (m * (m - 1)) if m > 1 else zero
+        XY = K_XY.sum() / (n * m)
         return XX - 2 * XY + YY
 
 
@@ -158,3 +178,29 @@ def compute_swd(
 
     return swd,norm_swd
 
+
+
+# ---------------------------------------------------------------------------
+# Pointwise (non-distributional) baseline loss.
+#
+# Added for experiments/gaussian_simulations/infeasible_target (paper Table 9,
+# tab:nonstar_results), whose two "pointwise" arms need a squared-error objective
+# rather than a distributional one. Upstream this is
+# conditional-matching-paper simulations/src/Optimization.py::_step_loss, branch
+# loss == "L2": ((target_samples - mog_samples) ** 2).mean() -- an unpaired,
+# per-row squared distance between two independently drawn batches. It is exactly
+# the paper's pointwise (y - y*)^2 when the target is degenerate (every row equal,
+# i.e. sigma_t -> 0), which is the only setting the paper uses it in; for a
+# non-degenerate target it depends on the arbitrary row pairing between the two
+# batches, so it is not a distance and is deliberately not offered as a general
+# alternative to MMD/SWD.
+# ---------------------------------------------------------------------------
+def pointwise_squared_error(model_samples, target_samples):
+    """Mean squared distance between two equal-length sample batches, row by row.
+
+    Both arguments are [n, dim_y]. Differentiable in `model_samples`.
+    """
+    if model_samples.shape[0] != target_samples.shape[0]:
+        n = min(model_samples.shape[0], target_samples.shape[0])
+        model_samples, target_samples = model_samples[:n], target_samples[:n]
+    return ((target_samples - model_samples) ** 2).mean()

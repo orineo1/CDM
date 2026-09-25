@@ -41,6 +41,21 @@ The file names do not predict the contents. Concretely:
 
 `MMDLoss()` with no kernel constructs `RBF(device=device)`, i.e. all of the above.
 
+## `MMDLoss` is the UNBIASED (U-statistic) estimator — changed 2026-09-25
+
+`MMDLoss.forward` returns the **squared** MMD as the U-statistic of the paper's Eq. 2
+(`eq:mmd-ustat-def`): the diagonal is dropped from each within-sample kernel block and
+the denominators are `n(n-1)` and `m(m-1)`; the cross term keeps `1/(nm)`. There is no
+`sqrt`, and no flag to select a different estimator.
+
+**Until 2026-09-25 it was the V-statistic** — `.mean()` over the full blocks, diagonal
+included, denominator `n^2`. The repo now uses one estimator everywhere. The SD pipeline
+(`SD_cond_SD_controlnet/src/metrics.py`) already used the U-statistic, so this aligns them.
+
+One consequence for callers: an unbiased estimator **can be negative** and must not be
+clamped or square-rooted. No call site in the repo does either — they only minimise and
+compare. `checks/check_mmd_unbiased.py` is the guard.
+
 ## The contract `guidance/` relies on
 
 A loss is any callable `(X, Y) -> scalar tensor` — predicted samples first, target samples
