@@ -10,7 +10,24 @@ Run on the cluster:
 
 Deliberately cheap: tiny untrained models, few steps, few samples. This tests
 CODE equivalence, not scientific results -- untrained weights are fine because
-both paths see the same weights. Scientific agreement is scripts/run_regression.py.
+both paths see the same weights.
+
+--------------------------------------------------------------------------
+BLIND SPOT -- read tests/README.md before treating a green run as correctness.
+Both arms of this comparison import the SAME modules under models/, losses/ and
+utils/. A defect in a shared dependency is present identically on both sides,
+the difference cancels, and this gate stays green. The worked example is the
+shadowed network in models/samplers/consistency.py (reorg Item 4): this file
+exercises it -- imports ConsistencyModel, instantiates it, runs with CM=True --
+and was green the whole time it was broken; after the fix both arms moved by the
+same amount and the gate reported rel_diff=0.0000%.
+
+A green Tier 1 is evidence of AGREEMENT, not of correctness. And the intended
+backstop, scripts/run_regression.py, does not currently work either: tests/golden/
+is empty and untracked so it exits 2, and the models it scores are untrained
+random inits. tests/test_refactor_guards.py holds the object-inspecting guards
+that this structure cannot provide.
+--------------------------------------------------------------------------
 
 --------------------------------------------------------------------------
 IF A TEST FAILS: the most likely cause is RNG CONSUMPTION ORDER, not wrong
