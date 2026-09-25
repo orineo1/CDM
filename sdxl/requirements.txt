@@ -1,0 +1,16 @@
+# SD-specific dependencies, on top of the repo's root requirements.txt.
+# The SDXL experiment needs a CUDA GPU; these are the packages its pipeline imports.
+torch
+diffusers>=0.27
+transformers
+peft
+accelerate
+safetensors
+controlnet_aux        # HEDdetector (lllyasviel/Annotators)
+huggingface_hub
+scikit-learn          # PCA in the CLIP-space plots
+matplotlib
+numpy
+Pillow
+tqdm
+wandb                 # run logging; the entry points import it at module scope
