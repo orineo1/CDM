@@ -1,0 +1,9 @@
+# MLGD-F inference hyperparameters for the MNIST rotation experiments.
+# Source: paper Table 13 (tab:mnist_lgd_hparams). Read by run.sh full.
+# Fixed across all three targets: SWD with 50 projections, 15 independent runs,
+# iCT sampling steps [150, 50, 20, 10, 5, 1], output clamped after optimisation.
+#
+# target    n_cond  T     n_mc  step_size_mode  variance
+unimodal    1500    130   3     double          515
+bimodal     1500    125   10    original        252
+uniform     600     290   3     original        -
