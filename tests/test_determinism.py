@@ -16,8 +16,8 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from priors.diffusion import DiffusionModel
-from samplers.consistency import ConsistencyModel
+from models.diffusion import DiffusionModel
+from models.samplers.consistency import ConsistencyModel
 from losses.functions import MMDLoss, RBF
 from guidance import GuidanceConfig, optimize_guided, init_randn, perturb_beta_ratio
 

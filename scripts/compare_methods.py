@@ -35,7 +35,7 @@ import torch
 import numpy as np
 
 from utils import dist as dist_utils
-from samplers import flow_matching as FlowMatching
+from models.samplers import flow_matching as FlowMatching
 from legacy import Optimization
 from likelihood_optimizer import optimize_likelihood, optimize_likelihood_direct
 from losses.functions import MMDLoss, RBF

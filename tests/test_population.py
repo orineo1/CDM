@@ -11,8 +11,8 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from priors.diffusion import DiffusionModel
-from samplers.consistency import ConsistencyModel
+from models.diffusion import DiffusionModel
+from models.samplers.consistency import ConsistencyModel
 from losses.functions import MMDLoss, RBF
 from guidance import (GuidanceConfig, optimize_guided, optimize_guided_population, init_randn,
                       perturb_beta_ratio)
@@ -102,7 +102,7 @@ def test_linear_resample_schedule_ramps_and_runs():
 
 
 def test_exact_conditional_sampler_matches_analytic_conditional():
-    from samplers.exact import ExactConditionalSampler
+    from models.samplers.exact import ExactConditionalSampler
     from utils.dist import compute_conditionals, compute_alpha
     torch.manual_seed(0)
     mu = [torch.tensor([0., 1., 0.5]), torch.tensor([2., -1., 1.])]

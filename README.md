@@ -142,8 +142,9 @@ their original signatures.
 
 ```
 guidance/       the guided-diffusion optimizer: core.py (optimize_guided), config.py (GuidanceConfig)
-priors/         unconditional diffusion models over X
-samplers/       conditional samplers for P(Y|X): consistency models, flow matching
+models/         the frozen networks: diffusion.py (discrete-time DiffusionModel) and
+                diffusion_general.py (continuous-time), plus priors/ (P(X)) and
+                samplers/ (P(Y|X): consistency models, flow matching, exact)
 losses/         MMD/RBF, circular, sliced Wasserstein
 utils/          networks, mixtures and the exact L2 between GMMs, evaluation, superposition
 gcio/           run persistence (results/runs.jsonl)

@@ -77,8 +77,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from guidance import GuidanceConfig, optimize_guided, optimize_guided_population   # noqa: E402
 from guidance.config import (init_randn, init_zeros, perturb_beta_ratio,    # noqa: E402
                              perturb_none, aggregate_logsumexp, aggregate_single)
-from priors.diffusion import DiffusionModel                                 # noqa: E402
-from samplers.consistency import ConsistencyModeliCT                        # noqa: E402
+from models.diffusion import DiffusionModel                                 # noqa: E402
+from models.samplers.consistency import ConsistencyModeliCT                 # noqa: E402
 from losses.functions import MMDLoss, RBF                                    # noqa: E402
 from utils.dist import (generate_mog_samples_not_differentiable,            # noqa: E402
                         compute_conditionals, compute_alpha,

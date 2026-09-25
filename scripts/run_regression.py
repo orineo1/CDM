@@ -42,8 +42,8 @@ REL_TOL = 0.05
 
 
 def build_models(device, seed, nunits=128, diffusion_steps=100):
-    from priors.diffusion import DiffusionModel
-    from samplers.consistency import ConsistencyModel
+    from models.diffusion import DiffusionModel
+    from models.samplers.consistency import ConsistencyModel
 
     torch.manual_seed(seed)
     if device == "cuda":

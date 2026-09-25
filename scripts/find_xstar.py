@@ -284,7 +284,7 @@ def main():
     dev = args.device
     prior, prior_arch = load_model(args.prior, dev)
     if args.sampler == "exact":   # oracle: the analytic conditional of the target file's mixture, no sampler error
-        from samplers.exact import ExactConditionalSampler
+        from models.samplers.exact import ExactConditionalSampler
         _, info0 = load_target(args.target, "cpu")
         assert info0.get("mu_list") is not None, "--sampler exact needs a target file with the mixture"
         c0 = torch.load(args.target, map_location="cpu", weights_only=False)["condition_on"]

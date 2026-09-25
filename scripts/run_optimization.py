@@ -20,9 +20,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 import torch
 from utils import dist as dist_utils
-from priors import diffusion as Diffusion
-from samplers import consistency as ConsistencyModels
-from samplers import flow_matching as FlowMatching
+from models import diffusion as Diffusion
+from models.samplers import consistency as ConsistencyModels
+from models.samplers import flow_matching as FlowMatching
 from legacy import Optimization
 from guidance import GuidanceConfig, optimize_guided
 from guidance.config import init_randn, init_zeros, perturb_beta_ratio, aggregate_logsumexp

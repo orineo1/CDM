@@ -25,8 +25,8 @@ def test_imports():
     from legacy import Optimization
     from legacy import Optimization_legacy
     from losses import functions as LossFunctions
-    from priors import diffusion as Diffusion
-    from samplers import consistency as ConsistencyModels
+    from models import diffusion as Diffusion
+    from models.samplers import consistency as ConsistencyModels
 
     assert hasattr(guidance, "optimize_guided")
     assert hasattr(guidance, "GuidanceConfig")
@@ -83,8 +83,8 @@ def test_logsumexp_is_a_softmin_not_a_mean():
 def test_end_to_end_tiny():
     """Run the core end to end on a tiny model. Values are meaningless
     (untrained); we only require it completes and returns finite numbers."""
-    from priors.diffusion import DiffusionModel
-    from samplers.consistency import ConsistencyModel
+    from models.diffusion import DiffusionModel
+    from models.samplers.consistency import ConsistencyModel
     from losses.functions import MMDLoss, RBF
     from guidance import GuidanceConfig, optimize_guided, init_randn, perturb_beta_ratio
 
