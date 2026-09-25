@@ -27,28 +27,13 @@ roles it plays, which is why it sits at `models/` level instead.
 because it is the `P(X)` name in the paper's split and the counterpart to
 `models/samplers/`; the classes it names live one directory up.
 
-## `diffusion.py` vs `diffusion_general.py`
+## `diffusion.py`
 
-Both define a class called `DiffusionModel`. They are different models, not duplicates
-(see the naming note at `models/diffusion_general.py:447-466`).
-
-| module | formulation | exported as |
-|---|---|---|
-| `diffusion.py` | **discrete-time**: timestep-indexed DDPM/DDIM, `betas`/`alphas` schedule, `sample_ddim_step` | `models.DiffusionModel` |
-| `diffusion_general.py` | **continuous-time SDE**: drift/diffusion coefficients, score-matching loss | `models.DiffusionModelCT` |
+`DiffusionModel` is **discrete-time**: timestep-indexed DDPM/DDIM, `betas`/`alphas`
+schedule, `sample_ddim_step`. Exported as `models.DiffusionModel`.
 
 **"Discrete-time" means timestep-indexed. It does NOT mean discrete-state diffusion —
 there is none in this repo.**
-
-**Only the discrete-time class is used.** Every import in the live code
-(`scripts/`, `tests/`) is `from models.diffusion import DiffusionModel` or
-`from models import diffusion as Diffusion`. `diffusion_general.py` has **no importers**
-outside `models/__init__.py` and `models/priors/__init__.py`, which only re-export it.
-As far as the paper is concerned it is dead code — flagged, not deleted.
-
-It also carries an in-module alias `DiffusionModelSDE = DiffusionModel`
-(`diffusion_general.py:468`), so the continuous-time class answers to three names: `models.diffusion_general.DiffusionModel`,
-`...DiffusionModelSDE`, and `models.DiffusionModelCT`.
 
 ## `models/samplers/`
 
@@ -71,8 +56,6 @@ alongside `"state_dict"` and `"config"` (`train_models.py:207-234`), and
 |---|---|
 | `"diffusion"` | `models.diffusion.DiffusionModel` (discrete-time) |
 | `"cm"` | `models.samplers.consistency.ConsistencyModeliCT` — note: the iCT variant, not `ConsistencyModel` |
-
-No checkpoint format in this repo reconstructs `DiffusionModelCT`.
 
 `MnistModels/MnistConditional500Epoch.pt` is a different format — its keys are `epoch`,
 `model_state_dict`, `optimizer_state_dict`, `scheduler_state_dict`, `loss`,

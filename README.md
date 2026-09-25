@@ -141,11 +141,10 @@ subsampling through `cond_output_transform`.
 
 ```
 guidance/       the guided-diffusion optimizer: core.py (optimize_guided), config.py (GuidanceConfig)
-models/         the frozen networks: diffusion.py (discrete-time DiffusionModel) and
-                diffusion_general.py (continuous-time), plus priors/ (P(X)) and
+models/         the frozen networks: diffusion.py (discrete-time DiffusionModel), plus priors/ (P(X)) and
                 samplers/ (P(Y|X): consistency models, exact)
 losses/         MMD/RBF, circular, sliced Wasserstein
-utils/          networks, mixtures and the exact L2 between GMMs, evaluation, superposition
+utils/          networks, mixtures and the exact L2 between GMMs, evaluation
 gcio/           run persistence (results/runs.jsonl)
 scripts/        all command-line entry points (find_xstar.py is the method), test runners, cluster templates
 experiments/    one directory per paper experiment: what it produces, the command, the reference numbers
