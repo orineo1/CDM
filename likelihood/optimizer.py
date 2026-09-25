@@ -15,7 +15,7 @@ integrator (torchdiffeq) that does NOT use FM_Solver_Extension_module.py,
 thus avoiding its time_grid[0]==1.0 assertion.
 
 Usage:
-    from likelihood_optimizer import optimize_likelihood
+    from likelihood import optimize_likelihood
 
     x_hat, loss_val = optimize_likelihood(
         model_cond,       # trained FMModel (conditional)
@@ -34,7 +34,7 @@ from torch.distributions import Independent, Normal
 from torchdiffeq import odeint
 from flow_matching.utils import gradient
 
-from representative_points import get_representative_points, get_noised_representatives
+from .representative_points import get_representative_points, get_noised_representatives
 
 
 def compute_log_likelihood_at_t(model, y_t, t_val, x_cond, step_size=0.02,

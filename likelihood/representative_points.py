@@ -6,7 +6,7 @@ For low-dimensional Y (dim <= 2): uses a deterministic grid with density-based w
 For higher-dimensional Y: uses stratified Monte Carlo sampling from G components.
 
 Usage:
-    from representative_points import get_representative_points
+    from likelihood import get_representative_points
 
     # G is specified by its MoG parameters
     y_rep, w_rep = get_representative_points(
