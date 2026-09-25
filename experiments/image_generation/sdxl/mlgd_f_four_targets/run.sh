@@ -5,7 +5,7 @@
 #
 #   bash run.sh check              CPU, seconds, no downloads, no GPU.
 #                                  Static integrity of the ported package + proof that
-#                                  the SD MMD routes through the shared U-statistic.
+#                                  the SD MMD is the shared compute_mmd.
 #                                  This is the ONLY tier that runs without a GPU.
 #
 #   bash run.sh smoke <scenario>   GPU REQUIRED. Tiny: 6 guided steps, 6 variations.

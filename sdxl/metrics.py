@@ -2,9 +2,9 @@
 sdxl/metrics.py -- SD-specific metrics, plus the seam to the shared MMD.
 
 MMD is NOT implemented here. `compute_mmd`, `mmd_report` and `compute_witness_scores`
-are re-exported from `sdxl.mmd`, which builds the SD kernel and hands it to the SHARED
-unbiased estimator `losses.functions.MMDLoss`. This module keeps the upstream names so
-the ported pipeline code reads as it did.
+are re-exported from `sdxl.mmd`, which aliases the SHARED `losses.functions.compute_mmd`
+-- the port of the paper repo's own MMD, SD kernel included. This module keeps the
+upstream names so the ported pipeline code reads as it did.
 
 SWD below IS SD-specific and stays. The shared `losses.functions.sliced_wasserstein_distance`
 is a different estimator (per-projection 1-D Wasserstein via `ot.wasserstein_1d`) with a
@@ -19,7 +19,7 @@ import numpy as np
 import torch
 import torchvision.transforms.functional as TF
 
-from sdxl.mmd import (  # the shared U-statistic, under the upstream names
+from sdxl.mmd import (  # the shared MMD, under the upstream names
     sd_mmd as compute_mmd,
     mmd_report,
     compute_witness_scores,
@@ -162,7 +162,7 @@ def evaluate_distribution_mmd(
 
     Returns:
         (mmd_scalar, eval_photos_list, clip_embs) -- mmd_scalar is
-        mmd_report()'d (sqrt of the unbiased MMD^2_U), for display/comparison.
+        the value upstream reports, sqrt(|MMD^2| + 1e-8), for display/comparison.
     """
     from sdxl.clip_utils import encode_images_clip
     from sdxl.image_utils import latent_to_pil
@@ -196,9 +196,8 @@ def evaluate_distribution_mmd(
     clip_model.to("cpu")
 
     # Report-only value: this function exists purely to log/compare an MMD number
-    # (called under torch.no_grad(), never feeds a loss), so return the square root
-    # for a human-readable, apples-to-apples comparison with run_dps_step_clip's own
-    # reported mmd_loss (also mmd_report()'d) rather than the plain squared statistic.
+    # (called under torch.no_grad(), never feeds a loss). `mmd_report` is a pass-through
+    # now that `compute_mmd` returns upstream's square-rooted value directly.
     mmd = mmd_report(compute_mmd(clip_embs, all_clip_embeddings)).item()
 
     return mmd, eval_photos, clip_embs

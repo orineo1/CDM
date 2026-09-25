@@ -48,7 +48,6 @@ What *was* verified here, by `bash run.sh check`:
 - every one of the 16 rewired intra-package imports resolves, and all 13 modules
   byte-compile (`sdxl/check_imports.py`) — this is what the port could plausibly have
   broken, since upstream used bare sibling imports and a `sys.path` shim;
-- the SD MMD routed through the **shared** `losses.functions.MMDLoss` reproduces
-  upstream's vendored formula to 1e-6, the estimator is the unbiased U-statistic
-  (`MMD²(X,X) < 0`), and gradients flow through the generated samples while the target
-  stays detached (`sdxl/check_mmd_equivalence.py`).
+- the SD MMD, which is the **shared** `losses.functions.compute_mmd`, reproduces
+  upstream's formula to 1e-6, and gradients flow through the generated samples while the
+  target stays detached (`sdxl/check_mmd_equivalence.py`).

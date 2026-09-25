@@ -1,27 +1,15 @@
 """
-sdxl/mmd.py -- the SD experiment's MMD, built ON TOP of the shared estimator.
+sdxl/mmd.py -- the SD experiment's MMD, which IS the shared one.
 
-THE DIVISION OF LABOUR, which is the point of this file:
+`compute_mmd` in `losses.functions` is the port of the function that produced the
+paper's SD tables (conditional-matching-paper SD_cond_SD_controlnet/src/metrics.py).
+SD's kernel -- a single median-heuristic bandwidth raised to a generalised exponent
+`alpha`, k(a,b) = exp(-(||a-b||^2 / 2bw^2)^alpha) -- is that function's own kernel, so
+there is nothing SD-specific left to build here: `sd_mmd` is a thin alias that keeps the
+name the ported pipeline code uses.
 
-  * The ESTIMATOR is shared. The U-statistic arithmetic -- drop the diagonal from
-    each within-sample block, divide by n(n-1) and m(m-1), keep 1/(nm) on the cross
-    term -- lives in `losses.functions.MMDLoss` and is CALLED, not copied. That class
-    was a V-statistic until 2026-09-25; it is now the U-statistic, which is what the
-    SD pipeline always used and what produced the paper's Tables 3 and 15.
-
-  * The KERNEL is SD-specific, so it is defined here. The shared `losses.RBF` is a
-    5-bandwidth mixture (mul_factor 2.0) with a MEAN-based bandwidth. SD uses a
-    SINGLE bandwidth from the MEDIAN heuristic on the cross-distances, raised to a
-    generalised exponent `alpha`:  k(a,b) = exp(-(||a-b||^2 / 2bw^2)^alpha).
-    These are different kernels and give different numbers. Substituting the shared
-    RBF here would silently change the published SD results, so it is not done.
-    `MMDLoss` takes an injected kernel, which is exactly the seam we need.
-
-  * The sqrt WRAPPER is SD-specific and stays here. SD reports
-    sqrt(|MMD^2_U| + 1e-8). The absolute value is load-bearing: an unbiased estimator
-    legitimately returns small negative values and the paper's MMD column is a
-    square root. `mmd_report` is for DISPLAY ONLY -- the loss and its gradient use
-    the plain squared statistic, as upstream does.
+What remains in this file is the bandwidth helper and the witness scores, which the
+pipeline imports separately.
 
 Upstream equivalent: SD_cond_SD_controlnet/src/metrics.py at
 orineo1/conditional-matching-paper @ cb8bc91.
@@ -29,9 +17,8 @@ orineo1/conditional-matching-paper @ cb8bc91.
 
 import numpy as np
 import torch
-from torch import nn
 
-from losses.functions import MMDLoss   # <- the shared U-statistic estimator
+from losses.functions import compute_mmd as _shared_compute_mmd
 
 
 def _as_2d_float(t):
@@ -53,46 +40,25 @@ def estimate_bandwidth(x, y, bandwidth_scale=1.0):
     return bw.detach() * bandwidth_scale
 
 
-class GeneralizedRBF(nn.Module):
-    """exp(-(||a-b||^2 / 2bw^2)^alpha) over one stacked matrix, at a FIXED bandwidth.
+def sd_mmd(x, y, bandwidth=None, bandwidth_scale=1.0, kernel_alpha=1.0, cache_target=False):
+    """The shared `losses.functions.compute_mmd`, under the name the SD code uses.
 
-    Fixed rather than data-derived on purpose: SD estimates the bandwidth from the
-    x-vs-y cross distances, but the shared MMDLoss hands its kernel the CONCATENATION
-    of X and Y and so cannot express that split. The bandwidth is therefore computed
-    by `sd_mmd` before the kernel is built, and passed in.
+    Gradients flow through `x`; `y` (the target) is detached inside `compute_mmd`.
+    Returns what upstream returns: sqrt(|MMD^2| + 1e-8).
     """
-
-    def __init__(self, bandwidth, alpha=1.0):
-        super().__init__()
-        self.bandwidth = bandwidth
-        self.alpha = alpha
-
-    def forward(self, Z):
-        sq = (Z ** 2).sum(1, keepdim=True)
-        dist_sq = sq + sq.T - 2 * Z @ Z.T
-        return torch.exp(-(dist_sq / (2 * self.bandwidth ** 2)) ** self.alpha)
+    return _shared_compute_mmd(x, y, bandwidth=bandwidth, bandwidth_scale=bandwidth_scale,
+                               kernel_alpha=kernel_alpha, cache_target=cache_target)
 
 
-def sd_mmd(x, y, bandwidth=None, bandwidth_scale=1.0, kernel_alpha=1.0):
-    """Unbiased squared MMD (MMD^2_U) in CLIP space, via the shared estimator.
+def mmd_report(mmd_value):
+    """Pass-through, kept so the pipeline's `mmd_report(compute_mmd(...))` calls still read.
 
-    Gradients flow through `x`; `y` (the target) is detached, as upstream.
-    Returns the SQUARED statistic -- no square root. Use `mmd_report` for display.
+    `compute_mmd` already returns the square-rooted value that upstream reports, so there
+    is nothing left for this to do. Tensors and floats both come back as a tensor.
     """
-    x = _as_2d_float(x)
-    y = _as_2d_float(y).detach()
-    y = y.to(x.device)
-    if bandwidth is None:
-        bandwidth = estimate_bandwidth(x.detach(), y, bandwidth_scale)
-    kernel = GeneralizedRBF(bandwidth, kernel_alpha)
-    return MMDLoss(kernel=kernel, device=x.device)(x, y)
-
-
-def mmd_report(mmd_squared):
-    """sqrt(|MMD^2_U| + 1e-8) -- DISPLAY ONLY. Never feed this into a loss."""
-    if not torch.is_tensor(mmd_squared):
-        mmd_squared = torch.tensor(mmd_squared)
-    return torch.sqrt(mmd_squared.abs() + 1e-8)
+    if not torch.is_tensor(mmd_value):
+        mmd_value = torch.tensor(mmd_value)
+    return mmd_value
 
 
 def compute_witness_scores(x, y, bandwidth=None, bandwidth_scale=1.0, kernel_alpha=1.0):

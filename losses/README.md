@@ -7,7 +7,7 @@ consumed by `guidance/`; nothing in here knows about diffusion.
 
 | file | what is in it |
 |---|---|
-| `functions.py` | `RBF` kernel, `MMDLoss`, and the functional SWD pair `sliced_wasserstein_distance` / `compute_swd` |
+| `functions.py` | `compute_mmd` (ported from the paper repo), `RBF` kernel, `MMDLoss`, and the functional SWD pair `sliced_wasserstein_distance` / `compute_swd` |
 | `sliced.py` | `SupportAwareSlicedWassersteinLoss` — the SWD used by the MNIST rotation experiment |
 | `circular.py` | angle <-> `(cos, sin)` conversion and a MoG-on-the-circle density evaluator |
 | `__init__.py` | imports the three submodules; exports no symbols of its own |
@@ -16,7 +16,7 @@ consumed by `guidance/`; nothing in here knows about diffusion.
 
 The file names do not predict the contents. Concretely:
 
-- **MMD and the RBF kernel** -> `functions.py` (`MMDLoss`, `RBF`).
+- **MMD and the RBF kernel** -> `functions.py` (`compute_mmd`, `MMDLoss`, `RBF`).
 - **SWD -> both files.** The *functions* `sliced_wasserstein_distance` and `compute_swd`
   (POT-backed, `ot.wasserstein_1d`) are in `functions.py`; the *class*
   `SupportAwareSlicedWassersteinLoss` (pure-torch, differentiable) is in `sliced.py`.
@@ -39,22 +39,31 @@ The file names do not predict the contents. Concretely:
   `bandwidth is None`) is treated as a constant of the kernel. `False` is the legacy
   behaviour and lets the gradient flow through it as well.
 
-`MMDLoss()` with no kernel constructs `RBF(device=device)`, i.e. all of the above.
+`MMDLoss()` with no kernel no longer constructs an `RBF`; it calls `compute_mmd`, which
+builds its own single-bandwidth kernel (see below). The mixture above is what every
+existing call site injects explicitly, `MMDLoss(kernel=RBF(...))`.
 
-## `MMDLoss` is the UNBIASED (U-statistic) estimator — changed 2026-09-25
+## The MMD is the paper's, not a local one
 
-`MMDLoss.forward` returns the **squared** MMD as the U-statistic of the paper's Eq. 2
-(`eq:mmd-ustat-def`): the diagonal is dropped from each within-sample kernel block and
-the denominators are `n(n-1)` and `m(m-1)`; the cross term keeps `1/(nm)`. There is no
-`sqrt`, and no flag to select a different estimator.
+`compute_mmd` in `functions.py` is a verbatim port of
 
-**Until 2026-09-25 it was the V-statistic** — `.mean()` over the full blocks, diagonal
-included, denominator `n^2`. The repo now uses one estimator everywhere. The SD pipeline
-(`SD_cond_SD_controlnet/src/metrics.py`) already used the U-statistic, so this aligns them.
+    conditional-matching-paper  SD_cond_SD_controlnet/src/metrics.py :: compute_mmd
 
-One consequence for callers: an unbiased estimator **can be negative** and must not be
-clamped or square-rooted. No call site in the repo does either — they only minimise and
-compare. `checks/check_mmd_unbiased.py` is the guard.
+the function that produced the paper's Stable Diffusion tables — same maths, same
+median-heuristic bandwidth, same `cache_target` path, same `sqrt(|mmd_sq| + 1e-8)`
+return. It takes `bandwidth`, `bandwidth_scale`, `kernel_alpha` and `cache_target`.
+
+`MMDLoss` is the `nn.Module` wrapper around it and returns the same quantity:
+
+- `MMDLoss()` (no kernel) calls `compute_mmd` directly.
+- `MMDLoss(kernel=...)` keeps the injection seam every call site in this repo uses: the
+  injected kernel builds the Gram matrix of the stacked `[X; Y]` batch and
+  `_mmd_from_gram` finishes with `compute_mmd`'s own closing arithmetic. An injected
+  kernel (the mixture `RBF`) cannot be expressed through `compute_mmd`, which builds its
+  own kernel, which is why the seam exists.
+
+Both paths return the square-rooted value, as upstream does — a non-negative distance,
+not the squared statistic.
 
 ## The contract `guidance/` relies on
 

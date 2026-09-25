@@ -1,12 +1,12 @@
 """
-Proves `sdxl.mmd.sd_mmd` (shared estimator + SD kernel) is numerically identical to
-the formula vendored in conditional-matching-paper SD_cond_SD_controlnet/src/metrics.py
-@ cb8bc91. CPU-only, no model downloads, seconds.
+Proves `sdxl.mmd.sd_mmd` (the shared `losses.functions.compute_mmd`) is numerically
+identical to the formula in conditional-matching-paper
+SD_cond_SD_controlnet/src/metrics.py @ cb8bc91. CPU-only, no model downloads, seconds.
 
     python -m sdxl.check_mmd_equivalence
 """
 import torch
-from sdxl.mmd import sd_mmd, mmd_report, estimate_bandwidth
+from sdxl.mmd import sd_mmd, estimate_bandwidth
 
 
 def upstream_compute_mmd(x, y, bandwidth=None, bandwidth_scale=1.0, kernel_alpha=1.0):
@@ -30,7 +30,7 @@ def upstream_compute_mmd(x, y, bandwidth=None, bandwidth_scale=1.0, kernel_alpha
     xx = (K_xx.sum() - K_xx.trace()) / (n * (n - 1)) if n > 1 else 0.0
     yy = (K_yy.sum() - K_yy.trace()) / (m * (m - 1)) if m > 1 else 0.0
     xy = 2 * K_xy.sum() / (n * m)
-    return xx - xy + yy
+    return torch.sqrt((xx - xy + yy).abs() + 1e-8)
 
 
 def main():
@@ -52,12 +52,6 @@ def main():
         ok &= same
         print(f"  n={n:<4} m={m:<4} alpha={alpha}  shared={a:+.8f}  upstream={b:+.8f}  "
               f"{'OK (both NaN, see note)' if same and a != a else ('OK' if same else 'MISMATCH')}")
-
-    # the estimator must be unbiased: MMD^2(X,X) < 0, not exactly 0 (that is a V-statistic)
-    x = torch.randn(80, 768)
-    self_mmd = sd_mmd(x, x).item()
-    print(f"\n  MMD^2_U(X,X) = {self_mmd:+.8f}  ({'U-statistic' if self_mmd < 0 else 'NOT a U-statistic'})")
-    ok &= self_mmd < 0
 
     # gradients must flow through x and not through y
     x = torch.randn(32, 768, requires_grad=True)

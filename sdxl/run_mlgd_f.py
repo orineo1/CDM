@@ -86,6 +86,11 @@ def parse_args():
     p.add_argument("--guidance_scale",   type=float, default=0.0,
                    help="CFG scale for architect (0.0 = unconditional)")
     p.add_argument("--controlnet_scale", type=float, default=0.5)
+    p.add_argument("--variation_cn_scale", type=float, default=0.8,
+                   help="ControlNet conditioning scale of the SPRINTER guidance/eval calls "
+                        "(historically hard-coded 0.8; Appendix E specifies 0.5). Default "
+                        "0.8 = unchanged behaviour. --controlnet_scale still governs target "
+                        "generation.")
     p.add_argument("--loss_fn",          type=str,   default="mmd",
                    choices=["mmd", "swd"])
     p.add_argument("--bandwidth_scale",  type=float, default=1.0,
@@ -142,6 +147,10 @@ def parse_args():
                    help="Reshapes |score|^(1/T) before the witness_floor blend. T=1 "
                         "(default) is plain |w|; T>1 flattens the selection distribution "
                         "toward uniform; T<1 sharpens it toward the top-|score| rows.")
+    p.add_argument("--witness_bandwidth_scale", type=float, default=1.0,
+                   help="[witness] RBF bandwidth scale for the witness score only.")
+    p.add_argument("--witness_kernel_alpha", type=float, default=1.0,
+                   help="[witness] RBF exponent for the witness score only.")
     p.add_argument("--witness_replacement", action="store_true",
                    help="Sample the backsel_k witness-selected indices WITH "
                         "replacement (a repeated index counts multiple times in "
@@ -189,6 +198,13 @@ def parse_args():
                    default="stabilityai/stable-diffusion-xl-base-1.0")
 
     p.add_argument("--seed", type=int, default=None)
+    p.add_argument("--eval_n", type=int, default=None,
+                   help="Fresh sprinter samples for the FINAL MMD eval (default: "
+                        "eval_n_intermediate = 10, the repo default).")
+    p.add_argument("--eval_n_intermediate", type=int, default=10,
+                   help="Sprinter samples for intermediate evals / baseline vis (repo: 10).")
+    p.add_argument("--eval_batch_size", type=int, default=2,
+                   help="Sprinter batch size in evaluate_distribution_mmd (repo: 2).")
     p.add_argument("--run_unguided", action="store_true",
                    help="Also run the regular (unguided) path in parallel for "
                         "comparison -- an extra full UNet forward pass every step, "
@@ -534,7 +550,8 @@ def main():
     steps_dir = os.path.join(args.output_dir, "steps")
     os.makedirs(steps_dir, exist_ok=True)
 
-    n_eval = 10  # number of Sprinter photos per MMD evaluation
+    n_eval = args.eval_n_intermediate  # Sprinter photos per intermediate MMD evaluation (repo: 10)
+    eval_n_final = args.eval_n if args.eval_n is not None else n_eval
 
     if args.seed is not None:
         torch.manual_seed(args.seed)
@@ -606,8 +623,10 @@ def main():
             "base_zeta":                    args.base_zeta,
             "guidance_scale":               args.guidance_scale,
             "controlnet_scale":             args.controlnet_scale,
+            "variation_cn_scale":           args.variation_cn_scale,
             "edge_method":                  "hed_scribble",
             "n_eval":                       n_eval,
+            "eval_n_final":                 eval_n_final,
             "eval_interval":                eval_interval,
             "lora_path":                    args.lora_path,
             "architect_unet_path":          args.architect_unet_path,
@@ -764,7 +783,7 @@ def main():
     visualize_step(sd_baseline, architect, sprinter, target_clip_np,
                    num_cond=4, save_path=os.path.join(steps_dir, "step_baseline.png"),
                    pca_fixed=pca_fixed, group_names=group_names, group_sizes=group_sizes,
-                   controlnet_scale=args.controlnet_scale)
+                   controlnet_scale=args.variation_cn_scale)
     print("✅ Baseline visualisation saved.", flush=True)
 
     # ── 9. MLGD-F guidance loop ─────────────────────────────────────────────
@@ -821,15 +840,15 @@ def main():
             variation_prompt=args.sprinter_variation_prompt,
             loss_fn=loss_fn,
             loss_scale=args.loss_scale,
-            controlnet_scale=args.controlnet_scale,
+            cn_scale=args.variation_cn_scale,
             backsel_k=args.backsel_k,
             backsel_rule=args.backsel_rule,
             backsel_generator=backsel_generator,
             witness_floor=args.witness_floor,
             witness_temperature=args.witness_temperature,
             witness_replacement=args.witness_replacement,
-            witness_bandwidth_scale=args.bandwidth_scale,
-            witness_kernel_alpha=args.kernel_alpha,
+            witness_bandwidth_scale=args.witness_bandwidth_scale,
+            witness_kernel_alpha=args.witness_kernel_alpha,
             uniform_normalize_by_nsel=args.uniform_normalize_by_nsel,
         )
 
@@ -901,7 +920,8 @@ def main():
                 pred_x0_regular.detach(), architect.vae, architect.image_processor,
                 sprinter, clip_model, clip_processor,
                 all_clip_embeddings, args.sprinter_eval_prompt,
-                n_eval=n_eval, device=device, controlnet_scale=args.controlnet_scale,
+                n_eval=n_eval, device=device, batch_size=args.eval_batch_size,
+                cn_scale=args.variation_cn_scale,
             )
             wandb_log["intermediate/unguided_cond_mmd"] = unguided_mmd
             wandb_log["intermediate/mlgd_f_cond_mmd"]   = mmd_display.item()
@@ -929,7 +949,7 @@ def main():
         visualize_step(sd, architect, sprinter, target_clip_np,
                        num_cond=5, save_path=os.path.join(steps_dir, f"step_{i:03d}.png"),
                        pca_fixed=pca_fixed, group_names=group_names, group_sizes=group_sizes,
-                       controlnet_scale=args.controlnet_scale)
+                       controlnet_scale=args.variation_cn_scale)
 
         latents = denoise_step(
             architect.scheduler, noise_pred, t, latents_step, correction=correction
@@ -950,43 +970,36 @@ def main():
     print(f"\n✅ MLGD-F complete! {len(step_vis_data)} steps stored.", flush=True)
 
     # ── 10. Final MMD evaluation ────────────────────────────────────────────
-    # Uses a larger, fixed sample size (FINAL_MMD_N=250 on both sides) than the
-    # per-step n_eval, for a lower-variance final number independent of however
-    # many target images this run happened to build (N_total). Target side is
-    # resampled from the existing all_clip_embeddings pool (bootstrap if it has
-    # fewer than 250 rows) rather than regenerated from scratch.
-    FINAL_MMD_N = 250
-    final_mmd_generator = torch.Generator().manual_seed(args.seed) if args.seed is not None else None
-    final_target_clip = sample_target_embeddings(
-        all_clip_embeddings, FINAL_MMD_N, generator=final_mmd_generator
-    )
-
+    # Evaluated against the FULL target embedding set with eval_n_final fresh
+    # sprinter samples (--eval_n, default = the intermediate n_eval).
     regular_mmd = None
     regular_eval_photos = []
     if args.run_unguided:
-        print(f"Computing final MMD (regular, n={FINAL_MMD_N})...", flush=True)
+        print(f"Computing final MMD (regular, n={eval_n_final})...", flush=True)
         regular_mmd, regular_eval_photos, _ = evaluate_distribution_mmd(
             latents_regular, architect.vae, architect.image_processor,
             sprinter, clip_model, clip_processor,
-            final_target_clip, eval_prompt=args.sprinter_eval_prompt,
-            n_eval=FINAL_MMD_N, device=device, controlnet_scale=args.controlnet_scale,
+            all_clip_embeddings, eval_prompt=args.sprinter_eval_prompt,
+            n_eval=eval_n_final, device=device, batch_size=args.eval_batch_size,
+            cn_scale=args.variation_cn_scale,
         )
 
-    print(f"Computing final MMD (MLGD-F, n={FINAL_MMD_N})...", flush=True)
+    print(f"Computing final MMD (MLGD-F, n={eval_n_final})...", flush=True)
     mlgd_f_mmd, mlgd_f_eval_photos, _ = evaluate_distribution_mmd(
         latents, architect.vae, architect.image_processor,
         sprinter, clip_model, clip_processor,
-        final_target_clip, eval_prompt=args.sprinter_eval_prompt,
-        n_eval=FINAL_MMD_N, device=device, controlnet_scale=args.controlnet_scale,
+        all_clip_embeddings, eval_prompt=args.sprinter_eval_prompt,
+        n_eval=eval_n_final, device=device, batch_size=args.eval_batch_size,
+        cn_scale=args.variation_cn_scale,
     )
 
     print(f"MLGD-F MMD  : {mlgd_f_mmd:.6f}",  flush=True)
-    final_log = {"final/mlgd_f_mmd_n250": mlgd_f_mmd}
+    final_log = {"final/mlgd_f_mmd": mlgd_f_mmd}
     if args.run_unguided:
         print(f"Regular MMD : {regular_mmd:.6f}", flush=True)
         print(f"Delta (↓ better for MLGD-F): {regular_mmd - mlgd_f_mmd:.6f}", flush=True)
-        final_log["final/regular_mmd_n250"] = regular_mmd
-        final_log["final/mmd_delta_n250"]   = regular_mmd - mlgd_f_mmd
+        final_log["final/regular_mmd"] = regular_mmd
+        final_log["final/mmd_delta"]   = regular_mmd - mlgd_f_mmd
     wandb.log(final_log, commit=False)
 
     # ── 11. Final visualisations ────────────────────────────────────────────
@@ -1094,6 +1107,7 @@ def main():
             "final_mlgd_f_mmd":       mlgd_f_mmd,
             "final_regular_mmd":      regular_mmd if args.run_unguided else None,
             "mmd_delta":              (regular_mmd - mlgd_f_mmd) if args.run_unguided else None,
+            "eval_n_final":           eval_n_final,
             "final_mlgd_f_swd":       swd_mlgd_f,   # None — run analysis.py to compute
             "final_regular_swd":      swd_regular,  # None — run analysis.py to compute
             "swd_delta":              None,         # computed in analysis.py

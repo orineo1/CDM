@@ -15,7 +15,7 @@ nothing points at another repo at runtime. `sdxl/README.md` says what was copied
 what is called from the shared packages; in short, the SDXL + ControlNet-Scribble
 pipeline, HED extraction, SDEdit init, target construction, CLIP evaluation and the
 baselines are SD-specific and carried here, while the **MMD estimator is the shared
-`losses.functions.MMDLoss`** and is called, not duplicated.
+`losses.functions.compute_mmd`** and is called, not duplicated.
 
 SDXL does not use `models/DiffusionModel`; it uses Stable Diffusion's own pipelines.
 

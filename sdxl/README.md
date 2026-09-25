@@ -17,7 +17,7 @@ Ported from `orineo1/conditional-matching-paper`, branch
 | `image_utils.py` | Sobel proxy, latent→PIL decode, the base conditioning image |
 | `hed.py` | HED scribble extraction (`lllyasviel/Annotators`) and weighted scribble averaging |
 | `metrics.py` | SWD + the full decode→generate→CLIP→MMD evaluation helper; re-exports the MMD seam |
-| `mmd.py` | **the seam to the shared estimator — see below** |
+| `mmd.py` | thin alias onto the shared MMD, plus the bandwidth helper and witness scores |
 | `analysis.py`, `visualization.py` | scribble-diff heatmaps and step plots |
 | `run_mlgd_f.py`, `eval_baselines.py` | the two entry points |
 
@@ -26,15 +26,13 @@ pipelines, which is correct and expected for this experiment.
 
 ## What is CALLED from the shared packages, not duplicated
 
-`sdxl/mmd.py` is the whole point. The **estimator** — the unbiased U-statistic —
-is `losses.functions.MMDLoss` and is called, never copied. What stays SD-specific is
-only what genuinely differs:
-
-- **the kernel.** SD uses a single median-heuristic bandwidth with a generalised
-  exponent, `exp(-(||a-b||²/2bw²)^alpha)`. The shared `losses.RBF` is a 5-bandwidth
-  mean-based mixture. `MMDLoss` accepts an injected kernel, which is the seam used.
-- **the sqrt wrapper.** SD reports `sqrt(|MMD²| + 1e-8)`. `mmd_report` does that, for
-  display only; the loss and its gradient use the plain squared statistic.
+**MMD is not implemented here.** `losses.functions.compute_mmd` is the port of the
+paper repo's `SD_cond_SD_controlnet/src/metrics.py::compute_mmd` — SD's own kernel
+(single median-heuristic bandwidth, generalised exponent `exp(-(||a-b||²/2bw²)^alpha)`)
+and SD's own `sqrt(|MMD²| + 1e-8)` return are part of that function, so there is nothing
+SD-specific left to build. `sdxl/mmd.py::sd_mmd` is a thin alias that keeps the name the
+pipeline code uses; `mmd_report` is now a pass-through, kept so existing call sites read
+unchanged. `estimate_bandwidth` and `compute_witness_scores` stay here.
 
 SWD is *not* aliased onto the shared one: `losses.functions.sliced_wasserstein_distance`
 is a different estimator with a different signature and return type, so SD's is carried
@@ -46,10 +44,9 @@ in `metrics.py`.
 python -m sdxl.check_mmd_equivalence
 ```
 
-CPU-only, seconds, no model downloads. Asserts that routing through the shared
-`MMDLoss` reproduces the upstream vendored formula to 1e-6, that the estimator is
-unbiased (`MMD²(X,X) < 0`), and that gradients flow through the generated samples
-while the target stays detached.
+CPU-only, seconds, no model downloads. Asserts that the shared `compute_mmd`
+reproduces the upstream formula to 1e-6 and that gradients flow through the generated
+samples while the target stays detached.
 
 ## Dependencies
 
