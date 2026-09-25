@@ -1,0 +1,691 @@
+{
+  "label": "TUNING (50 restarts, offset 0)",
+  "arms": [
+    {
+      "key": [
+        4,
+        "lgd_high",
+        "adam"
+      ],
+      "score": 0.3554513264055164,
+      "L2_mean": 0.3554513156414032,
+      "L2_median": 0.26531627774238586,
+      "success_rate": 0.46,
+      "diverged": 0,
+      "conditional_calls_per_run": 1188.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        4,
+        "lgd_high",
+        "lambda"
+      ],
+      "score": 0.2878123823001971,
+      "L2_mean": 0.28781235218048096,
+      "L2_median": 0.23282009363174438,
+      "success_rate": 0.6,
+      "diverged": 0,
+      "conditional_calls_per_run": 1188.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        4,
+        "lgd_high",
+        "none"
+      ],
+      "score": 0.5886513115891974,
+      "L2_mean": 0.5886512994766235,
+      "L2_median": 0.5935735702514648,
+      "success_rate": 0.24,
+      "diverged": 0,
+      "conditional_calls_per_run": 1188.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        4,
+        "no_lgd",
+        "adam"
+      ],
+      "score": 0.3790430776020059,
+      "L2_mean": 0.3790430724620819,
+      "L2_median": 0.31220510601997375,
+      "success_rate": 0.34,
+      "diverged": 0,
+      "conditional_calls_per_run": 396.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        4,
+        "no_lgd",
+        "lambda"
+      ],
+      "score": 0.5181783581742851,
+      "L2_mean": 0.4879371225833893,
+      "L2_median": 0.3531799912452698,
+      "success_rate": 0.3,
+      "diverged": 1,
+      "conditional_calls_per_run": 396.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        4,
+        "no_lgd",
+        "none"
+      ],
+      "score": 0.7440800576405764,
+      "L2_mean": 0.6045333743095398,
+      "L2_median": 0.6172885298728943,
+      "success_rate": 0.16,
+      "diverged": 5,
+      "conditional_calls_per_run": 396.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        8,
+        "lgd_high",
+        "adam"
+      ],
+      "score": 0.23721727824788846,
+      "L2_mean": 0.2372172474861145,
+      "L2_median": 0.15333318710327148,
+      "success_rate": 0.62,
+      "diverged": 0,
+      "conditional_calls_per_run": 2376.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        8,
+        "lgd_high",
+        "lambda"
+      ],
+      "score": 0.20479670021116075,
+      "L2_mean": 0.2047967165708542,
+      "L2_median": 0.19558309018611908,
+      "success_rate": 0.82,
+      "diverged": 0,
+      "conditional_calls_per_run": 2376.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        8,
+        "lgd_high",
+        "none"
+      ],
+      "score": 0.36720913832254376,
+      "L2_mean": 0.36720916628837585,
+      "L2_median": 0.21522778272628784,
+      "success_rate": 0.58,
+      "diverged": 0,
+      "conditional_calls_per_run": 2376.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        8,
+        "no_lgd",
+        "adam"
+      ],
+      "score": 0.33403042171143077,
+      "L2_mean": 0.334030419588089,
+      "L2_median": 0.20388716459274292,
+      "success_rate": 0.54,
+      "diverged": 0,
+      "conditional_calls_per_run": 792.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        8,
+        "no_lgd",
+        "lambda"
+      ],
+      "score": 0.39671360856832244,
+      "L2_mean": 0.36399346590042114,
+      "L2_median": 0.23056836426258087,
+      "success_rate": 0.52,
+      "diverged": 1,
+      "conditional_calls_per_run": 792.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        8,
+        "no_lgd",
+        "none"
+      ],
+      "score": 0.5785018227178297,
+      "L2_mean": 0.5192727446556091,
+      "L2_median": 0.42655694484710693,
+      "success_rate": 0.34,
+      "diverged": 2,
+      "conditional_calls_per_run": 792.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        16,
+        "lgd_high",
+        "adam"
+      ],
+      "score": 0.25308118574164035,
+      "L2_mean": 0.25308120250701904,
+      "L2_median": 0.1458166092634201,
+      "success_rate": 0.6,
+      "diverged": 0,
+      "conditional_calls_per_run": 4752.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        16,
+        "lgd_high",
+        "lambda"
+      ],
+      "score": 0.20674116240228047,
+      "L2_mean": 0.20674115419387817,
+      "L2_median": 0.1634247899055481,
+      "success_rate": 0.86,
+      "diverged": 0,
+      "conditional_calls_per_run": 4752.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        16,
+        "lgd_high",
+        "none"
+      ],
+      "score": 0.2069901695717444,
+      "L2_mean": 0.17039813101291656,
+      "L2_median": 0.14005307853221893,
+      "success_rate": 0.86,
+      "diverged": 1,
+      "conditional_calls_per_run": 4752.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        16,
+        "no_lgd",
+        "adam"
+      ],
+      "score": 0.23231855210417707,
+      "L2_mean": 0.23231855034828186,
+      "L2_median": 0.15838350355625153,
+      "success_rate": 0.7,
+      "diverged": 0,
+      "conditional_calls_per_run": 1584.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        16,
+        "no_lgd",
+        "lambda"
+      ],
+      "score": 0.30491305461568674,
+      "L2_mean": 0.27031946182250977,
+      "L2_median": 0.1900588721036911,
+      "success_rate": 0.64,
+      "diverged": 1,
+      "conditional_calls_per_run": 1584.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        16,
+        "no_lgd",
+        "none"
+      ],
+      "score": 0.3839477426727161,
+      "L2_mean": 0.31661221385002136,
+      "L2_median": 0.19853223860263824,
+      "success_rate": 0.56,
+      "diverged": 2,
+      "conditional_calls_per_run": 1584.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        32,
+        "lgd_high",
+        "adam"
+      ],
+      "score": 0.22467494721378023,
+      "L2_mean": 0.22467495501041412,
+      "L2_median": 0.12362664937973022,
+      "success_rate": 0.8,
+      "diverged": 0,
+      "conditional_calls_per_run": 9504.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        32,
+        "lgd_high",
+        "lambda"
+      ],
+      "score": 0.14896452696657062,
+      "L2_mean": 0.148964524269104,
+      "L2_median": 0.12876245379447937,
+      "success_rate": 0.96,
+      "diverged": 0,
+      "conditional_calls_per_run": 9504.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        32,
+        "lgd_high",
+        "none"
+      ],
+      "score": 0.13660344029695995,
+      "L2_mean": 0.136603444814682,
+      "L2_median": 0.10921105742454529,
+      "success_rate": 0.92,
+      "diverged": 0,
+      "conditional_calls_per_run": 9504.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        32,
+        "no_lgd",
+        "adam"
+      ],
+      "score": 0.22990055626908462,
+      "L2_mean": 0.2299005687236786,
+      "L2_median": 0.14034897089004517,
+      "success_rate": 0.78,
+      "diverged": 0,
+      "conditional_calls_per_run": 3168.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        32,
+        "no_lgd",
+        "lambda"
+      ],
+      "score": 0.21130906445908199,
+      "L2_mean": 0.2113090455532074,
+      "L2_median": 0.16660746932029724,
+      "success_rate": 0.84,
+      "diverged": 0,
+      "conditional_calls_per_run": 3168.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    },
+    {
+      "key": [
+        32,
+        "no_lgd",
+        "none"
+      ],
+      "score": 0.18949240850834015,
+      "L2_mean": 0.18949241936206818,
+      "L2_median": 0.14464566111564636,
+      "success_rate": 0.86,
+      "diverged": 0,
+      "conditional_calls_per_run": 3168.0,
+      "n_completed": null,
+      "restarts": 50,
+      "restart_offset": 0
+    }
+  ],
+  "comparisons": [
+    {
+      "n_max": 4,
+      "spatial": "no_lgd",
+      "comparison": "none vs adam",
+      "n_pairs": 50,
+      "mean_diff": 0.3650369800385705,
+      "se": 0.08218077076961167,
+      "median_diff": 0.27583612149450765,
+      "ci95": [
+        0.2097934371664109,
+        0.5320979806410289
+      ],
+      "wins_for_b": 33,
+      "perm_p": 4.999750012499375e-05
+    },
+    {
+      "n_max": 4,
+      "spatial": "no_lgd",
+      "comparison": "none vs lambda",
+      "n_pairs": 50,
+      "mean_diff": 0.22590169946629132,
+      "se": 0.0896012948093264,
+      "median_diff": 0.2659629690646276,
+      "ci95": [
+        0.05017288891861672,
+        0.40003488640686086
+      ],
+      "wins_for_b": 33,
+      "perm_p": 0.01454927253637318
+    },
+    {
+      "n_max": 4,
+      "spatial": "lgd_high",
+      "comparison": "none vs adam",
+      "n_pairs": 50,
+      "mean_diff": 0.23319998518368099,
+      "se": 0.06165741458077893,
+      "median_diff": 0.2451424756196096,
+      "ci95": [
+        0.11219925421900137,
+        0.3514028814928003
+      ],
+      "wins_for_b": 35,
+      "perm_p": 0.0008999550022498875
+    },
+    {
+      "n_max": 4,
+      "spatial": "lgd_high",
+      "comparison": "none vs lambda",
+      "n_pairs": 50,
+      "mean_diff": 0.3008389292890003,
+      "se": 0.06526865811407051,
+      "median_diff": 0.28556020058255116,
+      "ci95": [
+        0.17236323344956636,
+        0.42477058544426255
+      ],
+      "wins_for_b": 38,
+      "perm_p": 0.00014999250037498125
+    },
+    {
+      "n_max": 4,
+      "spatial": "H3",
+      "comparison": "full-LGD/none vs no-LGD/Adam (1/3 cost)",
+      "n_pairs": 50,
+      "mean_diff": 0.20960823398719147,
+      "se": 0.06025406554568163,
+      "median_diff": 0.16783125256422657,
+      "ci95": [
+        0.09205182560678991,
+        0.3282815949440771
+      ],
+      "wins_for_b": 35,
+      "perm_p": 0.0010499475026248687
+    },
+    {
+      "n_max": 8,
+      "spatial": "no_lgd",
+      "comparison": "none vs adam",
+      "n_pairs": 50,
+      "mean_diff": 0.24447140100639894,
+      "se": 0.07349875058271156,
+      "median_diff": 0.1588594977019417,
+      "ci95": [
+        0.10415226770548854,
+        0.39083234214666857
+      ],
+      "wins_for_b": 31,
+      "perm_p": 0.0013499325033748313
+    },
+    {
+      "n_max": 8,
+      "spatial": "no_lgd",
+      "comparison": "none vs lambda",
+      "n_pairs": 50,
+      "mean_diff": 0.18178821414950727,
+      "se": 0.06633207318947992,
+      "median_diff": 0.14058870928868938,
+      "ci95": [
+        0.05421526024061341,
+        0.31279856639823256
+      ],
+      "wins_for_b": 32,
+      "perm_p": 0.008449577521123944
+    },
+    {
+      "n_max": 8,
+      "spatial": "lgd_high",
+      "comparison": "none vs adam",
+      "n_pairs": 50,
+      "mean_diff": 0.12999186007465532,
+      "se": 0.06245374977538729,
+      "median_diff": 0.0358877102606389,
+      "ci95": [
+        0.012584423749820267,
+        0.25484017524407376
+      ],
+      "wins_for_b": 29,
+      "perm_p": 0.041247937603119844
+    },
+    {
+      "n_max": 8,
+      "spatial": "lgd_high",
+      "comparison": "none vs lambda",
+      "n_pairs": 50,
+      "mean_diff": 0.16241243811138306,
+      "se": 0.052220710621201184,
+      "median_diff": 0.026583369746509225,
+      "ci95": [
+        0.06374409674048258,
+        0.2670063788002054
+      ],
+      "wins_for_b": 27,
+      "perm_p": 0.0023498825058747065
+    },
+    {
+      "n_max": 8,
+      "spatial": "H3",
+      "comparison": "full-LGD/none vs no-LGD/Adam (1/3 cost)",
+      "n_pairs": 50,
+      "mean_diff": 0.033178716611113004,
+      "se": 0.06453161203812532,
+      "median_diff": 0.024101041652461245,
+      "ci95": [
+        -0.09011854477083207,
+        0.15917852555006481
+      ],
+      "wins_for_b": 27,
+      "perm_p": 0.6097195140242988
+    },
+    {
+      "n_max": 16,
+      "spatial": "no_lgd",
+      "comparison": "none vs adam",
+      "n_pairs": 50,
+      "mean_diff": 0.15162919056853902,
+      "se": 0.0716264795377507,
+      "median_diff": 0.052034449852605816,
+      "ci95": [
+        0.018238974974856065,
+        0.2973779643096358
+      ],
+      "wins_for_b": 29,
+      "perm_p": 0.037048147592620366
+    },
+    {
+      "n_max": 16,
+      "spatial": "no_lgd",
+      "comparison": "none vs lambda",
+      "n_pairs": 50,
+      "mean_diff": 0.07903468805702933,
+      "se": 0.0752952677185001,
+      "median_diff": -0.0013242578230393195,
+      "ci95": [
+        -0.059922485892323886,
+        0.23342538994523382
+      ],
+      "wins_for_b": 24,
+      "perm_p": 0.30433478326083696
+    },
+    {
+      "n_max": 16,
+      "spatial": "lgd_high",
+      "comparison": "none vs adam",
+      "n_pairs": 50,
+      "mean_diff": -0.04609101616989594,
+      "se": 0.056293367973427925,
+      "median_diff": -0.03153411196275613,
+      "ci95": [
+        -0.14536131892497467,
+        0.0727799278289885
+      ],
+      "wins_for_b": 19,
+      "perm_p": 0.447927603619819
+    },
+    {
+      "n_max": 16,
+      "spatial": "lgd_high",
+      "comparison": "none vs lambda",
+      "n_pairs": 50,
+      "mean_diff": 0.0002490071694639717,
+      "se": 0.0502375129568871,
+      "median_diff": -0.022805737691534947,
+      "ci95": [
+        -0.08956255287162647,
+        0.10496742244446586
+      ],
+      "wins_for_b": 15,
+      "perm_p": 0.9965501724913755
+    },
+    {
+      "n_max": 16,
+      "spatial": "H3",
+      "comparison": "full-LGD/none vs no-LGD/Adam (1/3 cost)",
+      "n_pairs": 50,
+      "mean_diff": -0.025328382532432647,
+      "se": 0.05203663251820062,
+      "median_diff": -0.02140414802380578,
+      "ci95": [
+        -0.1193132437018925,
+        0.0831219160847906
+      ],
+      "wins_for_b": 23,
+      "perm_p": 0.6583670816459177
+    },
+    {
+      "n_max": 32,
+      "spatial": "no_lgd",
+      "comparison": "none vs adam",
+      "n_pairs": 50,
+      "mean_diff": -0.04040814776074446,
+      "se": 0.04684833312839172,
+      "median_diff": 0.013794360290171753,
+      "ci95": [
+        -0.13373207238179316,
+        0.048316816507400676
+      ],
+      "wins_for_b": 25,
+      "perm_p": 0.391730413479326
+    },
+    {
+      "n_max": 32,
+      "spatial": "no_lgd",
+      "comparison": "none vs lambda",
+      "n_pairs": 50,
+      "mean_diff": -0.02181665595074184,
+      "se": 0.03289933200798232,
+      "median_diff": -0.019107851195683152,
+      "ci95": [
+        -0.08567062434445445,
+        0.0415211135375481
+      ],
+      "wins_for_b": 19,
+      "perm_p": 0.5106744662766861
+    },
+    {
+      "n_max": 32,
+      "spatial": "lgd_high",
+      "comparison": "none vs adam",
+      "n_pairs": 50,
+      "mean_diff": -0.08807150691682028,
+      "se": 0.04239905756664242,
+      "median_diff": -0.020252573388220587,
+      "ci95": [
+        -0.17355295792827358,
+        -0.007923031039585976
+      ],
+      "wins_for_b": 19,
+      "perm_p": 0.04174791260436978
+    },
+    {
+      "n_max": 32,
+      "spatial": "lgd_high",
+      "comparison": "none vs lambda",
+      "n_pairs": 50,
+      "mean_diff": -0.012361086669610659,
+      "se": 0.027262191717117405,
+      "median_diff": -0.018427823786447868,
+      "ci95": [
+        -0.06445893940985649,
+        0.041371281756990466
+      ],
+      "wins_for_b": 20,
+      "perm_p": 0.6707164641767912
+    },
+    {
+      "n_max": 32,
+      "spatial": "H3",
+      "comparison": "full-LGD/none vs no-LGD/Adam (1/3 cost)",
+      "n_pairs": 50,
+      "mean_diff": -0.09329711597212466,
+      "se": 0.04350217921961857,
+      "median_diff": -0.023991937742693974,
+      "ci95": [
+        -0.18137766231497598,
+        -0.011767009327955496
+      ],
+      "wins_for_b": 20,
+      "perm_p": 0.0327983600819959
+    }
+  ]
+}

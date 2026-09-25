@@ -1,0 +1,36 @@
+[
+  {
+    "check": "A2",
+    "steps_compared": 99,
+    "max_abs_dx": 0.0,
+    "max_abs_dgrad": 0.0,
+    "max_abs_dloss": 0.0,
+    "x_legacy": -4.190645217895508,
+    "x_new": -4.190645217895508,
+    "final_abs_dx": 0.0,
+    "pass": true
+  },
+  {
+    "check": "A3",
+    "loss_ours": 0.0739860015985836,
+    "loss_repo": 0.07398600180317105,
+    "abs_dloss": 2.0458745808582535e-10,
+    "grad_ours": 0.0165961142629385,
+    "grad_repo": 0.0165961142629385,
+    "abs_dgrad": 0.0,
+    "grad_fd": 0.016491329828394186,
+    "rel_err_vs_fd": 0.006353910547826152,
+    "pass": true
+  },
+  {
+    "check": "A4",
+    "target_mean": -0.02160193729400635,
+    "loss_ours": 25.782988069200318,
+    "loss_indep": 25.782988069200318,
+    "abs_dloss": 0.0,
+    "grad_ours": 3.5375425815582275,
+    "grad_indep": 3.5375425815582275,
+    "abs_dgrad": 0.0,
+    "pass": true
+  }
+]

@@ -1,0 +1,55 @@
+[
+  {
+    "rho": null,
+    "label": "none",
+    "score": 0.09251346207613542,
+    "L2_mean": 0.09251346439123154,
+    "L2_median": 0.09497500211000443,
+    "success_rate": 1.0
+  },
+  {
+    "rho": 0.02,
+    "label": "adam 0.02",
+    "score": 0.6751094829735911,
+    "L2_mean": 0.6751095056533813,
+    "L2_median": 0.6756212711334229,
+    "success_rate": 0.0,
+    "admissible": false
+  },
+  {
+    "rho": 0.05,
+    "label": "adam 0.05",
+    "score": 0.3710022664143512,
+    "L2_mean": 0.3710022270679474,
+    "L2_median": 0.1494901329278946,
+    "success_rate": 0.5,
+    "admissible": false
+  },
+  {
+    "rho": 0.1,
+    "label": "adam 0.1",
+    "score": 0.23043971914979888,
+    "L2_mean": 0.2304397076368332,
+    "L2_median": 0.12749876081943512,
+    "success_rate": 0.8,
+    "admissible": false
+  },
+  {
+    "rho": 0.2,
+    "label": "adam 0.2",
+    "score": 0.2369877414459575,
+    "L2_mean": 0.23698775470256805,
+    "L2_median": 0.1073535680770874,
+    "success_rate": 0.7666666666666667,
+    "admissible": false
+  },
+  {
+    "rho": 0.3,
+    "label": "adam 0.3",
+    "score": 0.16228151344799244,
+    "L2_mean": 0.16228151321411133,
+    "L2_median": 0.09124040603637695,
+    "success_rate": 0.8666666666666667,
+    "admissible": false
+  }
+]

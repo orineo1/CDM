@@ -34,6 +34,8 @@ def parse_args():
     p.add_argument("--dim", type=int, default=2)
     p.add_argument("--n-components", type=int, default=4)
     p.add_argument("--condition-on", type=int, default=1)
+    p.add_argument("--uncond-dim", type=int, default=1)
+    p.add_argument("--min-separation", type=float, default=5.0)
 
     # Training
     p.add_argument("--architecture", type=str, default="cm",
@@ -90,7 +92,9 @@ def main():
         cmd += ["--params-file", args.params_file]
     if args.random_mog:
         cmd += ["--random-mog", "--dim", str(args.dim),
-                "--n-components", str(args.n_components)]
+                "--n-components", str(args.n_components),
+                "--uncond-dim", str(args.uncond_dim),
+                "--min-separation", str(args.min_separation)]
     if args.seed is not None:
         cmd += ["--seed", str(args.seed)]
     run(cmd)

@@ -1,0 +1,15 @@
+{
+  "seed": 20240401,
+  "config": {
+    "nfeatures": 1,
+    "nblocks": 3,
+    "nunits": 128,
+    "diffusion_steps": 100,
+    "nepochs": 20000,
+    "batch_size": 1024
+  },
+  "seconds": 122.09567591710947,
+  "device": "cpu",
+  "provenance": "RE-TRAINED to paper Table 3; not the paper's weights",
+  "git_commit": "31a4be5838e1b88e08f46d143bac54f7e745776f"
+}

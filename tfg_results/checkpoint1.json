@@ -1,0 +1,3043 @@
+{
+  "checkpoint": 1,
+  "metadata": {
+    "commit": "31a4be5838e1b88e08f46d143bac54f7e745776f",
+    "branch": "agent/code/generalized-tfg",
+    "dirty_files": "M dist_utils.py\n M oz/generate_data.py\n M oz/run_experiment.py\n?? \"PocThesis 2.ipynb\"\n?? __pycache__/\n?? tests/\n?? tfg/\n?? tfg_results/",
+    "seed": 17,
+    "device": "cpu",
+    "dtype": "torch.float64",
+    "torch_version": "2.12.0",
+    "python": "3.13.11",
+    "platform": "macOS-26.0.1-arm64-arm-64bit-Mach-O"
+  },
+  "provenance_caveat": "No TFG implementation existed in this repository before this work (only the LGD subspace in Optimization.py:88). tfg/reference_tfg.py is NEW code transcribed from Algorithm 1, so these results compare two new implementations, not a new engine against established code.",
+  "test_A": [
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 0,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 74,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 8,
+        "predictor_evals": 8,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.009167415788397193,
+        "engine": 0.0009153340943157673
+      },
+      "final_x0_magnitude": 0.9748728782361282,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 0,
+        "gamma_bar": 0.0,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 0,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 74,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 24,
+        "predictor_evals": 24,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.001172875054180622,
+        "engine": 0.0012362089473754168
+      },
+      "final_x0_magnitude": 0.96238631195376,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 0,
+        "gamma_bar": 0.35,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 90,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 16,
+        "predictor_evals": 16,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0012613749131560326,
+        "engine": 0.0012567911762744188
+      },
+      "final_x0_magnitude": 0.9748728782361282,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 90,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 16,
+        "predictor_evals": 16,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.001245457911863923,
+        "engine": 0.002572125056758523
+      },
+      "final_x0_magnitude": 0.18389697780206604,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "mode": "mu_only",
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 90,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 16,
+        "predictor_evals": 16,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0012540000025182962,
+        "engine": 0.0012711251620203257
+      },
+      "final_x0_magnitude": 1.0575831282654085,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "mode": "both",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 90,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 48,
+        "predictor_evals": 48,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0018316670320928097,
+        "engine": 0.0018591659609228373
+      },
+      "final_x0_magnitude": 0.96238631195376,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 90,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 48,
+        "predictor_evals": 48,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0018137919250875711,
+        "engine": 0.0018794171046465635
+      },
+      "final_x0_magnitude": 0.17622451615060397,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "mode": "mu_only",
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 90,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 48,
+        "predictor_evals": 48,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0018094589468091726,
+        "engine": 0.0018785828724503517
+      },
+      "final_x0_magnitude": 1.0664916877638966,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "mode": "both",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 138,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 40,
+        "predictor_evals": 40,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0023402501828968525,
+        "engine": 0.002364416839554906
+      },
+      "final_x0_magnitude": 0.9748728782361282,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 138,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 40,
+        "predictor_evals": 40,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.002286334056407213,
+        "engine": 0.00232708384282887
+      },
+      "final_x0_magnitude": 1.2235097526997514,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "mode": "mu_only",
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 138,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 40,
+        "predictor_evals": 40,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0022704170551151037,
+        "engine": 0.00235054106451571
+      },
+      "final_x0_magnitude": 1.4286131473284656,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "mode": "both",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 138,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 120,
+        "predictor_evals": 120,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0036102079320698977,
+        "engine": 0.0036844999995082617
+      },
+      "final_x0_magnitude": 0.96238631195376,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 138,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 120,
+        "predictor_evals": 120,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0036019159015268087,
+        "engine": 0.003643625183030963
+      },
+      "final_x0_magnitude": 1.2032166516677245,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "mode": "mu_only",
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 138,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 120,
+        "predictor_evals": 120,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0036069999914616346,
+        "engine": 0.003662833943963051
+      },
+      "final_x0_magnitude": 1.2267217724125827,
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "mode": "both",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 0,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 162,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 16,
+        "predictor_evals": 16,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0017891658935695887,
+        "engine": 0.0018144589848816395
+      },
+      "final_x0_magnitude": 2.1577290216175107,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 0,
+        "gamma_bar": 0.0,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 0,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 162,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 48,
+        "predictor_evals": 48,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0023581250570714474,
+        "engine": 0.002385667059570551
+      },
+      "final_x0_magnitude": 2.174394282440142,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 0,
+        "gamma_bar": 0.35,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 194,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 32,
+        "predictor_evals": 32,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.002518624998629093,
+        "engine": 0.0025839589070528746
+      },
+      "final_x0_magnitude": 2.1577290216175107,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 194,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 32,
+        "predictor_evals": 32,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.002504125004634261,
+        "engine": 0.002551791025325656
+      },
+      "final_x0_magnitude": 1.0094172104342054,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "mode": "mu_only",
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 194,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 32,
+        "predictor_evals": 32,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0025197090581059456,
+        "engine": 0.0025701250415295362
+      },
+      "final_x0_magnitude": 1.6749325598606082,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "mode": "both",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 194,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 96,
+        "predictor_evals": 96,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.003557749791070819,
+        "engine": 0.0036301249638199806
+      },
+      "final_x0_magnitude": 2.174394282440142,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 194,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 96,
+        "predictor_evals": 96,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.003569583874195814,
+        "engine": 0.003628874896094203
+      },
+      "final_x0_magnitude": 1.0005719582660482,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "mode": "mu_only",
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 194,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 96,
+        "predictor_evals": 96,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0036185001954436302,
+        "engine": 0.003617791924625635
+      },
+      "final_x0_magnitude": 1.8345206497091058,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.35,
+        "mode": "both",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 290,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 80,
+        "predictor_evals": 80,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.004605791997164488,
+        "engine": 0.0049387919716537
+      },
+      "final_x0_magnitude": 2.1577290216175107,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 290,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 80,
+        "predictor_evals": 80,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.00457620806992054,
+        "engine": 0.004671124974265695
+      },
+      "final_x0_magnitude": 1.2872885834020886,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "mode": "mu_only",
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 1,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 290,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 80,
+        "predictor_evals": 80,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.00463970797136426,
+        "engine": 0.004651874769479036
+      },
+      "final_x0_magnitude": 1.4551692797891163,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.0,
+        "mode": "both",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "n_mc": 1,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 290,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 240,
+        "predictor_evals": 240,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.00722779193893075,
+        "engine": 0.0073145420756191015
+      },
+      "final_x0_magnitude": 2.174394282440142,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "mode": "rho_only",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.0,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 290,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 240,
+        "predictor_evals": 240,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.007168750045821071,
+        "engine": 0.007312959060072899
+      },
+      "final_x0_magnitude": 1.2703397558544476,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "mode": "mu_only",
+        "rho_scalar": 0.0,
+        "mu_scalar": 0.35,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 3,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 290,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 240,
+        "predictor_evals": 240,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.007184084039181471,
+        "engine": 0.007311749970540404
+      },
+      "final_x0_magnitude": 1.0863536679999113,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 4,
+        "gamma_bar": 0.35,
+        "mode": "both",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "n_mc": 3,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 8,
+        "N_recur": 3,
+        "N_iter": 2,
+        "gamma_bar": 0.4,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 2,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 346,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 8, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 8, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 8, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 24,
+        "conditional_calls": 144,
+        "predictor_evals": 144,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 3.0,
+        "recurrence_history": [
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.006015165941789746,
+        "engine": 0.006161208031699061
+      },
+      "final_x0_magnitude": 0.22140784581751827,
+      "cell": {
+        "N_recur": 3,
+        "N_iter": 2,
+        "gamma_bar": 0.4,
+        "mode": "both",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "n_mc": 2,
+        "T": 8
+      }
+    },
+    {
+      "config": {
+        "T": 2,
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.3,
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "rho_structure": "constant",
+        "mu_structure": "constant",
+        "n_mc": 2,
+        "distributional_tfg_enabled": false,
+        "n_schedule": {
+          "enabled": false,
+          "type": "constant",
+          "n_max": 1,
+          "kappa": 1.0
+        },
+        "temporal_cache": {
+          "enabled": false,
+          "type": "gradient",
+          "lambda_mode": "fixed",
+          "lambda_value": 0.0
+        },
+        "adaptive_recurrence": {
+          "enabled": false,
+          "max_recurrences": 1,
+          "threshold": 0.01,
+          "metric": "next_state_tweedie"
+        }
+      },
+      "seed": 17,
+      "max_abs_err_all_intermediates": 0.0,
+      "final_x0_abs_err": 0.0,
+      "first_divergence": null,
+      "n_traced_keys_compared": 50,
+      "tape_keys_only_reference": [],
+      "tape_keys_only_engine": [],
+      "worst_keys": [
+        [
+          "('x_T', 2, None, None)",
+          0.0
+        ],
+        [
+          "('x_t_in', 2, 1, None)",
+          0.0
+        ],
+        [
+          "('eps_theta', 2, 1, None)",
+          0.0
+        ]
+      ],
+      "counts": {
+        "denoiser_calls": 4,
+        "conditional_calls": 16,
+        "predictor_evals": 16,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2
+        ]
+      },
+      "runtime_s": {
+        "reference": 0.0007892921566963196,
+        "engine": 0.0007855410221964121
+      },
+      "final_x0_magnitude": 0.9472707896085326,
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.3,
+        "mode": "both",
+        "rho_scalar": 0.9,
+        "mu_scalar": 0.35,
+        "n_mc": 2,
+        "T": 2
+      }
+    }
+  ],
+  "test_B": [
+    {
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 0,
+        "gamma_bar": 0.0,
+        "n_max": 1
+      },
+      "max_abs_err_all_intermediates": 0.0,
+      "n_traced_keys_compared": 74,
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 8,
+        "predictor_evals": 8,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "n_max": 1
+      },
+      "max_abs_err_all_intermediates": 0.0,
+      "n_traced_keys_compared": 90,
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 16,
+        "predictor_evals": 16,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 1,
+        "gamma_bar": 0.0,
+        "n_max": 1
+      },
+      "max_abs_err_all_intermediates": 0.0,
+      "n_traced_keys_compared": 194,
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 32,
+        "predictor_evals": 32,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "cell": {
+        "N_recur": 1,
+        "N_iter": 2,
+        "gamma_bar": 0.3,
+        "n_max": 1
+      },
+      "max_abs_err_all_intermediates": 0.0,
+      "n_traced_keys_compared": 106,
+      "counts": {
+        "denoiser_calls": 8,
+        "conditional_calls": 48,
+        "predictor_evals": 48,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 1.0,
+        "recurrence_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "cell": {
+        "N_recur": 2,
+        "N_iter": 2,
+        "gamma_bar": 0.3,
+        "n_max": 1
+      },
+      "max_abs_err_all_intermediates": 0.0,
+      "n_traced_keys_compared": 226,
+      "counts": {
+        "denoiser_calls": 16,
+        "conditional_calls": 96,
+        "predictor_evals": 96,
+        "n_t_mean": 1.0,
+        "n_t_history": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "recurrence_mean": 2.0,
+        "recurrence_history": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      }
+    }
+  ],
+  "worst_max_abs_err": 0.0
+}

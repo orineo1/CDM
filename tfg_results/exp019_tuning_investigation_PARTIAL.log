@@ -1,0 +1,5 @@
+TUNING-ONLY investigation (no_lgd, B_t=750, 50 restarts)
+  const lambda=0.25          L2 mean=0.2324 med=0.1054 succ=76% div=0/50
+  const lambda=0.5           L2 mean=0.2930 med=0.1131 succ=66% div=0/50
+  const lambda=0.75          L2 mean=0.2704 med=0.1058 succ=70% div=0/50
+  lambda smoothed ema=0.5    L2 mean=0.1461 med=0.1014 succ=92% div=0/50

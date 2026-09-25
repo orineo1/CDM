@@ -697,16 +697,18 @@ def generate_gmm_parameters_Distance(d: int, num_components: int, seed: int = 42
 # print("Mixture Weights:", alpha)
 
 def get_param_mog_with_target(dim_data=3, num_components=2, device='cpu',
-                              conditional_modes=2, uncond_dim=1,distanceOrScale="Distance"):
+                              conditional_modes=2, uncond_dim=1,distanceOrScale="Distance",
+                              min_distance=5.0):
     """
     Generate GMM parameters with multi-modal conditional distribution.
 
     Args:
         conditional_modes: Number of modes for the conditional distribution
         condition_values: List of conditioning values to create modes at
+        min_distance: Minimum distance between component means
     """
     if distanceOrScale=="Distance":
-        mu_list, Sigma_list, alpha=generate_gmm_parameters_Distance(d=dim_data, num_components=num_components, seed=1)
+        mu_list, Sigma_list, alpha=generate_gmm_parameters_Distance(d=dim_data, num_components=num_components, seed=1, min_distance=min_distance)
     else:
         mu_list, Sigma_list, alpha = generate_gmm_parameters(d=dim_data, num_components=num_components, seed=1)
 

@@ -1,0 +1,59 @@
+[
+  {
+    "seed": 20240401,
+    "config": {
+      "nfeatures": 1,
+      "condition_on": 1,
+      "nunits": 128,
+      "depth": 3,
+      "nepochs": 20000,
+      "batch_size": 1024
+    },
+    "seconds": 48.38552145799622,
+    "device": "cpu",
+    "dtype": "float32 (model default)",
+    "git_commit": "31a4be5838e1b88e08f46d143bac54f7e745776f",
+    "torch": "2.12.0",
+    "provenance": "RE-TRAINED from recorded config; not the paper's weights",
+    "checkpoint": "tfg_results/cm_checkpoints/cm_seed20240401.pt",
+    "role": "MAIN"
+  },
+  {
+    "seed": 20240402,
+    "config": {
+      "nfeatures": 1,
+      "condition_on": 1,
+      "nunits": 128,
+      "depth": 3,
+      "nepochs": 20000,
+      "batch_size": 1024
+    },
+    "seconds": 48.30618299986236,
+    "device": "cpu",
+    "dtype": "float32 (model default)",
+    "git_commit": "31a4be5838e1b88e08f46d143bac54f7e745776f",
+    "torch": "2.12.0",
+    "provenance": "RE-TRAINED from recorded config; not the paper's weights",
+    "checkpoint": "tfg_results/cm_checkpoints/cm_seed20240402.pt",
+    "role": "robustness-1"
+  },
+  {
+    "seed": 20240403,
+    "config": {
+      "nfeatures": 1,
+      "condition_on": 1,
+      "nunits": 128,
+      "depth": 3,
+      "nepochs": 20000,
+      "batch_size": 1024
+    },
+    "seconds": 48.36108270823024,
+    "device": "cpu",
+    "dtype": "float32 (model default)",
+    "git_commit": "31a4be5838e1b88e08f46d143bac54f7e745776f",
+    "torch": "2.12.0",
+    "provenance": "RE-TRAINED from recorded config; not the paper's weights",
+    "checkpoint": "tfg_results/cm_checkpoints/cm_seed20240403.pt",
+    "role": "robustness-2"
+  }
+]

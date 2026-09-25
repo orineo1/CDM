@@ -1,0 +1,96 @@
+[
+  {
+    "proto": "constant",
+    "label": "none",
+    "score": 0.09251346207613542,
+    "succ": 1.0,
+    "L2_mean": 0.09251346439123154
+  },
+  {
+    "proto": "constant",
+    "label": "adam0.3",
+    "rho": 0.3,
+    "score": 0.16228151344799244,
+    "succ": 0.8666666666666667,
+    "L2_mean": 0.16228151321411133,
+    "L2_median": 0.09124040603637695,
+    "admissible": false
+  },
+  {
+    "proto": "constant",
+    "label": "adam0.5",
+    "rho": 0.5,
+    "score": 0.19214965275875395,
+    "succ": 0.8333333333333334,
+    "L2_mean": 0.19214965403079987,
+    "L2_median": 0.11747879534959793,
+    "admissible": false
+  },
+  {
+    "proto": "constant",
+    "label": "adam0.8",
+    "rho": 0.8,
+    "score": 0.17409091130392307,
+    "succ": 0.8666666666666667,
+    "L2_mean": 0.1740909069776535,
+    "L2_median": 0.09128923714160919,
+    "admissible": false
+  },
+  {
+    "proto": "constant",
+    "label": "adam1.2",
+    "rho": 1.2,
+    "score": 0.2825461947153715,
+    "succ": 0.7666666666666667,
+    "L2_mean": 0.28254619240760803,
+    "L2_median": 0.1168830543756485,
+    "admissible": false
+  },
+  {
+    "proto": "adaptive",
+    "label": "none",
+    "score": 0.12446251667259794,
+    "succ": 0.9666666666666667,
+    "L2_mean": 0.12446251511573792
+  },
+  {
+    "proto": "adaptive",
+    "label": "adam0.3",
+    "rho": 0.3,
+    "score": 0.20540049286018444,
+    "succ": 0.8,
+    "L2_mean": 0.2054004967212677,
+    "L2_median": 0.09500163048505783,
+    "admissible": false
+  },
+  {
+    "proto": "adaptive",
+    "label": "adam0.5",
+    "rho": 0.5,
+    "score": 0.13754676069973262,
+    "succ": 0.9333333333333333,
+    "L2_mean": 0.13754676282405853,
+    "L2_median": 0.09467107802629471,
+    "admissible": true
+  },
+  {
+    "proto": "adaptive",
+    "label": "adam0.8",
+    "rho": 0.8,
+    "score": 0.25312012182921756,
+    "succ": 0.8,
+    "L2_mean": 0.2531201243400574,
+    "L2_median": 0.1026911810040474,
+    "admissible": false
+  },
+  {
+    "proto": "adaptive",
+    "label": "adam1.2",
+    "rho": 1.2,
+    "score": 0.2644751853934196,
+    "succ": 0.7666666666666667,
+    "L2_mean": 0.26447516679763794,
+    "L2_median": 0.12375161796808243,
+    "admissible": false
+  }
+]

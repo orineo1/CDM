@@ -50,6 +50,10 @@ def parse_args():
                    help="Number of MoG components (for --random-mog).")
     p.add_argument("--condition-on", type=int, default=1,
                    help="Number of leading dimensions that form X.")
+    p.add_argument("--uncond-dim", type=int, default=1,
+                   help="Number of unconditional (Y) dimensions per component.")
+    p.add_argument("--min-separation", type=float, default=5.0,
+                   help="Minimum distance between MoG component means (for --random-mog).")
 
     # Target G(Y) = P(Y|X=x*)
     p.add_argument("--x-star", type=float, nargs="+", default=None,
@@ -101,6 +105,7 @@ def main():
             dist_utils.get_param_mog_with_target(
                 dim_data=args.dim, num_components=args.n_components,
                 device="cpu", conditional_modes=2, distanceOrScale="Distance",
+                uncond_dim=args.uncond_dim, min_distance=args.min_separation,
             )
 
     elif args.params_file:

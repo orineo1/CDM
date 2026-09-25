@@ -1,0 +1,25 @@
+  n=4   no_lgd    none    score=0.7484 L2mean=0.6756 succ=16% calls=396
+  n=4   no_lgd    adam    score=0.4306 L2mean=0.4306 succ=38% calls=396
+  n=4   no_lgd    lambda  score=0.5122 L2mean=0.4972 succ=28% calls=396
+  n=4   lgd_high  none    score=0.4959 L2mean=0.4807 succ=36% calls=1188
+  n=4   lgd_high  adam    score=0.3648 L2mean=0.3648 succ=42% calls=1188
+  n=4   lgd_high  lambda  score=0.2820 L2mean=0.2820 succ=57% calls=1188
+  n=8   no_lgd    none    score=0.5563 L2mean=0.5268 succ=32% calls=792
+  n=8   no_lgd    adam    score=0.3740 L2mean=0.3740 succ=44% calls=792
+  n=8   no_lgd    lambda  score=0.3579 L2mean=0.3413 succ=50% calls=792
+  n=8   lgd_high  none    score=0.3217 L2mean=0.3048 succ=57% calls=2376
+  n=8   lgd_high  adam    score=0.2628 L2mean=0.2628 succ=60% calls=2376
+  n=8   lgd_high  lambda  score=0.2276 L2mean=0.2276 succ=76% calls=2376
+  n=16  no_lgd    none    score=0.3573 L2mean=0.3490 succ=55% calls=1584
+  n=16  no_lgd    adam    score=0.2726 L2mean=0.2726 succ=62% calls=1584
+  n=16  no_lgd    lambda  score=0.2504 L2mean=0.2416 succ=67% calls=1584
+  n=16  lgd_high  none    score=0.2065 L2mean=0.2065 succ=76% calls=4752
+  n=16  lgd_high  adam    score=0.2517 L2mean=0.2517 succ=67% calls=4752
+  n=16  lgd_high  lambda  score=0.1734 L2mean=0.1734 succ=88% calls=4752
+  n=32  no_lgd    none    score=0.2021 L2mean=0.1931 succ=83% calls=3168
+  n=32  no_lgd    adam    score=0.2392 L2mean=0.2392 succ=74% calls=3168
+  n=32  no_lgd    lambda  score=0.1936 L2mean=0.1845 succ=88% calls=3168
+  n=32  lgd_high  none    score=0.1579 L2mean=0.1579 succ=90% calls=9504
+  n=32  lgd_high  adam    score=0.2371 L2mean=0.2371 succ=74% calls=9504
+  n=32  lgd_high  lambda  score=0.1443 L2mean=0.1443 succ=96% calls=9504
+DONE 24 arms -> tfg_results/exp022_confirm200.json
