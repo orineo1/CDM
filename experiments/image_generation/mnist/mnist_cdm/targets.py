@@ -49,11 +49,18 @@ class AngleTarget:
         return self.mog_means is None
 
     def sample_angles(self, n: int, device: str = "cpu") -> torch.Tensor:
-        """n draws from G, in degrees."""
+        """n draws from G, in degrees.
+
+        `device` applies to the uniform target only. The mixture draw is taken
+        on the CPU generator because `MNIST/run_mlgdf.py` calls
+        `generate_mog_samples(...)` without a device argument, i.e. on the CPU
+        default; the loss moves both sample sets to the compute device anyway,
+        so the only thing this preserves is which RNG stream is consumed.
+        """
         if self.is_uniform:
             return torch.rand(n, device=device) * 360.0
         return generate_mog_samples_not_differentiable(
-            n, self.mog_means, self.mog_variances, self.weights, device=device
+            n, self.mog_means, self.mog_variances, self.weights, device="cpu"
         ).squeeze()
 
     def generator(self) -> Callable[[int, str], torch.Tensor]:

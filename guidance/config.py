@@ -169,6 +169,14 @@ class GuidanceConfig:
     # Called as step_size_fn(t, i) -> float/tensor.
     step_size_fn: Callable = lambda t, i: 1.0
     guidance_cutoff_t: Optional[int] = None   # zero guidance for t < cutoff (MNIST: 200)
+    # Pure prior sampling: take the DDIM step and skip the guidance block entirely
+    # (no Tweedie perturbation, no conditional draws, no target draws, no gradient).
+    # This is NOT the same as step_size_fn -> 0: the upstream
+    # conditional-matching-paper simulations/src/Optimization.py::optimize_LGD
+    # short-circuits at `if zeta == 0.0:` BEFORE the Monte-Carlo loop, so the
+    # zeta=0 arm consumes no random numbers and its trajectory differs from a
+    # zeta=0 run that still draws the samples and multiplies the gradient by 0.
+    skip_guidance: bool = False
 
     # --- timestep iteration ---
     # "range": range(diffusion_steps-1, 0, -1)   (DPS, LGD, LGD_latent)

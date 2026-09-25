@@ -258,8 +258,12 @@ def classify_generated_images(images_np, classifier, device='cpu', threshold=0.7
     """Label generated 28x28 images with the rotation-robust classifier.
 
     Moved here from `MNIST/run_mlgdf.py` of `conditional-matching-paper`, which
-    carried a second, byte-identical copy of `ImprovedCNN` and its training loop
-    alongside `MNIST/src/classifier.py`. Only this module survives the port.
+    carried a second copy of `ImprovedCNN` and its training loop alongside
+    `MNIST/src/classifier.py`. The architectures are identical; the two training
+    loops differ in one respect -- the run_mlgdf copy builds its train loader
+    with `shuffle=False`, this module (and `MNIST/visualize.py`, which used it)
+    with `shuffle=True`. Only this module survives the port, so the port trains
+    the classifier the way `MNIST/visualize.py` did.
 
     Each image is min-max rescaled to [0, 1] before the MNIST normalisation,
     because the optimiser's output is an unnormalised latent image, not a

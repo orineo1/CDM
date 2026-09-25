@@ -109,15 +109,20 @@ from torch import optim
 from tqdm import tqdm
 # Optimize LGD using Monte Carlo-based guidance
 def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu_list, Sigma_list, alpha,
-                 nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda", FLAG=False):
+                 nsamples=250, num_x_t=3, loss="MMD", CM=False, device="cuda", FLAG=False,
+                 zeta=1.0):
     """DEPRECATED wrapper -- kept so existing notebooks keep working unchanged.
 
-    Reproduces the historical behaviour exactly, including two quirks:
+    Reproduces the historical behaviour exactly, including one quirk:
       * init is ZEROS, not N(0,I) (the paper's Alg. 1 says N(0,I); the newer
         optimize_LGD_CM carries a "CHANGED: zeros -> randn" comment). Fix this
         only AFTER tests/test_equivalence.py passes.
-      * the guidance step size is 1.0 -- there is no zeta_t, despite Alg. 3
-        specifying zeta_t = zeta'/||grad L||.
+
+    `zeta` is the guidance strength of upstream
+    conditional-matching-paper simulations/src/Optimization.py::optimize_LGD:
+    the update is `x_{t-1} - zeta * grad`, and `zeta == 0.0` short-circuits the
+    whole Monte-Carlo block (pure prior sampling, no random numbers consumed).
+    The default 1.0 is the historical behaviour.
     """
     cfg = GuidanceConfig(
         n_cond=nsamples,
@@ -127,7 +132,8 @@ def optimize_LGD(model_uncond, model_cond, mog_means, mog_variances, weights, mu
         perturb_fn=perturb_beta_ratio,
         perturb_square=False,                     # std = r_t, not r_t**2
         aggregate_fn=aggregate_logsumexp,
-        step_size_fn=lambda t, i: 1.0,            # no zeta
+        step_size_fn=lambda t, i: zeta,
+        skip_guidance=(zeta == 0.0),
         timestep_source="range",
         ddim_step_style="condition_x",
         repeat_condition=True,

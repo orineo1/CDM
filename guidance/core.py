@@ -103,6 +103,14 @@ def _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best, 
 
     x_t_minus_1, pred_x0 = _ddim_step(model_uncond, x_t, t, i, cfg)
 
+    if cfg.skip_guidance:
+        # Pure prior sampling. Upstream (conditional-matching-paper
+        # simulations/src/Optimization.py::optimize_LGD, `if zeta == 0.0`) skips the
+        # whole Monte-Carlo block here, so no random numbers are consumed.
+        with torch.no_grad():
+            x_next = x_t_minus_1.detach().clone()
+        return x_next, {"loss": float("nan"), "grad_norm": 0.0, "step": 0.0}
+
     r_t = cfg.perturb_fn(model_uncond, t, i)
     neg_losses = []
 
