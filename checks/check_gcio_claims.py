@@ -32,7 +32,7 @@ import re
 import sys
 
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", ".venv", "venv",
-             "node_modules", "notebooks", "legacy"}
+             "node_modules"}
 # Directories whose callers do not count as "entry points using the store":
 # gcio/ is the store itself, tests/ exercises it with a temp store, checks/ is us.
 EXEMPT_PREFIXES = ("gcio/", "tests/", "checks/")

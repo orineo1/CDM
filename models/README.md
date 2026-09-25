@@ -41,7 +41,7 @@ Both define a class called `DiffusionModel`. They are different models, not dupl
 there is none in this repo.**
 
 **Only the discrete-time class is used.** Every import in the live code
-(`scripts/`, `tests/`, `legacy/`) is `from models.diffusion import DiffusionModel` or
+(`scripts/`, `tests/`) is `from models.diffusion import DiffusionModel` or
 `from models import diffusion as Diffusion`. `diffusion_general.py` has **no importers**
 outside `models/__init__.py` and `models/priors/__init__.py`, which only re-export it.
 As far as the paper is concerned it is dead code — flagged, not deleted.
@@ -50,23 +50,16 @@ It also carries an in-module alias `DiffusionModelSDE = DiffusionModel`
 (`diffusion_general.py:468`), so the continuous-time class answers to three names: `models.diffusion_general.DiffusionModel`,
 `...DiffusionModelSDE`, and `models.DiffusionModelCT`.
 
-The notebooks import a top-level `DiffusionGeneral` module that does not exist in this
-repository; `notebooks/` is unmaintained.
-
 ## `models/samplers/`
 
 | file | what is in it |
 |---|---|
 | `consistency.py` | `ConsistencyModel` and `ConsistencyModeliCT` — consistency-model samplers (MLGD-F) |
 | `exact.py` | `ExactConditionalSampler` — oracle draws from `P(Y\|X)` of a known Gaussian mixture, no network |
-| `flow_matching.py` | `FMModel` — flow-matching sampler over an ODE path |
-| `fm_solver.py` | not a sampler: patches a `flow_matching` `ODESolver` with a gradient-carrying `compute_likelihood_allow_grad`, used by `flow_matching.py` |
 
 `guidance/core.py:73` calls `model_cond.sample(nsamples=..., condition_x=..., device=...)`.
 `consistency.py`, `exact.py` and `models/diffusion.py` all implement that signature and
-are interchangeable there. **`FMModel` does not** — its signature is
-`sample(num_sample, y=None, ...)`, and it is driven through `optimize_DFLOW`
-(`legacy/Optimization.py:265`) rather than through `optimize_guided`.
+are interchangeable there.
 
 ## Which class a checkpoint comes from
 
@@ -78,7 +71,6 @@ alongside `"state_dict"` and `"config"` (`train_models.py:207-234`), and
 |---|---|
 | `"diffusion"` | `models.diffusion.DiffusionModel` (discrete-time) |
 | `"cm"` | `models.samplers.consistency.ConsistencyModeliCT` — note: the iCT variant, not `ConsistencyModel` |
-| `"fm"` | `models.samplers.flow_matching.FMModel` |
 
 No checkpoint format in this repo reconstructs `DiffusionModelCT`.
 

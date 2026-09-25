@@ -1,7 +1,7 @@
 """Tier 0: does anything import and run at all?
 
 Seconds, CPU-only. Catches import errors, typos and config mistakes before
-burning GPU time on the equivalence gate.
+burning GPU time.
 """
 
 import os
@@ -22,8 +22,6 @@ def test_imports():
     import guidance.core
     import guidance.config
     import gcio.results
-    from legacy import Optimization
-    from legacy import Optimization_legacy
     from losses import functions as LossFunctions
     from models import diffusion as Diffusion
     from models.samplers import consistency as ConsistencyModels

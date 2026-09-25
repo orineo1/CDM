@@ -4,8 +4,7 @@ Every axis on which the historical optimizer variants differed is an explicit
 field here. Strategy callables are used instead of string flags so that each
 legacy variant is reproduced *exactly*, including its RNG call order.
 
-See guidance/core.py for how each field is consumed, and Optimization.py for
-the wrappers that reconstruct each legacy variant's behaviour.
+See guidance/core.py for how each field is consumed.
 """
 
 from dataclasses import dataclass, field

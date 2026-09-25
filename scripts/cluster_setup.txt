@@ -52,7 +52,7 @@ PREREQUISITES
 
   If your cluster CUDA version matches the default PyTorch build:
 
-    pip install torch numpy scipy tqdm flow-matching torchdiffeq POT scikit-learn matplotlib pandas
+    pip install torch numpy scipy tqdm POT scikit-learn matplotlib pandas
 
   If GPU is not detected after this, install PyTorch with explicit CUDA version
   (replace cu121 with your cluster's version, e.g. cu118, cu124):
@@ -143,7 +143,7 @@ PREREQUISITES
   module load anaconda3          # or miniconda, name varies
   conda create -n GlobalConditional python=3.10 -y
   conda activate GlobalConditional
-  pip install torch numpy scipy tqdm flow-matching torchdiffeq POT scikit-learn matplotlib pandas
+  pip install torch numpy scipy tqdm POT scikit-learn matplotlib pandas
 
   Then in job scripts, replace the venv activation line with:
 
@@ -161,9 +161,6 @@ PREREQUISITES
   Full run:
     python scripts/run_experiment.py --epochs 20 --n-attempts 25
 
-  Using D-FLOW instead:
-    python scripts/run_experiment.py --method DFLOW
-
   Using plain LGD (diffusion conditional):
     python scripts/run_experiment.py --method LGD --architecture diffusion --epochs 20
 
@@ -175,9 +172,6 @@ PREREQUISITES
 
   Reproducible run:
     python scripts/run_experiment.py --seed 42
-
-  Compare likelihood vs D-FLOW (all-in-one):
-    python scripts/compare_methods.py --n-attempts 5 --direct --architecture fm --epochs 10
 
 --------------------------------------------------------------------------------
 Cluster-specific values you need to fill in

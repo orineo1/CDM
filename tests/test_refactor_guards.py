@@ -10,16 +10,6 @@ reorg fixed, and each was demonstrated to FAIL on the pre-fix tree:
   * ``test_no_imported_name_is_redefined``           -- Items 1 and 6. The AST
     sweep that found the Item 4 bug, promoted from ``checks/ast_shadow_sweep.py``
     so the bug class cannot come back. 2 intersections pre-Item-4, 0 now.
-  * ``test_likelihood_imports_as_a_package`` and
-    ``test_flow_matching_resolves_to_site_packages`` -- Item 6. The two library
-    modules moved out of ``scripts/`` into ``likelihood/``; the second test is
-    the name-collision trap, because ``likelihood/optimizer.py`` imports the PIP
-    ``flow_matching`` package and this repo also ships ``models/samplers/
-    flow_matching.py``.
-
-Note what the equivalence gate structurally cannot do here: it compares two arms
-that import the SAME modules, so none of these defects would ever redden it.
-See ``tests/README.md``.
 """
 
 import ast
@@ -117,38 +107,7 @@ def _shadowing_intersections(root):
 
 def test_no_imported_name_is_redefined():
     hits = _shadowing_intersections(REPO)
-    # legacy/ is a byte-for-byte freeze of pre-refactor code: it is not ours to fix.
-    hits = [h for h in hits if not h[0].startswith("legacy/")]
     assert hits == [], "imported name redefined at module level:\n" + "\n".join(
         f"  {p}: '{n}' imported line {il}, redefined line {dl}"
         for p, n, il, dl in hits)
 
-
-# --------------------------------------------------------------------------
-# Item 6: the moved libraries, and the flow_matching collision trap
-# --------------------------------------------------------------------------
-
-def test_likelihood_imports_as_a_package():
-    import likelihood
-
-    assert likelihood.__file__.endswith(os.path.join("likelihood", "__init__.py"))
-    for name in ("optimize_likelihood", "optimize_likelihood_direct",
-                 "get_representative_points", "get_noised_representatives"):
-        assert callable(getattr(likelihood, name)), f"likelihood.{name} missing"
-
-
-def test_flow_matching_resolves_to_site_packages():
-    """likelihood/optimizer.py wants the PIP flow_matching, not ours.
-
-    This repo ships models/samplers/flow_matching.py. If anything ever puts that
-    directory on sys.path, or a top-level flow_matching.py appears, the import in
-    likelihood/optimizer.py silently binds to the wrong module.
-    """
-    flow_matching = pytest.importorskip(
-        "flow_matching", reason="pip flow_matching not installed in this env")
-    path = os.path.abspath(flow_matching.__file__)
-    assert "site-packages" in path or "dist-packages" in path, (
-        f"flow_matching resolved to {path}, not the installed package")
-    assert not path.startswith(REPO + os.sep), (
-        f"flow_matching resolved INSIDE this repo ({path}) -- the repo's own "
-        f"models/samplers/flow_matching.py is shadowing the pip package")

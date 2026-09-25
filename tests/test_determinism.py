@@ -1,6 +1,6 @@
 """Tier 2: same seed must give the same answer, twice in a row.
 
-If this fails, the equivalence gate (Tier 1) is meaningless -- you cannot
+If this fails, the other tests are meaningless -- you cannot
 compare two code paths when one path does not agree with itself. On CUDA,
 some kernels are nondeterministic by default; if that is the cause, set
     torch.use_deterministic_algorithms(True)

@@ -7,8 +7,8 @@ NAMING WARNING -- read before using. Despite the class name and the live
 support/coverage penalty is commented out in `forward` (`total_loss = swd
 #+ ...`). `support_weight` is inert. The paper describes the MNIST objective
 as SWD, so the *computation* matches the paper; only the name misleads.
-Kept verbatim for the equivalence gate -- do not rename or re-enable the
-penalty until tests/test_equivalence.py passes.
+Kept verbatim so the MNIST results stay reproducible -- do not rename or
+re-enable the penalty without re-running that experiment.
 
 Note also that `sliced_wasserstein_distance` uses mean |sorted difference|,
 i.e. sliced W_1, and requires X and Y to have equal sample counts.

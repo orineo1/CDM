@@ -6,7 +6,6 @@ Loads trained models (from train_models.py) and distribution metadata
 
 Usage:
   python run_optimization.py --data data/mog2d.pt --model-dir models/run1 --method LGD_CM
-  python run_optimization.py --data data/mog2d.pt --model-dir models/run1 --method DFLOW --n-attempts 25
   python run_optimization.py --data data/mog2d.pt --model-dir models/run1 --method LGD --n-attempts 10 --optim-samples 500
 """
 
@@ -22,8 +21,6 @@ import torch
 from utils import dist as dist_utils
 from models import diffusion as Diffusion
 from models.samplers import consistency as ConsistencyModels
-from models.samplers import flow_matching as FlowMatching
-from legacy import Optimization
 from guidance import GuidanceConfig, optimize_guided
 from guidance.config import init_randn, init_zeros, perturb_beta_ratio, aggregate_logsumexp
 from losses.functions import MMDLoss, RBF
@@ -45,16 +42,14 @@ def parse_args():
 
     # Optimization method
     p.add_argument("--method", type=str, required=True,
-                   choices=["LGD", "LGD_CM", "DFLOW"],
-                   help="LGD = diffusion-based, LGD_CM = consistency model, DFLOW = flow matching.")
+                   choices=["LGD", "LGD_CM"],
+                   help="LGD = diffusion-based, LGD_CM = consistency model.")
     p.add_argument("--n-attempts", type=int, default=5,
                    help="Independent optimization runs (best is selected).")
     p.add_argument("--optim-samples", type=int, default=250,
                    help="Samples per loss evaluation from both P_hat(Y|X) and G(Y).")
     p.add_argument("--mc-samples", type=int, default=3,
                    help="Monte Carlo samples for LGD gradient estimation per step.")
-    p.add_argument("--dflow-max-iter", type=int, default=100,
-                   help="Max LBFGS iterations for D-FLOW.")
     p.add_argument("--init", choices=["randn", "zeros"], default="randn",
                    help="x_T initialisation of each restart (randn = independent random restarts).")
     p.add_argument("--step-size", type=float, default=1.0, help="Guidance step zeta (LGD / LGD_CM).")
@@ -85,10 +80,6 @@ def load_model(path, device):
 
     elif arch == "cm":
         model = ConsistencyModels.ConsistencyModeliCT(**config, device=device)
-        model.load_state_dict(ckpt["state_dict"])
-
-    elif arch == "fm":
-        model = FlowMatching.FMModel(**config, device=device)
         model.load_state_dict(ckpt["state_dict"])
 
     model.to(device)
@@ -138,7 +129,7 @@ def main():
 
         if args.method in ("LGD", "LGD_CM"):
             # the paper's LGD configuration, through the library, with independent
-            # random restarts (the legacy optimize_LGD wrapper starts every restart at 0)
+            # random restarts
             cfg = GuidanceConfig(
                 n_cond=args.optim_samples, n_mc=args.mc_samples,
                 init_fn=init_randn if args.init == "randn" else init_zeros, unsqueeze_init=True,
@@ -154,14 +145,6 @@ def main():
             )
             res = optimize_guided(model_uncond, model_cond, MMDLoss(kernel=RBF(device=device)), cfg)
             x_hat, loss_val, trace = res["x_final"], res["final_loss"], res["trace"]
-        elif args.method == "DFLOW":
-            trace = None
-            x_hat, loss_val = Optimization.optimize_DFLOW(
-                model_cond, model_uncond, device,
-                target_means, target_variances, target_weights,
-                max_iter=args.dflow_max_iter,
-                n_sample=args.optim_samples, loss_method="MMD",
-            )
 
         elapsed = time.time() - t0
         x_val = x_hat.detach().cpu().squeeze()

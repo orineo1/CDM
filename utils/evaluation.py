@@ -20,14 +20,14 @@ def evaluate_conditional_model(
         nsamples=5000,
         num_projections=1000,
         extract_generated_only=True,  # Set False for CM models
-        model_type='diffusion',  # 'diffusion', 'cm', 'fm', or 'super_diffusion'
+        model_type='diffusion',  # 'diffusion', 'cm', or 'super_diffusion'
         reverse_distribution=False  # If True, flip mu and reverse Sigma indices
 ):
     """
     Evaluate conditional model using SWD metric.
 
     Args:
-        model: Trained conditional model (Diffusion, ConsistencyModel, or FlowMatching)
+        model: Trained conditional model (Diffusion or ConsistencyModel)
         mu_list: List of means for MoG
         Sigma_list: List of covariances for MoG
         alpha: Mixture weights
@@ -37,7 +37,7 @@ def evaluate_conditional_model(
         nsamples: Number of samples per evaluation
         num_projections: Number of projections for SWD
         extract_generated_only: Whether to extract only generated features (not conditioning)
-        model_type: Type of model ('diffusion', 'cm', 'fm', 'super_diffusion')
+        model_type: Type of model ('diffusion', 'cm', 'super_diffusion')
         reverse_distribution: If True, reverse the order of features in mu and Sigma
 
     Returns:
@@ -89,11 +89,6 @@ def evaluate_conditional_model(
                     nsamples=nsamples,
                     condition_x=condition_vector.float(),
                     device=device
-                )
-            elif model_type == 'fm':
-                model_samples = model.sample(
-                    nsamples,
-                    condition_vector.float()
                 )
             elif model_type == 'super_diffusion':
                 condition_vector_rep = condition_vector.repeat(nsamples, 1)
@@ -158,7 +153,7 @@ def evaluate_unconditional_model(
         device,
         nsamples=10000,
         num_projections=1000,
-        model_type='diffusion',  # 'diffusion' or 'fm'
+        model_type='diffusion',  # 'diffusion'
         num_evaluations=1  # Number of evaluation iterations
 ):
     """
@@ -173,7 +168,7 @@ def evaluate_unconditional_model(
         device: torch device
         nsamples: Number of samples to generate
         num_projections: Number of projections for SWD
-        model_type: Type of model ('diffusion' or 'fm')
+        model_type: Type of model ('diffusion')
         num_evaluations: Number of evaluation iterations
 
     Returns:
@@ -198,12 +193,6 @@ def evaluate_unconditional_model(
                     condition_x=None,
                     device=device
                 )
-            elif model_type == 'fm':
-                samples_uncond = model.sample(
-                    num_sample=nsamples,
-                    y=None,
-                )
-                samples_uncond = samples_uncond.cpu().detach()
             else:
                 raise ValueError(f"Unknown model_type: {model_type}")
 
@@ -216,9 +205,6 @@ def evaluate_unconditional_model(
                 kernel_func=lambda X: X[:, :condition_on]
             )
             Y_true = data_generator(nsamples, device=device)
-
-            if model_type == 'fm':
-                Y_true = Y_true.cpu().detach()
 
             # Slice means and covariances to match sample dimension
             sample_dim = samples_uncond.shape[1]

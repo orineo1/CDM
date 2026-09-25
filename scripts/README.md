@@ -31,19 +31,14 @@ imported as a library by the packages.
 
 | Script | What it does |
 | --- | --- |
-| `compare_methods.py` | Likelihood-based optimizer vs D-FLOW on the same data, model and target. |
 | `control_subsample.py` | Appendix G control: gradient subsampling (Uniform / Witness) vs full backprop. |
 
-The likelihood-optimizer *library* that `compare_methods.py` calls is not here — it is the
-top-level `likelihood/` package (`likelihood/optimizer.py`,
-`likelihood/representative_points.py`).
 
 ## Infra
 
 | File | What it does |
 | --- | --- |
-| `run_regression.py` | Tier 3: compares a run against a recorded baseline (see `tests/README.md`). |
-| `run_all_tests.sh` | Runs the Tier 0-2 test suite (`pytest tests/`). |
+| `run_all_tests.sh` | Runs the test suite (`pytest tests/`). |
 | `slurm_fig1.sh` | Figure 1 on the cluster, all settings, with restarts. |
 | `slurm_table1.sh` | Table 1 on the cluster: one array task per scenario, then a collect job. |
 | `cluster_setup.txt` | Cluster setup instructions. |

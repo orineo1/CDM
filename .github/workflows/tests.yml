@@ -21,9 +21,7 @@ jobs:
           pip install -r requirements.txt
 
       # GitHub's free runners have no GPU, so these run on CPU with tiny
-      # models. That covers imports, the compatibility shims, determinism and
-      # the equivalence gate at reduced settings. The full regression against
-      # published numbers (scripts/run_regression.py) needs the cluster and is
-      # deliberately NOT run here.
+      # models: imports, determinism and the targeted guards. Reproducing the
+      # published numbers needs a GPU and is deliberately NOT run here.
       - name: Run fast tests
         run: pytest tests/ -v --tb=short

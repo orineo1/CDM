@@ -37,7 +37,7 @@ def parse_args():
 
     # Training
     p.add_argument("--architecture", type=str, default="cm",
-                   choices=["diffusion", "cm", "fm"])
+                   choices=["diffusion", "cm"])
     p.add_argument("--epochs", type=int, default=5,
                    help="True epochs over the fixed dataset.")
     p.add_argument("--batch-size", type=int, default=512)
@@ -47,7 +47,7 @@ def parse_args():
 
     # Optimization
     p.add_argument("--method", type=str, default="LGD_CM",
-                   choices=["LGD", "LGD_CM", "DFLOW"])
+                   choices=["LGD", "LGD_CM"])
     p.add_argument("--n-attempts", type=int, default=5)
     p.add_argument("--optim-samples", type=int, default=250)
     p.add_argument("--mc-samples", type=int, default=3)

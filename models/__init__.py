@@ -8,7 +8,7 @@
                                  there is no discrete-state diffusion in this repo.
     models/diffusion_general.py  DiffusionModel   -- continuous-time SDE formulation.
     models/priors/               P(X):    the unconditional prior over X.
-    models/samplers/             P(Y|X):  consistency, flow matching, exact.
+    models/samplers/             P(Y|X):  consistency, exact.
 
 Both modules define a class named `DiffusionModel`, and the same class serves
 both roles: `DiffusionModel(condition=True)` is P(Y|X) on the diffusion-sampler

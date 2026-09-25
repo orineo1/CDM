@@ -3,7 +3,7 @@ Step 2: Train generative models from a saved dataset.
 
 Reads the .pt file produced by generate_data.py and trains:
   --model unconditional   :  P(X)   diffusion model
-  --model conditional     :  P(Y|X) model (diffusion, cm, or fm)
+  --model conditional     :  P(Y|X) model (diffusion or cm)
   --model both            :  both of the above
 
 Saves model checkpoints to --output-dir.
@@ -25,7 +25,6 @@ import torch
 import torch.nn as nn
 from models import diffusion as Diffusion
 from models.samplers import consistency as ConsistencyModels
-from models.samplers import flow_matching as FlowMatching
 
 
 def parse_args():
@@ -43,11 +42,10 @@ def parse_args():
                    choices=["unconditional", "conditional", "both"],
                    help="Which model(s) to train.")
     p.add_argument("--architecture", type=str, default="cm",
-                   choices=["diffusion", "cm", "fm"],
+                   choices=["diffusion", "cm"],
                    help="Architecture for the conditional model. "
-                        "diffusion = DDIM, cm = Improved Consistency Training, "
-                        "fm = Flow Matching. The unconditional model is always diffusion "
-                        "(except when architecture=fm, then it is also flow matching).")
+                        "diffusion = DDIM, cm = Improved Consistency Training. "
+                        "The unconditional model is always diffusion.")
 
     # Architecture hyperparameters
     p.add_argument("--nunits", type=int, default=128,
@@ -87,44 +85,23 @@ GEN = {}   # fresh-sample generators, set in main() with --fresh-samples
 def train_unconditional(X_train, args, nfeatures_x, device):
     """Train unconditional model on X (first condition_on dims)."""
 
-    if args.architecture == "fm":
-        print(f"\n--- Training unconditional flow matching on X (dim={nfeatures_x}) ---")
-        model = FlowMatching.FMModel(
-            nfeatures=nfeatures_x, condition_on=0,
-            nunits=args.nunits, nblocks=args.nblocks, device=device,
-        )
-        # FM only supports data_generator, so we wrap the fixed dataset
-        dataset = torch.utils.data.TensorDataset(X_train)
-        loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
-
-        def data_gen_from_loader(batch_size, device="cpu"):
-            # This is a workaround: sample a random batch from X_train
-            idx = torch.randint(0, len(X_train), (batch_size,))
-            return X_train[idx].to(device)
-
-        total_iters = args.epochs * (len(X_train) // args.batch_size + 1)
-        print(f"    {args.epochs} epochs x ~{len(X_train)//args.batch_size+1} batches = {total_iters} iterations")
-        lr = args.lr if args.lr else 0.001
-        model.train_FM(lr=lr, batch_size=args.batch_size,
-                       data_generator=data_gen_from_loader, nepochs=total_iters)
+    print(f"\n--- Training unconditional diffusion on X (dim={nfeatures_x}) ---")
+    model = Diffusion.DiffusionModel(
+        nfeatures=nfeatures_x, nblocks=args.nblocks, nunits=args.nunits,
+        condition=False, diffusion_steps=args.diffusion_steps, device=device,
+    )
+    if args.fresh_samples:
+        print(f"    Fresh draws: {args.epochs} batches of {args.batch_size}")
+        model.train_model(X=None, data_generator=GEN["x"], nepochs=args.epochs, batch_size=args.batch_size,
+                          device=device)
     else:
-        print(f"\n--- Training unconditional diffusion on X (dim={nfeatures_x}) ---")
-        model = Diffusion.DiffusionModel(
-            nfeatures=nfeatures_x, nblocks=args.nblocks, nunits=args.nunits,
-            condition=False, diffusion_steps=args.diffusion_steps, device=device,
+        print(f"    Data: {X_train.shape[0]} samples, {args.epochs} epochs, "
+              f"batch_size={args.batch_size}")
+        print(f"    Gradient steps: ~{args.epochs * (len(X_train) // args.batch_size + 1)}")
+        model.train_model(
+            X=X_train.to(device), nepochs=args.epochs, batch_size=args.batch_size,
+            device=device,
         )
-        if args.fresh_samples:
-            print(f"    Fresh draws: {args.epochs} batches of {args.batch_size}")
-            model.train_model(X=None, data_generator=GEN["x"], nepochs=args.epochs, batch_size=args.batch_size,
-                              device=device)
-        else:
-            print(f"    Data: {X_train.shape[0]} samples, {args.epochs} epochs, "
-                  f"batch_size={args.batch_size}")
-            print(f"    Gradient steps: ~{args.epochs * (len(X_train) // args.batch_size + 1)}")
-            model.train_model(
-                X=X_train.to(device), nepochs=args.epochs, batch_size=args.batch_size,
-                device=device,
-            )
 
     return model
 
@@ -174,24 +151,6 @@ def train_conditional(X_train_full, args, nfeatures, condition_on, device):
                 guidance_dropout=args.guidance_dropout, device=device,
             )
 
-    elif args.architecture == "fm":
-        print(f"\n--- Training conditional flow matching P(Y|X) ---")
-        model = FlowMatching.FMModel(
-            nfeatures=nfeatures, condition_on=condition_on,
-            nunits=args.nunits, nblocks=args.nblocks, device=device,
-        )
-        # FM only supports data_generator
-        def data_gen_from_dataset(batch_size, device="cpu"):
-            idx = torch.randint(0, len(X_train_full), (batch_size,))
-            return X_train_full[idx].to(device)
-
-        total_iters = args.epochs * (len(X_train_full) // args.batch_size + 1)
-        print(f"    {args.epochs} epochs x ~{len(X_train_full)//args.batch_size+1} batches = {total_iters} iterations")
-        lr = args.lr if args.lr else 0.001
-        model.train_FM(lr=lr, batch_size=args.batch_size,
-                       data_generator=data_gen_from_dataset, nepochs=total_iters,
-                       guidance_dropout=args.guidance_dropout)
-
     return model
 
 
@@ -222,13 +181,6 @@ def save_model(model, path, architecture, config_extra=None):
         }
     elif architecture == "cm":
         checkpoint["config"] = model.get_config()
-    elif architecture == "fm":
-        checkpoint["config"] = {
-            "nfeatures": model.nfeatures,
-            "nunits": model.nunits,
-            "condition_on": model.condition_on,
-            "nblocks": _n_blocks(model.vf),
-        }
     if config_extra:
         checkpoint.update(config_extra)
     torch.save(checkpoint, path)
@@ -270,11 +222,10 @@ def main():
 
     # ---- Train ----
     if args.model in ("unconditional", "both"):
-        uncond_arch = "fm" if args.architecture == "fm" else "diffusion"
         model_uncond = train_unconditional(X_only, args, condition_on, device)
         save_model(model_uncond,
                    os.path.join(args.output_dir, "model_unconditional.pt"),
-                   uncond_arch)
+                   "diffusion")
 
     if args.model in ("conditional", "both"):
         model_cond = train_conditional(X_full, args, nfeatures, condition_on, device)

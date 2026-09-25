@@ -1,21 +1,11 @@
 """Unified guided-diffusion optimizer.
 
-One implementation of the loop that was previously copy-pasted across
-`optimize_DPS`, `optimize_LGD` (Optimization.py), `optimize_LGD_CM`
-(PocThesis.ipynb cell 7) and `optimize_LGD_cfg` (mnistExpThesisFinal.ipynb
-cell 26).
-
-DESIGN RULE: this is a behaviour-preserving extraction. Every branch exists to
-reproduce a legacy variant exactly, including the order in which random
-numbers are consumed -- equivalence tests compare against Optimization_legacy.
-Do not "fix" anything here until tests/test_equivalence.py passes; fixes go in
-afterwards, as separate commits, so that any change in results is attributable.
-
-Deliberately NOT unified here:
-  * optimize_LGD_latent -- computes x_t_minus_1 and never uses it; it runs
-    Adam on x_t rather than guided reverse diffusion. Different algorithm.
-  * optimize_DFLOW      -- LBFGS over a flow-matching model. Different algorithm.
-Both remain in Optimization.py unchanged.
+One implementation of the guided reverse-diffusion loop behind every MLGD /
+MLGD-F variant in the paper (LGD, DPS, the consistency-model sampler and the
+MNIST classifier-free-guidance loop). Each variant is a GuidanceConfig; every
+axis on which the historical variants differed is an explicit strategy field,
+so a variant's behaviour -- including the order in which random numbers are
+consumed -- is fixed by its configuration.
 """
 
 import math
@@ -237,7 +227,6 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
         dict with keys: x_final, final_loss, best_loss, best_x0, n_steps, time_s,
         trace (per-step list of {i, t, loss, grad_norm, step, elapsed_s});
         with cfg.refine_steps > 0 also refine = {trace, x_before, final_loss_before}
-        (wrappers in Optimization.py unpack this into the legacy tuple shapes)
     """
     _seed(cfg)
     assert cfg.target_generator is not None, "cfg.target_generator must be set"

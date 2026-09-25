@@ -2,7 +2,7 @@
 
 The single most consequential gap found in the audit was that nothing in this
 repo ever wrote results to disk. That is why the synthetic results table in
-CompareMethods-Final.ipynb (cells 124/125) consists of ~150 hand-pasted
+The original analysis notebook consisted of ~150 hand-pasted
 `torch.tensor(...)` literals: with nothing persisted, someone had to copy
 console output by hand, and the published table cannot be regenerated.
 
