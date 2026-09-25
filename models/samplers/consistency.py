@@ -305,8 +305,13 @@ def ict_discretization_schedule(epoch, total_epochs, s0=10, s1=1280):
 
 
 
-# Simple implementations if NN_utils is not available
-class TimeEmbedding(nn.Module):
+# iCT-specific network definitions.
+# These are NOT the networks in utils.nn: they are the smaller copies that came in
+# with ConsistencyModeliCT. They used to be named TimeEmbedding/GenericNN, which
+# shadowed the `from utils.nn import ...` at the top of this file and silently
+# rebound ConsistencyModel's networks too. Renamed so only ConsistencyModeliCT
+# uses them (see plan Item 4).
+class _ICTTimeEmbedding(nn.Module):
     def __init__(self, dim):
         super().__init__()
         self.dim = dim
@@ -319,7 +324,7 @@ class TimeEmbedding(nn.Module):
         emb = t[:, None] * emb[None, :]
         emb = torch.cat([emb.sin(), emb.cos()], dim=1)
         return emb
-class GenericNN(nn.Module):
+class _ICTGenericNN(nn.Module):
     def __init__(self, input_dim, hidden_dims, output_dim):
         super().__init__()
         layers = []
@@ -384,9 +389,9 @@ class ConsistencyModeliCT(nn.Module):
             self.output_norm = nn.LayerNorm(nunits)
         # CHANGED: Optional norms
 
-        self.time_embed = TimeEmbedding(nunits)
+        self.time_embed = _ICTTimeEmbedding(nunits)
         self.out = nn.Linear(nunits, nfeatures)
-        self.net = GenericNN(
+        self.net = _ICTGenericNN(
             input_dim=nunits,
             hidden_dims=[nunits] * self.depth,
             output_dim=nunits,
