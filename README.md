@@ -148,9 +148,12 @@ models/         the frozen networks: diffusion.py (discrete-time DiffusionModel)
 losses/         MMD/RBF, circular, sliced Wasserstein
 utils/          networks, mixtures and the exact L2 between GMMs, evaluation, superposition
 gcio/           run persistence (results/runs.jsonl)
-legacy/         function-per-variant entry points and the frozen pre-refactor reference
+likelihood/     the likelihood-based optimizer and its representative points (D-FLOW comparison),
+                moved out of scripts/ because they are libraries, not entry points
+legacy/         function-per-variant entry points and the pre-refactor reference. Frozen in LOGIC
+                only -- its import lines were updated for the models/ move (item 1)
 scripts/        all command-line entry points (find_xstar.py is the method), test runners, cluster templates
-tests/          smoke, equivalence, determinism
+tests/          smoke, equivalence, determinism, population, refactor guards (see tests/README.md)
 notebooks/      exploratory notebooks (not maintained; the scripts supersede them)
 SimulationParameters/   the paper's fixed MoG settings
 MnistModels/    a small pretrained MNIST checkpoint
