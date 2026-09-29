@@ -7,6 +7,7 @@
 - MLGD: 5 attempts x budget 10; trajectories with TV<0.5: 48/50; in x* basin 47/50; per-attempt L2 [0.1537, 0.0577, 0.0, 0.147, 0.0996]
 - MLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 47/50; in x* basin 46/50; per-attempt L2 [0.5169, 0.5022, 0.4055, 0.4853, 0.3383]
 - PMLGD: 5 attempts x budget 10; trajectories with TV<0.5: 50/50; in x* basin 50/50; per-attempt L2 [0.0236, 0.0065, 0.0477, 0.0082, 0.0294]
+- PMLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 50/50; in x* basin 50/50; per-attempt L2 [0.5689, 0.4772, 0.4152, 0.4422, 0.5584]
 
 ## x1_y5
 - score network: max relative Fisher error over t > 1: 0.005; prior samples SWD (norm) 0.027
@@ -15,6 +16,7 @@
 - MLGD: 5 attempts x budget 10; trajectories with TV<0.5: 49/50; in x* basin 49/50; per-attempt L2 [0.0007, 0.0007, 0.0029, 0.0021, 0.0001]
 - MLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 48/50; in x* basin 48/50; per-attempt L2 [0.0019, 0.0006, 0.0007, 0.0045, 0.0017]
 - PMLGD: 5 attempts x budget 10; trajectories with TV<0.5: 50/50; in x* basin 50/50; per-attempt L2 [0.0, 0.0012, 0.0, 0.0053, 0.0037]
+- PMLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 50/50; in x* basin 50/50; per-attempt L2 [0.0021, 0.0039, 0.0028, 0.001, 0.0021]
 
 ## x1_y10
 - score network: max relative Fisher error over t > 1: 0.003; prior samples SWD (norm) 0.036
@@ -23,6 +25,7 @@
 - MLGD: 5 attempts x budget 10; trajectories with TV<0.5: 47/50; in x* basin 49/50; per-attempt L2 [0.0005, 0.0019, 0.0007, 0.0002, 0.0009]
 - MLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 48/50; in x* basin 50/50; per-attempt L2 [0.0028, 0.0031, 0.0029, 0.0031, 0.0025]
 - PMLGD: 5 attempts x budget 10; trajectories with TV<0.5: 50/50; in x* basin 50/50; per-attempt L2 [0.0012, 0.0012, 0.0003, 0.0011, 0.0]
+- PMLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 49/50; in x* basin 50/50; per-attempt L2 [0.0031, 0.0016, 0.0029, 0.0012, 0.0022]
 
 ## x5_y1
 - score network: max relative Fisher error over t > 1: 0.005; prior samples SWD (norm) 0.030
@@ -49,6 +52,7 @@
 - MLGD: 5 attempts x budget 10; trajectories with TV<0.5: 50/50; in x* basin 50/50; per-attempt L2 [0.0023, 0.0004, 0.0015, 0.0025, 0.0006]
 - MLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 49/50; in x* basin 50/50; per-attempt L2 [0.0098, 0.0104, 0.0096, 0.008, 0.0113]
 - PMLGD: 5 attempts x budget 10; trajectories with TV<0.5: 50/50; in x* basin 50/50; per-attempt L2 [0.0027, 0.0007, 0.0045, 0.0012, 0.0005]
+- PMLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 50/50; in x* basin 50/50; per-attempt L2 [0.006, 0.0111, 0.0093, 0.0116, 0.0109]
 
 ## x10_y1
 - score network: max relative Fisher error over t > 1: 0.010; prior samples SWD (norm) 0.036
@@ -57,6 +61,7 @@
 - MLGD: 5 attempts x budget 10; trajectories with TV<0.5: 5/50; in x* basin 0/50; per-attempt L2 [3.9881, 1.2973, 4.0463, 2.7749, 0.8668]
 - MLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 6/50; in x* basin 0/50; per-attempt L2 [1.4143, 0.6815, 1.6304, 1.9064, 2.1258]
 - PMLGD: 5 attempts x budget 10; trajectories with TV<0.5: 0/50; in x* basin 0/50; per-attempt L2 [4.051, 4.0512, 4.0409, 8.6551, 4.0508]
+- PMLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 1/50; in x* basin 0/50; per-attempt L2 [1.8826, 1.9203, 1.9217, 4.0512, 4.0512]
 
 ## x10_y5
 - score network: max relative Fisher error over t > 1: 0.016; prior samples SWD (norm) 0.031
@@ -65,6 +70,7 @@
 - MLGD: 5 attempts x budget 10; trajectories with TV<0.5: 44/50; in x* basin 0/50; per-attempt L2 [0.0776, 0.0457, 0.1887, 0.1298, 0.0865]
 - MLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 47/50; in x* basin 0/50; per-attempt L2 [0.1024, 0.1657, 0.2628, 0.2077, 0.2669]
 - PMLGD: 5 attempts x budget 10; trajectories with TV<0.5: 50/50; in x* basin 0/50; per-attempt L2 [0.009, 0.1468, 0.3439, 0.119, 0.142]
+- PMLGD-F: 5 attempts x budget 10; trajectories with TV<0.5: 50/50; in x* basin 0/50; per-attempt L2 [0.1264, 0.1448, 0.197, 0.1079, 0.2884]
 
 ## x10_y10
 - score network: max relative Fisher error over t > 1: 0.018; prior samples SWD (norm) 0.030
