@@ -42,7 +42,10 @@ def cell(ours, paper, tol):
 
 
 def fmt(v):
-    return f"{v[0]:.2f}±{v[1]:.2f}" if isinstance(v, tuple) else f"{v:g}"
+    if not isinstance(v, tuple):
+        return f"{v:g}"
+    nd = 3 if any(round(x, 2) != round(x, 3) for x in v) else 2   # the paper prints 2 or 3 decimals
+    return f"{v[0]:.{nd}f}±{v[1]:.{nd}f}"
 
 
 def table(title, header, rows):
