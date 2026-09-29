@@ -8,6 +8,7 @@ flag literal), `config/`, `results/` (reference numbers **imported** with proven
 | directory | paper artifact | entry point |
 |---|---|---|
 | `four_targets` | Table 3, Table 15 | `cdm.models.sd.run_mlgd_f`, `cdm.models.sd.eval_baselines` |
+| `jacobian_error` | theory appendix, Jacobian-fidelity figure and table | `eps_g_experiment.ipynb` (self-contained) |
 
 **The code lives in the `cdm.models.sd` package**, taken from
 `orineo1/conditional-matching-paper` @ `cb8bc91` so this repository is self-contained —
