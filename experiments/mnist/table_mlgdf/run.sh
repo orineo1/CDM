@@ -40,6 +40,7 @@ case "$TIER" in
         --ckpt-dir "$REPO/experiments/mnist/checkpoints" \
         --out "$OUT/full"
     done < "$HERE/config/targets.tsv"
+    "$PY" "$HERE/make_table.py" "$OUT/full"      # prints Table 2, writes outputs/full/table2.md
     ;;
 
   *) echo "usage: bash run.sh [smoke|full]" >&2; exit 64 ;;

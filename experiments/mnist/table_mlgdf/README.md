@@ -27,3 +27,14 @@ run record per target into `outputs/full/`.
 
 `results/PUBLISHED.md` -- the paper's Table 2 as published, with provenance.
 `outputs/` holds local runs and is never a published number.
+
+## The table
+
+`run.sh full` ends by printing Table 2 (SWD over all seeds and the best 5, time per
+seed, and the % of classified seeds recovered as each digit) and writing it to
+`outputs/full/table2.md`. To rebuild it from existing run records without re-running:
+
+```bash
+python experiments/mnist/table_mlgdf/make_table.py experiments/mnist/table_mlgdf/outputs/full
+```
+
