@@ -91,10 +91,17 @@ def make_target(name: str, unimodal_var: float = UNIMODAL_VAR,
     if name == "uniform":
         return AngleTarget(name="uniform", guidance_cutoff_t=250)
     if name == "bimodal":
+        # Modes at 180 and 360 (= 0) degrees, IN THIS ORDER: it is how the paper's
+        # bimodal run record was produced (conditional-matching-paper, branch
+        # gread-search-mnist, sample_mnist_gridsearch.py). `main`'s run_mlgdf.py
+        # writes [0, 180]: the same distribution on the circle, but the mixture
+        # components are ordered differently, so every categorical draw picks the
+        # other mode and the guided trajectory differs. [180, 360] reproduces the
+        # branch bit for bit.
         return AngleTarget(
             name="bimodal",
-            mog_means=[torch.tensor([0], dtype=torch.float64),
-                       torch.tensor([180], dtype=torch.float64)],
+            mog_means=[torch.tensor([180], dtype=torch.float64),
+                       torch.tensor([360], dtype=torch.float64)],
             mog_variances=[torch.tensor([[bimodal_var]], dtype=torch.float64),
                            torch.tensor([[bimodal_var]], dtype=torch.float64)],
             weights=torch.tensor([0.5, 0.5], dtype=torch.float64),

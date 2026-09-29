@@ -65,6 +65,14 @@ seeds), which is part of the published 22.4 +- 3.5 s.
 
 ## Bit-for-bit agreement with the source
 
+The records behind Table 2 were written by the grid-search scripts on branch
+`gread-search-mnist` (`mnist_uniform_gridsearch.py`, `sample_mnist_gridsearch.py`,
+`mnist_unimodal_gridsearch.py`), not by `main`'s `run_mlgdf.py`. Their optimisation
+loops are checked here bit for bit (CPU, same networks and seeds, max difference 0.0
+for all three targets). One setting had to follow the branch rather than `main`: the
+bimodal modes are [180, 360] degrees in that order (`main` has [0, 180]; same
+distribution, different component order, different random draws).
+
 The optimisation is checked against the source's own `optimize_LGD`
 (`MNIST/run_mlgdf.py` of conditional-matching-paper): with the same networks and seeds,
 on CPU, all three targets give identical images and losses (max difference 0.0). Two
