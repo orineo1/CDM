@@ -5,7 +5,10 @@
 #   bash run.sh smoke   CPU, ~1 min. Proves the code path runs end to end on a
 #                       4-step schedule with an untrained prior. It does NOT
 #                       reproduce any published number.
-#   bash run.sh full    the published configuration of Table 13. GPU.
+#   bash run.sh full    the configuration in config/targets.tsv. GPU.
+#                       CLASSIFIER=<path.pth> picks the digit classifier (default: the
+#                       paper's checkpoints/robust_classifier.pth; a missing file is
+#                       trained by the code and saved there).
 #
 # Every flag is literal in this file or in config/targets.tsv.
 set -euo pipefail
@@ -38,7 +41,7 @@ case "$TIER" in
         --step-size-mode "$mode" "${extra[@]}" \
         --n-seeds 15 --device cuda --threshold 0.75 --no-clamp \
         --ckpt-dir "$REPO/experiments/mnist/checkpoints" \
-        --classifier-path "$REPO/experiments/mnist/checkpoints/robust_classifier.pth" \
+        --classifier-path "${CLASSIFIER:-$REPO/experiments/mnist/checkpoints/robust_classifier.pth}" \
         --out "$OUT/full"
     done < "$HERE/config/targets.tsv"
     "$PY" "$HERE/make_table.py" "$OUT/full"      # prints Table 2, writes outputs/full/table2.md
