@@ -8,7 +8,8 @@
 #   bash run.sh full    the configuration in config/targets.tsv. GPU.
 #                       CLASSIFIER=<path.pth> picks the digit classifier (default
 #                       ../checkpoints/robust_classifier.pth; if the file is missing the
-#                       code trains the classifier once and saves it there).
+#                       code trains the classifier once and saves it there; MNIST is
+#                       downloaded to $MNIST_DATA_ROOT, default ../train/outputs/data).
 #                       Writes outputs/full/run_info.txt (commit, classifier, GPU).
 #
 # Every flag is literal in this file or in config/targets.tsv.
@@ -54,6 +55,7 @@ case "$TIER" in
         --n-seeds 15 --device cuda --threshold 0.8 --no-clamp \
         --ckpt-dir "$REPO/experiments/mnist/checkpoints" \
         --classifier-path "$CLF" \
+        --mnist-data-root "${MNIST_DATA_ROOT:-$REPO/experiments/mnist/train/outputs/data}" \
         --out "$OUT/full"
     done < "$HERE/config/targets.tsv"
     "$PY" "$HERE/make_table.py" "$OUT/full"      # prints Table 2, writes outputs/full/table2.md

@@ -139,6 +139,7 @@ def train_robust_classifier(
     lr:         float = 1e-3,
     device:     str   = 'cpu',
     seed:       int   = 42,
+    data_root:  str   = './data',
 ) -> ImprovedCNN:
     """
     Train ImprovedCNN on MNIST with Gaussian noise augmentation.
@@ -151,6 +152,7 @@ def train_robust_classifier(
     lr         : Adam learning rate
     device     : 'cuda' or 'cpu'
     seed       : random seed for full reproducibility
+    data_root  : where torchvision downloads / finds MNIST
 
     Returns
     -------
@@ -174,11 +176,11 @@ def train_robust_classifier(
     ])
 
     train_loader = DataLoader(
-        datasets.MNIST('./data', train=True,  download=True, transform=train_tf),
+        datasets.MNIST(data_root, train=True,  download=True, transform=train_tf),
         batch_size=batch_size, shuffle=True, num_workers=0, generator=g,
     )
     test_loader = DataLoader(
-        datasets.MNIST('./data', train=False, download=True, transform=test_tf),
+        datasets.MNIST(data_root, train=False, download=True, transform=test_tf),
         batch_size=batch_size, shuffle=False, num_workers=0,
     )
 
@@ -230,6 +232,7 @@ def load_or_train_classifier(
     batch_size: int   = 128,
     lr:         float = 1e-3,
     seed:       int   = 42,
+    data_root:  str   = './data',
 ) -> ImprovedCNN:
     """
     Load classifier weights from *save_path* if the file exists,
@@ -249,7 +252,7 @@ def load_or_train_classifier(
     return train_robust_classifier(
         save_path=save_path, epochs=epochs,
         batch_size=batch_size, lr=lr,
-        device=device, seed=seed,
+        device=device, seed=seed, data_root=data_root,
     )
 
 

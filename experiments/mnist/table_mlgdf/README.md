@@ -49,8 +49,8 @@ n_cond = 600, no clamping; `var300` is the target variance where there is one.
 - The digit label depends only on the saved image and the classifier; the SWDs and
   images do not depend on the classifier. If `../checkpoints/robust_classifier.pth` is
   missing, the first run trains it (10 epochs on MNIST, seed 42, a few minutes on a
-  GPU) and saves it there; MNIST is downloaded to `./data` under the directory the
-  run is started from.
+  GPU) and saves it there; MNIST is downloaded to `MNIST_DATA_ROOT` (default
+  `../train/outputs/data`, shared with `../train`).
 - Per-seed results are exactly repeatable on the same GPU model and software
   versions. A different GPU or torch/CUDA version can change the last digits, and a
   trajectory near a tipping point between two digits can then end on the other one.

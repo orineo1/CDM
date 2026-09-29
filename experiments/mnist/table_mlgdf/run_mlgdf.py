@@ -64,7 +64,7 @@ def parse_args():
     p.add_argument("--n-seeds", type=int, default=15)
     p.add_argument("--seed-start", type=int, default=0)
     p.add_argument("--unimodal-var", type=float, default=515.0)
-    p.add_argument("--bimodal-var", type=float, default=252.0)
+    p.add_argument("--bimodal-var", type=float, default=300.0)
     p.add_argument("--no-clamp", action="store_true",
                    help="disable the [-1, 1] clamp on the guided iterate")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -72,7 +72,9 @@ def parse_args():
                    help="local checkpoint directory; HuggingFace is the fallback")
     p.add_argument("--classifier-path", default=None,
                    help="rotation-robust classifier .pth (trained if absent)")
-    p.add_argument("--threshold", type=float, default=0.75,
+    p.add_argument("--mnist-data-root", default=os.path.join(MNIST_DIR, "train", "outputs", "data"),
+                   help="where MNIST is downloaded if the classifier has to be trained")
+    p.add_argument("--threshold", type=float, default=0.8,
                    help="classifier confidence below which a seed is labelled None")
     p.add_argument("--no-classify", action="store_true")
     p.add_argument("--allow-untrained-prior", action="store_true",
@@ -168,7 +170,7 @@ def main():
 
     if not args.no_classify:
         clf_path = args.classifier_path or os.path.join(args.out, "robust_classifier.pth")
-        classifier = load_or_train_classifier(clf_path, device=device)
+        classifier = load_or_train_classifier(clf_path, device=device, data_root=args.mnist_data_root)
         preds, confs = classify_generated_images(results, classifier, device,
                                                  threshold=args.threshold)
         payload["predicted_labels"] = preds
