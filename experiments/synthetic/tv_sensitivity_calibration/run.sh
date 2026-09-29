@@ -6,6 +6,7 @@
 # experiment. See README.md. This script deliberately exits 2 rather than
 # succeeding with nothing done.
 set -euo pipefail
+export PYTHONUNBUFFERED=1   # print lines reach the log as they happen, also under sbatch
 cat <<'EOF'
 STATUS: NO PRODUCER
 The delta-displacement TV calibration has no producer in either repo.

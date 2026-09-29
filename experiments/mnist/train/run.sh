@@ -10,6 +10,7 @@
 # The published checkpoints are downloaded by the other experiments; nothing
 # here has to be run to reproduce Table 2.
 set -euo pipefail
+export PYTHONUNBUFFERED=1   # print lines reach the log as they happen, also under sbatch
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PY="${PYTHON:-python}"
 OUT="$HERE/outputs"

@@ -20,6 +20,7 @@
 # <scenario> is one of: balanced | skewed | gender_interpolation | age_interpolation
 # Every flag is literal in this file or in config/; nothing is read from a hidden default.
 set -euo pipefail
+export PYTHONUNBUFFERED=1   # print lines reach the log as they happen, also under sbatch
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 PY="${PYTHON:-python}"

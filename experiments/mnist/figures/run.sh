@@ -9,6 +9,7 @@
 #
 # Both tiers read .pkl run records; neither re-runs the optimiser.
 set -euo pipefail
+export PYTHONUNBUFFERED=1   # print lines reach the log as they happen, also under sbatch
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 PY="${PYTHON:-python}"
