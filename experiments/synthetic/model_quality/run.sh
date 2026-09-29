@@ -41,10 +41,12 @@ case "$TIER" in
       --data "$OUT/data.pt" \
       --n-samples 200 --n-random-x 2 --n-seeds 1 --n-t 3 --grid 5 \
       --device cpu --out "$OUT/check_x1_y1"
+    "$PY" experiments/synthetic/pipeline/make_table5.py "$OUT" --out "$OUT/table5"
     ;;
 
   full)
-    RUNS_DIR="${RUNS_DIR:-runs/table1v2}"
+    # the networks trained by main_grid/run.sh full (one directory per scenario)
+    RUNS_DIR="${RUNS_DIR:-$HERE/../main_grid/outputs/runs}"
     for s in x1_y1 x1_y5 x1_y10 x5_y1 x5_y5 x5_y10 x10_y1 x10_y5 x10_y10; do
       [ -d "$RUNS_DIR/$s" ] || { echo "missing $RUNS_DIR/$s -- run main_grid first" >&2; exit 1; }
       "$PY" experiments/synthetic/pipeline/check_models.py \
@@ -54,6 +56,7 @@ case "$TIER" in
         --data "$RUNS_DIR/$s/data.pt" \
         --n-random-x 100 --device cuda --out "$OUT/checks__$s"
     done
+    "$PY" experiments/synthetic/pipeline/make_table5.py "$OUT" --out "$OUT/table5"      # Table 5
     ;;
 
   *) echo "usage: bash run.sh [smoke|full]" >&2; exit 64 ;;

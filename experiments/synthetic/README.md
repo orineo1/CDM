@@ -58,7 +58,30 @@ result. Per-experiment runtimes and GPU requirements are in each `README.md`.
 - `REFERENCE-ARTIFACTS.md` — which reference artifacts for these experiments are in the
   repository and which are not.
 
-Each experiment's `results/PUBLISHED.md` carries the paper's numbers for that experiment,
-transcribed with their location in the source. Other files in `results/` are artifacts
-imported from a named commit, listed in that directory's `PROVENANCE.md`. `outputs/` is
+For the experiments behind a table or figure of the paper (`main_grid`, `ablations`,
+`model_quality`, `infeasible_target`, `training_times`, `toy_example`, `smc_correction`) the
+README carries the paper's numbers, `results/` holds the committed output of the last full
+run (written by `export_results.py`), and
+`python experiments/synthetic/pipeline/compare_to_paper.py --results` prints the two side
+by side. The other directories back appendix prose only; their `results/PUBLISHED.md`
+carries the transcribed numbers and `PROVENANCE.md` names imported files. `outputs/` is
 gitignored and ships empty.
+
+## Reproducing the tables and figures on a SLURM cluster
+
+From the repository root, each as one GPU job (`slurm/slurm_run.sh <experiment>` runs that
+experiment's `run.sh full`); `main_grid` is an array job, one task per scenario:
+
+```bash
+sbatch experiments/synthetic/slurm/slurm_table1.sh                     # Tables 1, 7 (9 tasks, ~2 h each)
+sbatch experiments/synthetic/slurm/slurm_run.sh smc_correction         # Figure 3
+sbatch experiments/synthetic/slurm/slurm_run.sh infeasible_target      # Table 9, Figure 4
+sbatch --time=24:00:00 experiments/synthetic/slurm/slurm_run.sh training_times   # Table 10
+# after smc_correction has finished:
+sbatch experiments/synthetic/slurm/slurm_run.sh toy_example            # Figure 1
+# after all nine main_grid tasks have finished:
+sbatch experiments/synthetic/slurm/slurm_run.sh model_quality          # Table 5
+sbatch --time=48:00:00 experiments/synthetic/slurm/slurm_run.sh ablations   # Table 8
+```
+
+Then `python experiments/synthetic/export_results.py` and `compare_to_paper.py --results`.

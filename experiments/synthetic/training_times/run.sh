@@ -19,6 +19,7 @@ cd "$REPO"
 
 case "$TIER" in
   smoke)
+    echo "params,network,model,architecture,seconds" > "$OUT/timings.csv"
     "$PY" experiments/synthetic/pipeline/generate_data.py \
       --params-file experiments/synthetic/configs/mog/mog_2d_full.txt --condition-on 1 \
       --n-samples 500 --seed 42 --output "$OUT/mog_2d/data.pt"
@@ -30,10 +31,12 @@ case "$TIER" in
         --epochs 2 --batch-size 256 --nunits 16 --nblocks 1 \
         --seed 42 --device cpu --output-dir "$OUT/mog_2d/models/$3"
       echo "TIMING mog_2d $1/$2 $((SECONDS - t0))s" | tee -a "$OUT/timings.txt"
+      echo "mog_2d,$3,$1,$2,$((SECONDS - t0))" >> "$OUT/timings.csv"
     done
     ;;
 
   full)
+    echo "params,network,model,architecture,seconds" > "$OUT/timings.csv"     # Table 10 (minutes = seconds / 60)
     # NOTE: no 5D parameter file exists in experiments/synthetic/configs/mog/; the 5D row of
     # Table 10 cannot be reproduced from this repository.
     for pf in mog_2d_full mog_10d_full ldm_10D_full; do
@@ -48,6 +51,7 @@ case "$TIER" in
           --epochs 10000 --batch-size 1024 --nunits 128 --nblocks 3 \
           --seed 42 --device cuda --output-dir "$OUT/$pf/models/$3"
         echo "TIMING $pf $1/$2 $((SECONDS - t0))s" | tee -a "$OUT/timings.txt"
+        echo "$pf,$3,$1,$2,$((SECONDS - t0))" >> "$OUT/timings.csv"
       done
     done
     ;;

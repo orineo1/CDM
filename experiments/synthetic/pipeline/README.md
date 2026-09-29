@@ -26,6 +26,11 @@ The command-line entry points of the synthetic experiments. Every `.py` here has
 | `fig_smc_correction.py` | Twisted-SMC bias correction on the Figure 1 setting. |
 | `make_table1.py` | Table 1 end to end over all (dim X, dim Y) scenarios. |
 | `check_models.py` | Checks the trained networks against the analytic mixture, independently of the `x*` search. |
+| `make_table5.py` | Table 5 from the `check_models.py` JSONs. |
+| `make_table8.py` | Table 8 from the four ablation arms of `make_table1.py`. |
+| `make_table9.py` | Table 9 and Figure 4 from the `find_xstar.py` arms of the infeasible target. |
+| `paper_numbers.py` | The paper's synthetic numbers, transcribed. |
+| `compare_to_paper.py` | Prints every reproduced table and figure value next to the paper's and flags the differences. |
 
 ## Controls
 
@@ -39,7 +44,7 @@ The command-line entry points of the synthetic experiments. Every `.py` here has
 | File | What it does |
 | --- | --- |
 | `../../../tests/run_all_tests.sh` | Runs the test suite (`pytest tests/`). |
-| `../slurm/slurm_fig1.sh` | Figure 1 on the cluster, all settings, with restarts. |
+| `../slurm/slurm_run.sh` | One experiment (its `run.sh full`) as one GPU job. |
 | `../slurm/slurm_table1.sh` | Table 1 on the cluster: one array task per scenario, then a collect job. |
 | `../slurm/cluster_setup.txt` | Cluster setup instructions. |
 

@@ -25,12 +25,18 @@ case "$TIER" in
     ;;
 
   full)
+    # Panel (d) of the paper's Figure 1 (fig1_toy_hard_smc.png) overlays the twisted-SMC
+    # populations of ../smc_correction: its own full run if it exists, else the committed one.
+    SMC="$HERE/../smc_correction/outputs/fig_smc_hard.npz"
+    [ -f "$SMC" ] || SMC="$HERE/../smc_correction/results/fig_smc_hard.npz"
     for s in hard bimodal paper; do
+      extra=()
+      [ "$s" = "hard" ] && [ -f "$SMC" ] && extra=(--smc-npz "$SMC")
       "$PY" experiments/synthetic/pipeline/fig1_toy_example.py \
-        --setting "$s" --n-restarts 25 --n-cond 250 --n-mc 3 \
+        --setting "$s" --n-restarts 10 --n-cond 250 --n-mc 3 \
         --methods MLGD MLGD-F PMLGD PMLGD-F \
         --betas 0 2 8 16 --n-beta-samples 2000 \
-        --rerun-sim --rerun-sweep --device cuda \
+        --rerun-sim --rerun-sweep --device cuda "${extra[@]}" \
         --ckpt-dir "$OUT/ckpt" --out "$OUT/fig1_$s"
     done
     ;;

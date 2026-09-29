@@ -37,6 +37,8 @@ case "$TIER" in
       --guidance-optim adam --step-size 0.05 --tag _oracle \
       --skip-check --seed 42 --device cpu \
       --runs-dir "$OUT/runs" --out "$OUT/table8_oracle"
+    "$PY" experiments/synthetic/pipeline/make_table8.py "$OUT" \
+      --refined "$HERE/../main_grid/outputs/table1.json" --out "$OUT/table8"
     ;;
 
   full)
@@ -55,7 +57,8 @@ case "$TIER" in
       --nunits 128 --nblocks 3 --budget 10 --attempts 5 --n-cond 250 \
       --guidance-optim adam --step-size 0.05 --refine-steps 0 --tag _oracle \
       --seed 42 --device cuda --runs-dir "$OUT/runs" --out "$OUT/table8_oracle"
-    echo "NOTE: table1_ablation_rows.tex has no emitter; assemble Table 8 by hand." >&2
+    "$PY" experiments/synthetic/pipeline/make_table8.py "$OUT" \
+      --refined "$HERE/../main_grid/outputs/table1.json" --out "$OUT/table8"   # Table 8; the refined arm is main_grid
     ;;
 
   *) echo "usage: bash run.sh [smoke|full]" >&2; exit 64 ;;

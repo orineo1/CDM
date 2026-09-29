@@ -59,5 +59,5 @@ for ARM in "MMD_n$NBIG mmd $NBIG" "L2_n$NBIG l2 $NBIG" "L2_n1 l2 1"; do
     --seed 42 --device "$DEV" --out "$OUT/arm_$1.json"
 done
 
-echo "NOTE: the '% at x_bi' column of Table 9 is not emitted by any script in this repo;"
-echo "      the per-attempt x_hat needed for it is in $OUT/arm_*.json. See README.md."
+# Table 9 (% at x_bi, time per restart) and Figure 4 from the three arm JSONs
+"$PY" experiments/synthetic/pipeline/make_table9.py "$OUT" --out "$OUT/table9"

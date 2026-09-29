@@ -8,7 +8,10 @@
 # Each task generates its scenario's data, trains the three networks, runs check_models.py
 # and the four search algorithms (steps whose outputs exist are skipped, so a task can be
 # resubmitted), all under experiments/synthetic/main_grid/outputs/runs/<scenario>/. The last
-# task to finish collects the table into experiments/synthetic/main_grid/outputs/table1.*.
+# task to finish collects the table into experiments/synthetic/main_grid/outputs/table1.*;
+# if it finishes before another task, collect again:
+#   SETTINGS="1x1 1x5 1x10 5x1 5x5 5x10 10x1 10x5 10x10" bash experiments/synthetic/main_grid/run.sh full --collect
+# Logs: cdm-table1-<jobid>_<task>.out in the submit directory.
 #
 #SBATCH --job-name=cdm-table1
 #SBATCH --partition=catfish
@@ -17,12 +20,10 @@
 #SBATCH --mem=16G
 #SBATCH --time=08:00:00
 #SBATCH --array=0-8
-#SBATCH --output=logs/table1-%A_%a.out
-#SBATCH --error=logs/table1-%A_%a.err
+#SBATCH --output=%x-%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 [ -f experiments/synthetic/main_grid/run.sh ] || { echo "run sbatch from the repo root"; exit 1; }
-mkdir -p logs
 VENV=${VENV:-/sci/labs/orzuk/ori_m/venvs/cdm}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 
