@@ -82,19 +82,3 @@ cos/sin. Same code, seeds and settings on the same GPU and software versions giv
 same run every time; a different GPU or torch/CUDA version can still change the last
 digits, and near a tipping point that can change which digit a seed ends on.
 
-## Relabelling with another classifier or threshold
-
-The classifier only labels the recovered images, so labels can be recomputed without
-re-running anything. `relabel.py` writes relabelled copies of the records and a new
-`table2.md`, and prints each seed's top class and confidence:
-
-```bash
-python experiments/mnist/table_mlgdf/relabel.py \
-    --results-dir experiments/mnist/table_mlgdf/outputs/full \
-    --out experiments/mnist/table_mlgdf/outputs/full_thr0.5 --threshold 0.5
-```
-
-`--classifier` picks the weights (default: the paper's `robust_classifier.pth`; a path
-that does not exist is trained by the code and saved there). The paper used 0.75. The
-figures can then be drawn from `--out` with `figures/make_figures.py --results-dir`.
-
