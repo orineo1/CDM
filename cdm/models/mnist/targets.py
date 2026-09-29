@@ -66,7 +66,9 @@ class AngleTarget:
     def generator(self) -> Callable[[int, str], torch.Tensor]:
         """`GuidanceConfig.target_generator`: (n, device) -> (n, 2) circular samples."""
         def target_generator(n, device):
-            return angles_to_circular(self.sample_angles(n, device))
+            # float32 BEFORE cos/sin, as the source's angles_to_circular does
+            # (`angles_deg.float()`); the mixture targets are sampled in float64.
+            return angles_to_circular(self.sample_angles(n, device).float())
         return target_generator
 
     def density_curve(self, n_points: int = 200):

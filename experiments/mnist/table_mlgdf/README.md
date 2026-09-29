@@ -63,3 +63,14 @@ and each seed re-seeds torch. `--no-warmup` turns it off. Note that the paper's 
 records include the warm-up in seed 0 (bimodal: 35.4 s against 21.5 s for the other
 seeds), which is part of the published 22.4 +- 3.5 s.
 
+## Bit-for-bit agreement with the source
+
+The optimisation is checked against the source's own `optimize_LGD`
+(`MNIST/run_mlgdf.py` of conditional-matching-paper): with the same networks and seeds,
+on CPU, all three targets give identical images and losses (max difference 0.0). Two
+float32 details had to match for that: the SWD is one mean over all sorted differences
+(not a mean of per-projection means), and target angles are cast to float32 before
+cos/sin. Same code, seeds and settings on the same GPU and software versions give the
+same run every time; a different GPU or torch/CUDA version can still change the last
+digits, and near a tipping point that can change which digit a seed ends on.
+

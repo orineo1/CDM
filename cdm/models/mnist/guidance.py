@@ -16,9 +16,9 @@ runs it; this module only supplies the MNIST-shaped callables it takes:
                          [-1, 1] clamp the MNIST runs used (`--clamp`). There is
                          no `clamp` field on GuidanceConfig; the update callable
                          is the documented extension point for it.
-  * `loss_function`   -- SWD from `cdm.losses.sliced.SupportAwareSlicedWassersteinLoss`.
-                         `MNIST/run_mlgdf.py` carried a private copy of the same
-                         computation; it is not ported.
+  * `loss_function`   -- the SWD exactly as `MNIST/run_mlgdf.py` computes it (one
+                         mean over all sorted differences), so every float matches
+                         the source; see `make_swd_loss`.
 
 Everything else -- log-mean-exp aggregation over the n_mc Tweedie perturbations,
 the guidance cutoff, the explicit timestep list, the trailing unguided DDIM step,
@@ -30,7 +30,6 @@ import torch
 from cdm.guidance.config import (GuidanceConfig, aggregate_logsumexp,
                              update_ddim_minus_grad)
 from cdm.losses.circular import angles_to_circular, circular_to_angles
-from cdm.losses.sliced import SupportAwareSlicedWassersteinLoss
 
 # The iCT multi-step sampling schedule used everywhere in the MNIST experiment.
 ICT_TS = [150.0, 50.0, 20.0, 10.0, 5.0, 1.0]
@@ -88,12 +87,22 @@ def make_clamped_update(lo=-1.0, hi=1.0):
 
 
 def make_swd_loss(device="cpu", n_projections=50):
-    """The shared sliced-Wasserstein loss as a plain (X, Y) -> scalar callable."""
-    swd = SupportAwareSlicedWassersteinLoss(device=device, n_projections=n_projections)
+    """Sliced Wasserstein distance as a plain (X, Y) -> scalar callable.
 
+    Written exactly as `sliced_wasserstein_distance` in the source runner
+    (`MNIST/run_mlgdf.py` of conditional-matching-paper): ONE mean over all
+    |sorted differences|. The shared `SupportAwareSlicedWassersteinLoss` takes the
+    mean per projection and then over projections -- equal in exact arithmetic,
+    but rounded differently in float32, which is enough to send some guided
+    trajectories to a different digit than the paper's runs.
+    """
     def loss_function(pred_samples, target_samples):
-        return swd.sliced_wasserstein_distance(
-            pred_samples, target_samples, n_projections=n_projections)
+        X = pred_samples.to(device).float()
+        Y = target_samples.to(device).float()
+        proj = torch.randn(n_projections, X.shape[1], device=device)
+        proj = proj / torch.norm(proj, dim=1, keepdim=True)
+        return torch.mean(torch.abs(
+            torch.sort(X @ proj.T, dim=0)[0] - torch.sort(Y @ proj.T, dim=0)[0]))
 
     loss_function.__name__ = f"swd_{n_projections}proj"
     return loss_function
