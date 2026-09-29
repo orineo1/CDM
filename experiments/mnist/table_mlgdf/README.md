@@ -35,15 +35,22 @@ Written by `../export_results.py` from a finished run:
 
 | file | contents |
 |---|---|
-| `table2.md` | Table 2 |
-| `seeds.csv` | one row per target and seed: SWD, time, in top-5, label, confidence |
-| `images.npz` | the recovered images and the same per-seed values; `np.load` it (no pickle) |
-| `run_info.txt` | the commit, classifier, GPU, torch version and settings of the run |
+| `table2.md` | Table 2 (also shown in `../README.md`) |
+| `seeds.csv` | one row per target and seed: run name, SWD, time, in top-5, label (`None` below the threshold), confidence |
+| `images.npz` | the recovered images (`<target>_images`, 15x28x28, as optimised, not clamped) and the same per-seed values (`<target>_seed`, `_swd`, `_time_s`, `_label` with -1 for None, `_confidence`); `np.load` it (no pickle) |
+| `run_info.txt` | the date, commit, classifier, threshold, GPU, torch version and settings of the run |
+
+The run name in `seeds.csv` and in the figure file names encodes the settings, e.g.
+`uniform_st300_ssdouble_xt3_ns600_cl0`: T = 300 steps, step size 2 zeta_t, n_MC = 3,
+n_cond = 600, no clamping; `var300` is the target variance where there is one.
 
 ## Notes
 
 - The digit label depends only on the saved image and the classifier; the SWDs and
-  images do not depend on the classifier.
+  images do not depend on the classifier. If `../checkpoints/robust_classifier.pth` is
+  missing, the first run trains it (10 epochs on MNIST, seed 42, a few minutes on a
+  GPU) and saves it there; MNIST is downloaded to `./data` under the directory the
+  run is started from.
 - Per-seed results are exactly repeatable on the same GPU model and software
   versions. A different GPU or torch/CUDA version can change the last digits, and a
   trajectory near a tipping point between two digits can then end on the other one.

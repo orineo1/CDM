@@ -25,4 +25,9 @@ bash run.sh full <dir>         # draw from any directory of run records
 
 ## Committed results (`results/`)
 
-The figures of the last full run, copied by `../export_results.py`.
+The figures of the last full run, copied by `../export_results.py`; the run name in
+each file name encodes the settings (see `../table_mlgdf/README.md`):
+
+- `uniform_st300_ssdouble_xt3_ns600_cl0_{all_seeds,top5_notitle,dist_polar_notitle}.png`
+- `bimodal_var300_st125_ssoriginal_xt3_ns1500_cl0_{...}.png`
+- `unimodal_var515_st130_ssdouble_xt3_ns1500_cl0_{...}.png`

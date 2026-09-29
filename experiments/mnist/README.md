@@ -16,9 +16,22 @@ which digit was found.
 | `checkpoints/` | where the networks and the classifier are placed; not in git (see its README) |
 | `export_results.py` | copies a finished run into the committed `results/` folders |
 
-The results of the last full run are committed: `table_mlgdf/results/` (table,
-per-seed CSV, images, run info) and `figures/results/` (figures). They can be read
-without running anything.
+## Results
+
+The results of the last full run are committed and can be read without running
+anything: `table_mlgdf/results/` (table, per-seed CSV, images, run info) and
+`figures/results/` (three figures per target). The run used the settings in
+`table_mlgdf/config/targets.tsv`, 15 seeds per target, the classifier trained by the
+code, threshold 0.8, on an NVIDIA L4 with torch 2.11 (see `results/run_info.txt`).
+
+| Target | SWD_all | SWD_top5 | Time (s) | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | None |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| uniform | 0.049 ± 0.043 | 0.029 ± 0.006 | 18.0 ± 0.1 | 91 | -- | -- | -- | -- | -- | 9 | -- | -- | -- | 4 |
+| bimodal | 0.081 ± 0.066 | 0.034 ± 0.008 | 8.0 ± 0.1 | 18 | 18 | -- | -- | -- | 9 | 18 | -- | 27 | 9 | 4 |
+| unimodal | 0.050 ± 0.016 | 0.034 ± 0.008 | 8.1 ± 0.1 | -- | -- | 38 | 31 | -- | -- | -- | 23 | 8 | -- | 2 |
+
+Digit columns: % of the classified seeds; None: seeds below the classifier threshold
+(excluded from the %). SWD is mean ± std over all 15 seeds and over the 5 best.
 
 ## Reproducing the results
 
@@ -30,8 +43,13 @@ bash experiments/mnist/figures/run.sh full       # figures   -> figures/outputs/
 python experiments/mnist/export_results.py       # copy both into the committed results/ folders
 ```
 
-Each `run.sh` also has a `smoke` tier: a few seconds on CPU, with an untrained prior,
-to check the code path. It produces no result.
+On the first full run the two networks are downloaded and the classifier is trained
+(a few minutes; see `checkpoints/README.md`). Each `run.sh` also has a `smoke` tier:
+a few seconds on CPU, with an untrained prior, to check the code path. It produces
+no result.
+
+On a SLURM cluster, run each step as a job on a GPU node, in order, e.g.
+`sbatch --gres=gpu:1 --wrap "bash experiments/mnist/table_mlgdf/run.sh full"`.
 
 ## Code
 
