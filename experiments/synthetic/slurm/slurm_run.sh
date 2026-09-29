@@ -2,8 +2,7 @@
 # One synthetic experiment as one GPU job: runs experiments/synthetic/<experiment>/run.sh full,
 # so every flag lives in that run.sh. Submit from the repository root:
 #
-#   sbatch experiments/synthetic/slurm/slurm_run.sh smc_correction
-#   sbatch experiments/synthetic/slurm/slurm_run.sh toy_example          # after smc_correction (panel d)
+#   sbatch experiments/synthetic/slurm/slurm_run.sh toy_example          # Figure 1; runs smc_correction too
 #   sbatch experiments/synthetic/slurm/slurm_run.sh infeasible_target
 #   sbatch experiments/synthetic/slurm/slurm_run.sh training_times
 #   sbatch experiments/synthetic/slurm/slurm_run.sh model_quality        # after main_grid (reads its networks)

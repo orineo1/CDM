@@ -3,7 +3,7 @@
 **Produces:** Figure 1 `fig:sim_2d`, four panels: the joint and the recovered x̂ of each
 method, the loss landscape, the induced conditionals, and the β-sweep of CDM-S. Panel (d)
 of the published figure (`fig1_toy_hard_smc.png`) overlays the twisted-SMC populations of
-`../smc_correction`, so run that experiment first.
+`../smc_correction`; the full tier runs that experiment itself on the same networks.
 
 | | |
 |---|---|
@@ -16,7 +16,7 @@ of the published figure (`fig1_toy_hard_smc.png`) overlays the twisted-SMC popul
 
 ```bash
 bash experiments/synthetic/toy_example/run.sh smoke
-bash experiments/synthetic/toy_example/run.sh full          # after smc_correction/run.sh full
+bash experiments/synthetic/toy_example/run.sh full          # trains, simulates, runs ../smc_correction, draws
 sbatch experiments/synthetic/slurm/slurm_run.sh toy_example
 ```
 

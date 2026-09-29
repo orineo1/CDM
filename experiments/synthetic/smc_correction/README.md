@@ -20,8 +20,9 @@ sbatch experiments/synthetic/slurm/slurm_run.sh smc_correction
 
 Outputs go to `outputs/` (gitignored): `fig_smc_hard.png`, `fig_smc_hard.json` (the TV per β)
 and `fig_smc_hard.npz` (the populations, read by `../toy_example` for panel d). The full
-tier needs the toy networks under `outputs/ckpt/hard/`; the smoke tier trains them, the
-full tier trains them on first use.
+tier reads the toy networks of `../toy_example/outputs/ckpt/hard/` (`CKPT_DIR` overrides)
+and trains them with the paper's configuration if they are missing; `toy_example/run.sh
+full` calls this script, so one job produces Figure 1 with its panel (d).
 
 ## Committed results (`results/`)
 

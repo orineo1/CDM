@@ -74,11 +74,9 @@ experiment's `run.sh full`); `main_grid` is an array job, one task per scenario:
 
 ```bash
 sbatch experiments/synthetic/slurm/slurm_table1.sh                     # Tables 1, 7 (9 tasks, ~2 h each)
-sbatch experiments/synthetic/slurm/slurm_run.sh smc_correction         # Figure 3
+sbatch experiments/synthetic/slurm/slurm_run.sh toy_example           # Figure 1, including the SMC correction of panel (d)
 sbatch experiments/synthetic/slurm/slurm_run.sh infeasible_target      # Table 9, Figure 4
 # training_times (the timing table) is commented out in the current paper; run it only if it returns
-# after smc_correction has finished:
-sbatch experiments/synthetic/slurm/slurm_run.sh toy_example            # Figure 1
 # after all nine main_grid tasks have finished:
 sbatch experiments/synthetic/slurm/slurm_run.sh model_quality          # Table 5
 sbatch --time=48:00:00 experiments/synthetic/slurm/slurm_run.sh ablations   # Table 8
