@@ -1,10 +1,10 @@
-date:        2026-09-29T16:58:06+03:00
-git commit:  094dd86
+date:        2026-09-29T18:45:40+03:00
+git commit:  77b5934
 classifier:  /sci/labs/orzuk/ori_m/GlobalConditional/experiments/mnist/checkpoints/robust_classifier.pth
-threshold:   0.75
+threshold:   0.8
 gpu:         NVIDIA L4
 torch:       2.11.0+cu128 cuda 12.8
 config:      config/targets.tsv
              unimodal    1500    130   3     double          515
              bimodal     1500    125   3     original        300
-             uniform     600     290   3     double          -
+             uniform     600     300   3     double          -
