@@ -77,6 +77,8 @@ def parse_args():
     p.add_argument("--no-classify", action="store_true")
     p.add_argument("--allow-untrained-prior", action="store_true",
                    help="SMOKE TIER ONLY: run with an untrained UNet if no prior checkpoint")
+    p.add_argument("--no-warmup", action="store_true",
+                   help="skip the untimed GPU warm-up run before seed 0")
     p.add_argument("--out", required=True, help="output directory")
     return p.parse_args()
 
@@ -111,14 +113,33 @@ def main():
 
     loss_function = make_swd_loss(device=device, n_projections=50)
 
+    if str(device).startswith("cuda") and not args.no_warmup:
+        # One short, untimed run so that CUDA initialisation and first-call kernel
+        # setup are not charged to seed 0. It cannot change any seed's result:
+        # every draw in the loop comes from torch, and each seed re-seeds torch.
+        t0 = time.time()
+        warm = DDIMScheduler.from_config(make_noise_scheduler().config)
+        warm.set_timesteps(num_inference_steps=3)
+        optimize_guided(uncond_model, cond_model, loss_function,
+                        build_config(target, warm, n_cond=args.n_cond, n_mc=args.n_mc,
+                                     step_size_mode=args.step_size_mode, device=device,
+                                     seed=GLOBAL_SEED, clamp=not args.no_clamp,
+                                     tag="warmup"))
+        torch.cuda.synchronize()
+        print(f"[warm-up] {time.time() - t0:.1f}s (not timed)")
+
     results, loss_log, seed_log, time_log = [], [], [], []
     for seed in range(args.seed_start, args.seed_start + args.n_seeds):
         cfg = build_config(target, ddim, n_cond=args.n_cond, n_mc=args.n_mc,
                            step_size_mode=args.step_size_mode, device=device,
                            seed=seed, clamp=not args.no_clamp,
                            tag=run_name)
+        if str(device).startswith("cuda"):
+            torch.cuda.synchronize()
         t0 = time.time()
         out = optimize_guided(uncond_model, cond_model, loss_function, cfg)
+        if str(device).startswith("cuda"):
+            torch.cuda.synchronize()
         elapsed = time.time() - t0
         loss = float(out["final_loss"])
         results.append(out["x_final"].squeeze().detach().cpu().numpy())

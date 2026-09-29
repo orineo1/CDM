@@ -54,3 +54,12 @@ branch `gread-search-mnist`, `MNIST/checkpoints_and_results/`: uniform =
   gives 0: 83 %, 1: 8 %, 9: 8 % (3 unlabelled) against the published 0: 79 %, 7: 7 %,
   9: 14 %, a one-to-two seed difference that no threshold removes.
 
+## Timing
+
+On a GPU, `run_mlgdf.py` first does one short untimed run (3 DDIM steps) so that CUDA
+start-up is not charged to seed 0, and synchronises the GPU around each timed seed. The
+warm-up cannot change any result: every random draw in the seed loop comes from torch,
+and each seed re-seeds torch. `--no-warmup` turns it off. Note that the paper's own
+records include the warm-up in seed 0 (bimodal: 35.4 s against 21.5 s for the other
+seeds), which is part of the published 22.4 +- 3.5 s.
+
