@@ -89,46 +89,30 @@ def plot_all_images(payload, plots_dir, ncols=5, dpi=100,
             plt.close(fig_c)
 
 
-def plot_all_seeds_grid(payload, plots_dir, ncols=5, dpi=100, indices=None,
-                        suffix="all_seeds", show_conf=False, title=None):
-    """Seeds of one target in a single grid, titled 'Seed i | Loss x | label'.
+def plot_all_seeds_grid(payload, plots_dir, ncols=5, dpi=100):
+    """All seeds of one target in a single grid, titled 'Seed i | Loss x | label'.
 
     The label is the digit the run's classifier assigned (`predicted_labels` in the
     run record, the same labels Table 2 counts); "None" when it was below the
     threshold. Records without labels get titles without the label field.
-
-    indices   draw only these seeds, in this order (e.g. the top-5 by SWD);
-              default all seeds in seed order
-    suffix    file name suffix: <experiment_name>_<suffix>.png
-    show_conf append the classifier's top-class confidence, 'label (0.93)'
-    title     optional figure title
     """
     results, loss_log, seed_log = payload["results"], payload["loss_log"], payload["seed_log"]
     preds = payload.get("predicted_labels")
-    confs = payload.get("predicted_confidences")
-    order = list(range(len(results))) if indices is None else list(indices)
-    n = len(order)
-    ncols = min(ncols, n)
+    n = len(results)
     nrows = math.ceil(n / ncols)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 2.2, nrows * 2.3 + (0.3 if title else 0)),
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 2.2, nrows * 2.3),
                              squeeze=False)
-    for slot, ax in enumerate(axes.flat):
+    for k, ax in enumerate(axes.flat):
         ax.axis("off")
-        if slot >= n:
+        if k >= n:
             continue
-        k = order[slot]
         ax.imshow(results[k], cmap="gray", vmin=0.0, vmax=1.0)
-        text = f"Seed {seed_log[k]} | Loss {loss_log[k]:.4f}"
+        title = f"Seed {seed_log[k]} | Loss {loss_log[k]:.4f}"
         if preds is not None:
-            text += f" | {preds[k] if preds[k] is not None else 'None'}"
-            if show_conf and confs is not None:
-                text += f" ({confs[k]:.2f})"
-        ax.set_title(text, fontsize=8, pad=2)
-    fig.tight_layout(pad=0.3, h_pad=1.2, w_pad=0.3,
-                     rect=(0, 0, 1, 1 - 0.35 / fig.get_figheight()) if title else None)
-    if title:
-        fig.suptitle(title, fontsize=9)
-    path = os.path.join(plots_dir, f"{payload['experiment_name']}_{suffix}.png")
+            title += f" | {preds[k] if preds[k] is not None else 'None'}"
+        ax.set_title(title, fontsize=8, pad=2)
+    fig.tight_layout(pad=0.3, h_pad=0.6, w_pad=0.3)
+    path = os.path.join(plots_dir, f"{payload['experiment_name']}_all_seeds.png")
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {path}")

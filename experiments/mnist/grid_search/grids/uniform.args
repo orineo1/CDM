@@ -1,1 +1,0 @@
---n-cond 600 1000 --steps 290 300 400 --n-mc 3 10 --step-size-mode original half double

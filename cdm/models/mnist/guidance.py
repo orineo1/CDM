@@ -56,14 +56,6 @@ def compute_step_size(r_t, t, mode):
         return r_t / (1 + r_t ** 2) + 10 * t / 1000
     if mode == "no_linear":
         return r_t / (1 + r_t ** 2)
-    if mode.startswith("x"):
-        # "x<k>": k times the original rule, e.g. "x1.5", "x2.5" (for fine grids;
-        # "x2" equals "double" and "x0.5" equals "half")
-        try:
-            k = float(mode[1:])
-        except ValueError:
-            raise ValueError(f"unknown step_size_mode: {mode}") from None
-        return k * (r_t / (1 + r_t ** 2) + 5 * t / 1000)
     raise ValueError(f"unknown step_size_mode: {mode}")
 
 
