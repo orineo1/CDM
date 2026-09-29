@@ -73,3 +73,16 @@ python experiments/mnist/grid_search/reclassify.py --target uniform \
     --classifier-path experiments/mnist/checkpoints/robust_classifier_code.pth
 ```
 
+## A local grid around one configuration
+
+`grids/uniform_local.args` searches around `uniform_st300_ssdouble_xt3_ns600`:
+n_cond {500, 600, 800} x T {280, 300, 320} x n_MC {3, 5} x step rule
+{x1.5, double, x2.5} (54 configurations). Step rules `x<k>` scale the original rule by
+k (`x2` = `double`, `x0.5` = `half`). Submit a named grid with
+
+```bash
+bash experiments/mnist/grid_search/submit.sh uniform uniform_local
+```
+
+Configurations that already finished in an earlier grid are skipped.
+

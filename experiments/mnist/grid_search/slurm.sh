@@ -13,7 +13,8 @@
 #SBATCH --error=logs/grid-%x-%A_%a.err
 set -euo pipefail
 export PYTHONUNBUFFERED=1
-TARGET="${1:?usage: sbatch --array=0-N slurm.sh <uniform|bimodal>}"
+TARGET="${1:?usage: sbatch --array=0-N slurm.sh <uniform|bimodal> [grid name]}"
+GRID="${2:-$TARGET}"            # grids/<GRID>.args; default grids/<target>.args
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 [ -f experiments/mnist/grid_search/grid_search.py ] || { echo "submit from the repo root"; exit 1; }
 VENV=${VENV:-/sci/labs/orzuk/ori_m/venvs/cdm}
@@ -23,6 +24,6 @@ export XDG_CACHE_HOME="$CACHE" HF_HOME="$CACHE/huggingface" MPLCONFIGDIR="$CACHE
 
 # shellcheck disable=SC2046
 python experiments/mnist/grid_search/grid_search.py --target "$TARGET" \
-    $(cat "experiments/mnist/grid_search/grids/$TARGET.args") \
+    $(cat "experiments/mnist/grid_search/grids/$GRID.args") \
     --index "$SLURM_ARRAY_TASK_ID" --skip-existing \
     --wandb-mode "${WANDB_MODE:-online}" ${GRID_EXTRA:-}

@@ -3,19 +3,22 @@
 # the finished configurations once every array task has ended.
 #   bash experiments/mnist/grid_search/submit.sh uniform
 #   bash experiments/mnist/grid_search/submit.sh bimodal
-# Edit grids/<target>.args to change the grid. WANDB_MODE=offline|disabled is passed on.
+#   bash experiments/mnist/grid_search/submit.sh uniform uniform_local   # grids/uniform_local.args
+# Edit grids/<name>.args to change a grid. WANDB_MODE=offline|disabled is passed on.
+# Configurations that already finished (in any grid) are skipped.
 set -euo pipefail
-TARGET="${1:?usage: bash submit.sh <uniform|bimodal>}"
+TARGET="${1:?usage: bash submit.sh <uniform|bimodal> [grid name]}"
+GRID="${2:-$TARGET}"
 cd "$(dirname "$0")/../../.."
 VENV=${VENV:-/sci/labs/orzuk/ori_m/venvs/cdm}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 mkdir -p logs
 # shellcheck disable=SC2046
 N=$(python experiments/mnist/grid_search/grid_search.py --target "$TARGET" \
-      $(cat "experiments/mnist/grid_search/grids/$TARGET.args") --count)
-echo "$TARGET: $N configurations"
-A=$(sbatch --parsable --job-name="grid-$TARGET" --array="0-$((N - 1))" \
-      --export=ALL experiments/mnist/grid_search/slurm.sh "$TARGET")
+      $(cat "experiments/mnist/grid_search/grids/$GRID.args") --count)
+echo "$TARGET, grid $GRID: $N configurations"
+A=$(sbatch --parsable --job-name="grid-$GRID" --array="0-$((N - 1))" \
+      --export=ALL experiments/mnist/grid_search/slurm.sh "$TARGET" "$GRID")
 echo "array job $A"
 S=$(sbatch --parsable --dependency="afterany:$A" --job-name="rank-$TARGET" --partition=catfish \
       --gres=gpu:1 --cpus-per-task=1 --mem=2G --time=00:10:00 \
