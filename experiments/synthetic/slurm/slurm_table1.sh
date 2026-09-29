@@ -14,7 +14,7 @@
 # Logs: cdm-table1-<jobid>_<task>.out in the submit directory.
 #
 #SBATCH --job-name=cdm-table1
-#SBATCH --partition=catfish
+#SBATCH --partition=salmon
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G

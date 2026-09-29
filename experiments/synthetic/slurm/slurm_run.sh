@@ -14,7 +14,7 @@
 #   sbatch --time=24:00:00 experiments/synthetic/slurm/slurm_run.sh ablations
 #
 #SBATCH --job-name=cdm-synthetic
-#SBATCH --partition=catfish
+#SBATCH --partition=salmon
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
