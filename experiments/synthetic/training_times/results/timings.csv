@@ -1,0 +1,3 @@
+params,network,model,architecture,seconds
+mog_2d_full,uncond,unconditional,diffusion,441
+mog_2d_full,diffusion,conditional,diffusion,775

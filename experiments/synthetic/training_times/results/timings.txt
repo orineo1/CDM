@@ -1,0 +1,2 @@
+TIMING mog_2d_full unconditional/diffusion 441s
+TIMING mog_2d_full conditional/diffusion 775s
