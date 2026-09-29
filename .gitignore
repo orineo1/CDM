@@ -9,6 +9,8 @@ venv/
 
 # Run outputs -- regenerable, and can get large (scripts default to results/)
 results/
+# ...except the committed results of the experiments (written by export_results.py)
+!experiments/*/*/results/
 
 # Model checkpoints (tracked deliberately only where small)
 *.ckpt
