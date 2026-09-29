@@ -90,25 +90,25 @@ def table5(results, tol):
 def table8(results, tol):
     path = d("ablations", "table8.csv", results)
     if not os.path.exists(path):
-        print("\n## Table 8: not run (no ablations table8.csv)")
+        print("\n## tab:sim_full: not run (no ablations table8.csv)")
         return
     ours = {(r["scenario"], r["method"]): r for r in csv.DictReader(open(path))}
+    cols = ["dist", "l2rel", "norefine", "annealed", "oracle"]
     rows = []
-    for s, methods in P.TABLE8.items():
+    for s, methods in P.SIM_FULL.items():
         key = "x" + s.replace("x", "_y")
-        for m, arms in methods.items():
+        for m, paper in methods.items():
             r = ours.get((key, m))
             row = [s, m]
-            for a in ("norefine", "annealed", "oracle"):
-                if a in arms:
-                    v = float(r[f"{a}_mean"]) if r and r.get(f"{a}_mean") not in (None, "") else None
-                    row.append(cell(v, arms[a], tol))
-                else:
+            for c in cols:
+                if c not in paper:
                     row.append("")
+                    continue
+                v = float(r[f"{c}_mean"]) if r and r.get(f"{c}_mean") not in (None, "") else None
+                row.append(cell(v, paper[c], tol))
             rows.append(row)
-    table("tab:sim_full (ablation columns): TV without refinement, ours / paper "
-          "(transcribed from the earlier Table 8, first five scenarios only; ||x_hat-x*|| and relative L2 not transcribed)",
-          ["(dX,dY)", "method", "no refinement", "annealed", "oracle"], rows)
+    table("tab:sim_full: ||x_hat-x*|| and relative L2 after refinement, TV without refinement per arm, ours / paper",
+          ["(dX,dY)", "method", "||x_hat-x*||", "relative L2", "no refinement", "annealed", "oracle"], rows)
 
 
 def table9(results, tol):
