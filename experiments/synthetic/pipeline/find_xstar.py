@@ -98,6 +98,8 @@ sys.path.insert(0, HERE)   # sibling pipeline modules
 
 from cdm.guidance import GuidanceConfig, optimize_guided, optimize_guided_population, AdamGuidance   # noqa: E402
 from cdm.guidance.config import update_ddim_minus_grad                                             # noqa: E402
+from cdm.guidance.core import refine as refine_x, _final_loss                                  # noqa: E402
+import dataclasses                                                                           # noqa: E402
 from cdm.guidance.config import (init_randn, init_zeros, perturb_beta_ratio,               # noqa: E402
                              perturb_beta_prod_ratio_sq, perturb_sqrt_beta_prod, perturb_none,
                              aggregate_logsumexp, aggregate_mean, aggregate_single)
@@ -130,7 +132,15 @@ def parse_args():
     g.add_argument("--zeta", type=float, default=1.0)
     g.add_argument("--eta", type=float, default=0.0)
     g.add_argument("--guidance-cutoff-t", type=int, default=None)
-    g.add_argument("--init", choices=["randn", "zeros"], default="randn")
+    g.add_argument("--init", choices=["randn", "zeros", "screen"], default="randn",
+                   help="screen: draw --n-screen unguided prior samples, rank them by the sample loss, "
+                        "and finish the best R (lgd only)")
+    g.add_argument("--n-screen", type=int, default=1000, help="--init screen: unguided prior samples screened per attempt")
+    g.add_argument("--screen-n-cond", type=int, default=None, help="--init screen: conditional samples per screening loss (default n_cond)")
+    g.add_argument("--screen-finish", choices=["refine", "guided"], default="refine",
+                   help="--init screen: 'refine' = post-refinement only (no guided diffusion); "
+                        "'guided' = re-noise to --screen-t-frac of the schedule, guided diffusion from there, then refinement")
+    g.add_argument("--screen-t-frac", type=float, default=0.5, help="--init screen --screen-finish guided: start timestep as a fraction of T")
     g.add_argument("--guidance-optim", choices=["sgd", "adam"], default="sgd",
                    help="adam: Adam-style guidance push (moments across the reverse steps, AdamDPS-like); "
                         "the step size is then a displacement in x units")
@@ -247,7 +257,7 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
     gen = target_generator if not args.n_target else (lambda n, d, g=target_generator: g(args.n_target, d))
     return GuidanceConfig(
         n_cond=args.n_cond, n_mc=args.n_mc, final_n_cond=args.final_n_cond or 4 * args.n_cond,
-        init_fn=init_randn if args.init == "randn" else init_zeros, unsqueeze_init=True,
+        init_fn=init_zeros if args.init == "zeros" else init_randn, unsqueeze_init=True,
         perturb_fn=perturb, perturb_square=(args.perturb == "beta_prod_ratio_sq"),
         aggregate_fn=aggregate, step_size_fn=step_fn, guidance_cutoff_t=args.guidance_cutoff_t,
         update_fn=(AdamGuidance(*args.adam_betas) if args.guidance_optim == "adam" else update_ddim_minus_grad),
@@ -324,10 +334,57 @@ def main():
             rec["refine"] = {k: (v.tolist() if torch.is_tensor(v) else v) for k, v in res["refine"].items()}
         return rec, cfg
 
+    def screened_attempt(a):
+        """--init screen: rank n_screen unguided prior samples by the sample loss (forward only), keep the
+        best R, finish each (refinement only, or re-noised guided diffusion + refinement), return the best."""
+        seed = args.seed * 1000 + a * R
+        torch.manual_seed(seed)
+        cfg0 = make_cfg(args, prior, sampler_type, target_generator, seed)
+        t0 = time.time()
+        with torch.no_grad():
+            X = prior.sample(args.n_screen, device=dev, eta=args.eta)[0].detach()
+        cfg_s = dataclasses.replace(cfg0, final_n_cond=args.screen_n_cond or args.n_cond)
+        losses = torch.stack([_final_loss(sampler, loss_fn, cfg_s, X[i:i + 1]).reshape(()) for i in range(X.shape[0])]).float().cpu()
+        t_screen = time.time() - t0
+        top = torch.argsort(losses)[:R].tolist()
+        runs = []
+        for r, idx in enumerate(top):
+            t1 = time.time()
+            seed_r = seed + r
+            x0 = X[idx:idx + 1].clone()
+            if args.screen_finish == "refine":
+                torch.manual_seed(seed_r)
+                x_f = refine_x(prior, sampler, loss_fn, cfg0, x0)[0] if cfg0.refine_steps > 0 else x0
+                fl = float(_final_loss(sampler, loss_fn, cfg0, x_f))
+            else:
+                T = int(prior.diffusion_steps)
+                t_mid = int(round(args.screen_t_frac * (T - 1)))
+                ab = prior.baralphas[t_mid].to(x0.device)
+                x_mid = (torch.sqrt(ab) * x0 + torch.sqrt(1 - ab) * torch.randn_like(x0)).view(-1)
+                cfg = make_cfg(args, prior, sampler_type, target_generator, seed_r)
+                cfg.range_t_start = t_mid
+                cfg.init_fn = lambda nf, d, v=x_mid: v.clone().detach().requires_grad_(True)
+                res = optimize_guided(prior, sampler, loss_fn, cfg)
+                x_f, fl = res["x_final"], float(res["final_loss"])
+            x_hat = x_f.detach().float().view(-1)
+            runs.append({"seed": seed_r, "screen_index": int(idx), "screen_loss": float(losses[idx]),
+                         "x_hat": x_hat.cpu().tolist(), "final_loss": fl, "time_s": time.time() - t1, **evaluate(x_hat, info)})
+        best = min(runs, key=lambda q: q["final_loss"])
+        q = torch.quantile(losses, torch.tensor([0.0, 0.01, 0.1, 0.5]))
+        return {"attempt": a, **best, "restarts": runs,
+                "screen": {"n": int(X.shape[0]), "n_cond": cfg_s.final_n_cond, "finish": args.screen_finish,
+                           "t_frac": args.screen_t_frac, "time_s": t_screen,
+                           "loss_min_p1_p10_median": [float(v) for v in q]}}
+
+    if args.init == "screen":
+        assert args.algo == "lgd", "--init screen is implemented for --algo lgd"
+
     attempts = []
     for a in range(args.n_attempts):
         t_att = time.time()
-        if args.algo == "particles":
+        if args.init == "screen":
+            att = screened_attempt(a)
+        elif args.algo == "particles":
             rec, cfg = one_trajectory(args.seed * 1000 + a, optimize_guided_population)
             att = {"attempt": a, **rec}
         else:   # R independent restarts, the smallest final loss wins: that is the algorithm's answer

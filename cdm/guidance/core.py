@@ -20,7 +20,8 @@ from .config import GuidanceConfig
 def _iter_timesteps(model_uncond, cfg):
     """Yield (i, t) pairs in the order the legacy variant used."""
     if cfg.timestep_source == "range":
-        steps = range(model_uncond.diffusion_steps - 1, 0, -1)
+        start = cfg.range_t_start if getattr(cfg, "range_t_start", None) is not None else model_uncond.diffusion_steps - 1
+        steps = range(start, 0, -1)
         for i, t in enumerate(steps):
             yield i, t
     elif cfg.timestep_source == "model":

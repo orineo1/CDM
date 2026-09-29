@@ -194,6 +194,9 @@ class GuidanceConfig:
 
     # --- explicit timestep list (timestep_source="list") ---
     timesteps_list: Optional[Any] = None
+    # timestep_source="range": start the reverse process here instead of T-1 (partial trajectory
+    # from a noised starting point, as in SDEdit); None keeps the full schedule
+    range_t_start: Optional[int] = None
     # MNIST takes one unguided DDIM step after the loop and returns its pred_x0
     final_unguided_step: bool = False
 
