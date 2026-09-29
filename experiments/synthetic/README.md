@@ -18,12 +18,12 @@ correction have **no counterpart upstream** and are GlobalConditional-native.
 
 | directory | paper artifact (ICLR numbering; AISTATS will renumber) | producer |
 |---|---|---|
-| `main_grid` | Table 1, Table 7 | `make_table1.py` |
-| `ablations` | Table 8 | `make_table1.py` (no `_ablation` emitter) |
-| `model_quality` | Table 5 | `check_models.py` |
-| `toy_example` | Figure 1 | `fig1_toy_example.py` |
-| `smc_correction` | Figure 3 | `fig_smc_correction.py` |
-| `infeasible_target` | Table 9, Figure 4 | `generate_data` + `train_models` + `find_xstar --loss l2` |
+| `main_grid` | Table 1 `tab:sim_main`; the refined columns of `tab:sim_full` | `make_table1.py` |
+| `ablations` | the ablation columns of `tab:sim_full` (formerly Table 8) | `make_table1.py` x 3 arms + `make_table8.py` |
+| `model_quality` | Table 5 `tab:model_quality` | `check_models.py` + `make_table5.py` |
+| `toy_example` | Figure 1 | `fig1_toy_example.py` (`--smc-npz` from `smc_correction` for panel d) |
+| `smc_correction` | Figure 1(d), the twisted-SMC overlay and its TV values (App. B.8) | `fig_smc_correction.py` |
+| `infeasible_target` | Table 9 `tab:nonstar_results`, Figure 4 | `generate_data` + `train_models` + `find_xstar --loss l2` + `make_table9.py` |
 | `subsampling_control` | App. G control (no float) | `control_subsample.py` |
 | `detached_bandwidth_grid` | App. B.6 prose | `make_table1.py --extra "--bandwidth-grad"` |
 | `ncond_ramp` | App. B.6 prose | `make_table1.py --extra "--n-cond-schedule linear ..."` |
@@ -34,7 +34,7 @@ correction have **no counterpart upstream** and are GlobalConditional-native.
 | `retrain_50k` | App. B.7 prose | `make_table1.py --epochs 50000 --force` |
 | `toy_model_checks` | App. B.8 prose | `check_models.py --setting` |
 | `grid_model_training` | App. B.4 prose | `generate_data.py` + `train_models.py` |
-| `training_times` | Table 10 | `generate_data.py --params-file` + `train_models.py` |
+| `training_times` | training-time table, commented out in the current paper | `generate_data.py --params-file` + `train_models.py` |
 | `tv_sensitivity_calibration` | App. B.7 prose | **none** — `run.sh` exits 2 |
 | `prior_draw_baseline` | App. B.7 prose | **none** — `run.sh` exits 2 |
 
@@ -76,7 +76,7 @@ experiment's `run.sh full`); `main_grid` is an array job, one task per scenario:
 sbatch experiments/synthetic/slurm/slurm_table1.sh                     # Tables 1, 7 (9 tasks, ~2 h each)
 sbatch experiments/synthetic/slurm/slurm_run.sh smc_correction         # Figure 3
 sbatch experiments/synthetic/slurm/slurm_run.sh infeasible_target      # Table 9, Figure 4
-sbatch --time=24:00:00 experiments/synthetic/slurm/slurm_run.sh training_times   # Table 10
+# training_times (the timing table) is commented out in the current paper; run it only if it returns
 # after smc_correction has finished:
 sbatch experiments/synthetic/slurm/slurm_run.sh toy_example            # Figure 1
 # after all nine main_grid tasks have finished:

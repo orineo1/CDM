@@ -1,8 +1,10 @@
 # ablations
 
-**Produces:** Table 8 `tab:sim_ablation`: four arms of the Table 1 grid: no refinement,
-refined (= Table 1), annealed resampling (particle methods only), oracle `f_phi` (the exact
-conditional as sampler). `config/arms.txt` lists the flag that distinguishes each arm.
+**Produces:** the appendix table `tab:sim_full` (formerly Table 8 `tab:sim_ablation`): per
+setting and method, ‖x̂ − x*‖ and the relative L² after refinement (from `../main_grid`), and
+the TV without refinement of three arms: the plain search, annealed resampling (particle
+methods only) and the oracle `f_phi` (the exact conditional as sampler). `config/arms.txt`
+lists the flag that distinguishes each arm.
 
 | | |
 |---|---|
@@ -29,9 +31,9 @@ method, mean and std per arm), the three per-arm `table8_*.json` / `.md`, `run_i
 
 ## Paper numbers
 
-Table 8 `tab:sim_ablation`: TV of the returned x̂, mean ± std over five runs. The first five
-scenarios were transcribed; the table continues through all nine in the PDF. "refined" is
-Table 1 reprinted.
+From the earlier version's Table 8 `tab:sim_ablation` (TV of the returned x̂, mean ± std over
+five runs; the first five scenarios were transcribed, the PDF has all nine; "refined" is
+Table 1). The current `tab:sim_full` adds ‖x̂ − x*‖ and the relative L², not transcribed here.
 
 | Setting | Method | no refinement | refined | annealed resampling | oracle f_phi |
 |---|---|---|---|---|---|

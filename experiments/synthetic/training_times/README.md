@@ -1,7 +1,7 @@
 # training_times
 
-**Produces:** Table 10 `tab:training_times`: wall-clock training time of the three networks
-per setting.
+**Produces:** the training-time table `tab:training_times` (wall-clock training time of the
+three networks per setting). **Commented out in the current paper**; kept in case it returns.
 
 | | |
 |---|---|

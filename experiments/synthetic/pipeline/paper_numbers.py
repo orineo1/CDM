@@ -36,8 +36,10 @@ TABLE5 = {
     "10x10": (0.017, 0.032, 0.057, 0.142, 0.279, 0.401),
 }
 
-# Table 8 (tab:sim_ablation): TV, mean +- std over five runs; arms "norefine", "annealed",
-# "oracle". Only the first five scenarios were transcribed from the source.
+# tab:sim_full (the appendix companion of Table 1; formerly Table 8 tab:sim_ablation): TV without
+# refinement, mean +- std over five runs; arms "norefine", "annealed", "oracle". Only the first
+# five scenarios were transcribed, from the earlier version of the paper; the ||x_hat - x*|| and
+# relative L2 columns of the current table are not transcribed.
 TABLE8 = {
     "1x1": {"MLGD":    {"norefine": (0.01, 0.01), "oracle": (0.02, 0.01)},
             "MLGD-F":  {"norefine": (0.08, 0.05)},
@@ -67,7 +69,7 @@ TABLE9 = {                     # arm: (% at x_bi, time mean, time std)
     "L2_n1":    (12.0, 1.65, 0.46),
 }
 
-# Table 10 (tab:training_times): approximate minutes on an NVIDIA L4.
+# Training times (tab:training_times, commented out in the current paper): approximate minutes on an L4.
 TABLE10 = {                    # (params file, network): minutes
     ("mog_2d_full", "uncond"): 11, ("mog_2d_full", "diffusion"): 12, ("mog_2d_full", "cm"): 3,
     ("mog_10d_full", "uncond"): 240, ("mog_10d_full", "diffusion"): 240, ("mog_10d_full", "cm"): 9,

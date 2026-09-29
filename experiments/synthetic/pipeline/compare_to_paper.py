@@ -106,7 +106,8 @@ def table8(results, tol):
                 else:
                     row.append("")
             rows.append(row)
-    table("Table 8: ablations, ours / paper (the refined arm is Table 1; the paper's last four scenarios were not transcribed)",
+    table("tab:sim_full (ablation columns): TV without refinement, ours / paper "
+          "(transcribed from the earlier Table 8, first five scenarios only; ||x_hat-x*|| and relative L2 not transcribed)",
           ["(dX,dY)", "method", "no refinement", "annealed", "oracle"], rows)
 
 
@@ -127,11 +128,11 @@ def table9(results, tol):
 def table10(results, tol):
     path = d("training_times", "timings.csv", results)
     if not os.path.exists(path):
-        print("\n## Table 10: not run (no training_times timings.csv)")
+        print("\n## Training times: not run (the table is commented out in the current paper)")
         return
     ours = {(r["params"], r["network"]): float(r["seconds"]) / 60 for r in csv.DictReader(open(path))}
     rows = [[pf, net, cell(ours.get((pf, net)), minutes, 0.5)] for (pf, net), minutes in P.TABLE10.items()]
-    table("Table 10: training minutes, ours / paper (paper: NVIDIA L4, approximate; flagged beyond 50%)",
+    table("Training minutes, ours / paper (the table is commented out in the current paper; NVIDIA L4, approximate; flagged beyond 50%)",
           ["params", "network", "minutes"], rows)
 
 
