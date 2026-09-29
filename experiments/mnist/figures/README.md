@@ -28,3 +28,8 @@ are the versions that appear in the paper.
 
 `results/PUBLISHED.md` lists the figure files as they appear in the paper.
 `outputs/` holds local runs and is never a published figure.
+
+`<run>_all_seeds.png`: all 15 seeds of one target in one grid, each titled
+`Seed i | Loss x | label` (label = the digit the run's classifier assigned, `None` below
+the threshold). One file per target, i.e. per row of Table 2.
+

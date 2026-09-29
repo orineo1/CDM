@@ -89,6 +89,36 @@ def plot_all_images(payload, plots_dir, ncols=5, dpi=100,
             plt.close(fig_c)
 
 
+def plot_all_seeds_grid(payload, plots_dir, ncols=5, dpi=100):
+    """All seeds of one target in a single grid, titled 'Seed i | Loss x | label'.
+
+    The label is the digit the run's classifier assigned (`predicted_labels` in the
+    run record, the same labels Table 2 counts); "None" when it was below the
+    threshold. Records without labels get titles without the label field.
+    """
+    results, loss_log, seed_log = payload["results"], payload["loss_log"], payload["seed_log"]
+    preds = payload.get("predicted_labels")
+    n = len(results)
+    nrows = math.ceil(n / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 2.2, nrows * 2.3),
+                             squeeze=False)
+    for k, ax in enumerate(axes.flat):
+        ax.axis("off")
+        if k >= n:
+            continue
+        ax.imshow(results[k], cmap="gray", vmin=0.0, vmax=1.0)
+        title = f"Seed {seed_log[k]} | Loss {loss_log[k]:.4f}"
+        if preds is not None:
+            title += f" | {preds[k] if preds[k] is not None else 'None'}"
+        ax.set_title(title, fontsize=8, pad=2)
+    fig.tight_layout(pad=0.3, h_pad=0.6, w_pad=0.3)
+    path = os.path.join(plots_dir, f"{payload['experiment_name']}_all_seeds.png")
+    fig.savefig(path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {path}")
+    return path
+
+
 def plot_top_k_images(payload, plots_dir, top_k=5, dpi=100, save_no_title=False):
     results, loss_log, seed_log = (
         payload['results'], payload['loss_log'], payload['seed_log']

@@ -22,7 +22,7 @@ import numpy as np
 import torch
 
 from cdm.models.mnist.checkpoints import load_cond_model  # noqa: E402
-from cdm.models.mnist.plotting import (clamp_normalize, plot_all_images,  # noqa: E402
+from cdm.models.mnist.plotting import (clamp_normalize, plot_all_images, plot_all_seeds_grid,  # noqa: E402
                                 plot_top_k_distributions, plot_top_k_images)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -83,6 +83,7 @@ def main():
     for label, payload in payloads:
         print(f"== {label}")
         plot_all_images(payload, args.out, dpi=args.dpi, save_no_title=args.no_titles)
+        plot_all_seeds_grid(payload, args.out, dpi=args.dpi)
         top_ix = plot_top_k_images(payload, args.out, top_k=args.top_k, dpi=args.dpi,
                                    save_no_title=args.no_titles)
         if cond_model is not None:
