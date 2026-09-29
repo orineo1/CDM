@@ -16,7 +16,7 @@
 #     ssh huji-work "cat /sci/labs/orzuk/orzuk/github/CDM/results/$f" > results/$f; done
 #
 #SBATCH --job-name=cdm-fig1
-#SBATCH --partition=gpu            # override: sbatch --partition=<name> experiments/synthetic/slurm/slurm_fig1.sh
+#SBATCH --partition=catfish        # override: sbatch --partition=<name> experiments/synthetic/slurm/slurm_fig1.sh
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
@@ -30,7 +30,7 @@ cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 [ -f experiments/synthetic/pipeline/fig1_toy_example.py ] || { echo "run sbatch from the repo root"; exit 1; }
 mkdir -p logs results
 # environment: a venv with CUDA torch (no modules needed when the torch wheel bundles CUDA)
-VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
+VENV=${VENV:-/sci/labs/orzuk/ori_m/venvs/cdm}
 if [ -f "$VENV/bin/activate" ]; then source "$VENV/bin/activate"; fi
 
 N_RESTARTS=${N_RESTARTS:-25}

@@ -11,7 +11,7 @@
 # task to finish collects the table into experiments/synthetic/main_grid/outputs/table1.*.
 #
 #SBATCH --job-name=cdm-table1
-#SBATCH --partition=salmon
+#SBATCH --partition=catfish
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
@@ -23,7 +23,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 [ -f experiments/synthetic/main_grid/run.sh ] || { echo "run sbatch from the repo root"; exit 1; }
 mkdir -p logs
-VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
+VENV=${VENV:-/sci/labs/orzuk/ori_m/venvs/cdm}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 
 ALL_SETTINGS=${SETTINGS:-"1x1 1x5 1x10 5x1 5x5 5x10 10x1 10x5 10x10"}
