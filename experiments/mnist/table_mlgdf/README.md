@@ -38,3 +38,19 @@ seed, and the % of classified seeds recovered as each digit) and writing it to
 python experiments/mnist/table_mlgdf/make_table.py experiments/mnist/table_mlgdf/outputs/full
 ```
 
+## Settings checked against the paper's own run records
+
+The run records behind Table 2 are committed in `orineo1/conditional-matching-paper`,
+branch `gread-search-mnist`, `MNIST/checkpoints_and_results/`: uniform =
+`unif_ns600_st290_ssoriginal_xt3.pkl`, bimodal = `Bimodal.pkl`, unimodal =
+`uni_var515_st130_ssdouble_xt3.pkl`. Their SWDs and times reproduce Table 2 exactly.
+
+- **No per-step clamp.** The records' images reach pixel values of 2.0-3.3; with the
+  per-step clamp to [-1, 1] the final image stays within about +-1.01 (the last DDIM
+  step, at t = 0, is almost the identity). `run.sh full` passes `--no-clamp`.
+- **The paper's classifier.** `experiments/mnist/checkpoints/robust_classifier.pth` is
+  the classifier committed next to those records. Applied to them at threshold 0.75 it
+  reproduces the bimodal and unimodal digit columns of Table 2 exactly; for uniform it
+  gives 0: 83 %, 1: 8 %, 9: 8 % (3 unlabelled) against the published 0: 79 %, 7: 7 %,
+  9: 14 %, a one-to-two seed difference that no threshold removes.
+

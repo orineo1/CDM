@@ -36,8 +36,9 @@ case "$TIER" in
       "$PY" "$HERE/run_mlgdf.py" --target "$target" \
         --steps "$steps" --n-cond "$n_cond" --n-mc "$n_mc" \
         --step-size-mode "$mode" "${extra[@]}" \
-        --n-seeds 15 --device cuda --threshold 0.75 \
+        --n-seeds 15 --device cuda --threshold 0.75 --no-clamp \
         --ckpt-dir "$REPO/experiments/mnist/checkpoints" \
+        --classifier-path "$REPO/experiments/mnist/checkpoints/robust_classifier.pth" \
         --out "$OUT/full"
     done < "$HERE/config/targets.tsv"
     "$PY" "$HERE/make_table.py" "$OUT/full"      # prints Table 2, writes outputs/full/table2.md
