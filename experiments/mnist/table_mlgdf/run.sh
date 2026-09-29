@@ -38,7 +38,7 @@ case "$TIER" in
       echo "date:        $(date -Iseconds)"
       echo "git commit:  $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)"
       echo "classifier:  $CLF"
-      echo "threshold:   0.75"
+      echo "threshold:   0.8"
       "$PY" -c "import torch; print('gpu:        ', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu'); print('torch:      ', torch.__version__, 'cuda', torch.version.cuda)"
       echo "config:      config/targets.tsv"
       grep -v '^#' "$HERE/config/targets.tsv" | sed '/^$/d; s/^/             /'
@@ -51,7 +51,7 @@ case "$TIER" in
       "$PY" "$HERE/run_mlgdf.py" --target "$target" \
         --steps "$steps" --n-cond "$n_cond" --n-mc "$n_mc" \
         --step-size-mode "$mode" "${extra[@]}" \
-        --n-seeds 15 --device cuda --threshold 0.75 --no-clamp \
+        --n-seeds 15 --device cuda --threshold 0.8 --no-clamp \
         --ckpt-dir "$REPO/experiments/mnist/checkpoints" \
         --classifier-path "$CLF" \
         --out "$OUT/full"

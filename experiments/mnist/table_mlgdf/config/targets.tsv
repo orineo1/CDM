@@ -1,6 +1,6 @@
 # MLGD-F inference hyperparameters for the MNIST rotation experiments. Read by run.sh full.
 # unimodal: paper Table 13. bimodal and uniform: chosen from the hyperparameter grid
-# search (bimodal_var300_st125_ssoriginal_xt3_ns1500, uniform_st290_ssdouble_xt3_ns600);
+# search (bimodal_var300_st125_ssoriginal_xt3_ns1500, uniform_st300_ssdouble_xt3_ns600);
 # the paper's Table 13 had bimodal 1500/125/10/original/252 and uniform 600/290/3/original.
 # Fixed across all three targets: SWD with 50 projections, 15 independent runs,
 # iCT sampling steps [150, 50, 20, 10, 5, 1], NO per-step clamp (run.sh passes
@@ -10,4 +10,4 @@
 # target    n_cond  T     n_mc  step_size_mode  variance
 unimodal    1500    130   3     double          515
 bimodal     1500    125   3     original        300
-uniform     600     290   3     double          -
+uniform     600     300   3     double          -

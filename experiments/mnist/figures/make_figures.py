@@ -22,7 +22,7 @@ import numpy as np
 import torch
 
 from cdm.models.mnist.checkpoints import load_cond_model  # noqa: E402
-from cdm.models.mnist.plotting import (clamp_normalize, plot_all_images, plot_all_seeds_grid,  # noqa: E402
+from cdm.models.mnist.plotting import (clamp_normalize, plot_all_seeds_grid,  # noqa: E402
                                 plot_top_k_distributions, plot_top_k_images)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -59,8 +59,6 @@ def main():
     p.add_argument("--dpi", type=int, default=150)
     p.add_argument("--n-cond-plot", type=int, default=500,
                    help="angle samples drawn per displayed digit for the histograms")
-    p.add_argument("--no-titles", action="store_true",
-                   help="also write title-free copies (the versions used in the paper)")
     p.add_argument("--no-distributions", action="store_true",
                    help="skip the histogram panels (they need the conditional model)")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -82,15 +80,16 @@ def main():
 
     for label, payload in payloads:
         print(f"== {label}")
-        plot_all_images(payload, args.out, dpi=args.dpi, save_no_title=args.no_titles)
+        # three files per target: <run>_all_seeds.png, <run>_top5_notitle.png,
+        # <run>_dist_polar_notitle.png
         plot_all_seeds_grid(payload, args.out, dpi=args.dpi)
         top_ix = plot_top_k_images(payload, args.out, top_k=args.top_k, dpi=args.dpi,
-                                   save_no_title=args.no_titles)
+                                   save_titled=False, save_no_title=True)
         if cond_model is not None:
             plot_top_k_distributions(payload, cond_model, top_ix, args.out,
                                      top_k_dist=args.top_k, dpi=args.dpi,
-                                     save_no_title=args.no_titles, device=args.device,
-                                     n_cond_plot=args.n_cond_plot)
+                                     save_titled=False, save_cart=False, save_no_title=True,
+                                     device=args.device, n_cond_plot=args.n_cond_plot)
 
 
 if __name__ == "__main__":

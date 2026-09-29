@@ -11,11 +11,11 @@ time per seed, and the digits the classifier reads off the recovered images.
 |---|---|---|---|---|---|
 | unimodal | 1500 | 130 | 3 | 2 zeta_t | 515 |
 | bimodal | 1500 | 125 | 3 | zeta_t | 300 |
-| uniform | 600 | 290 | 3 | 2 zeta_t | - |
+| uniform | 600 | 300 | 3 | 2 zeta_t | - |
 
 zeta_t = r_t / (1 + r_t^2) + 5t/1000. Fixed for all targets: SWD with 50 projections,
 iCT sampling steps [150, 50, 20, 10, 5, 1], seeds 0-14, no clamping during the
-optimisation, classifier threshold 0.75 (below it an image is counted as `None`).
+optimisation, classifier threshold 0.8 (below it an image is counted as `None`).
 
 ## Run
 

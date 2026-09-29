@@ -29,7 +29,7 @@ case "$TIER" in
     SRC="${2:-$HERE/../table_mlgdf/outputs/full}"
     [ -d "$SRC" ] || { echo "no run records at $SRC -- run ../table_mlgdf/run.sh full first" >&2; exit 65; }
     "$PY" "$HERE/make_figures.py" --results-dir "$SRC" --out "$OUT/full" \
-      --device cuda --top-k 5 --n-cond-plot 500 --dpi 150 --no-titles \
+      --device cuda --top-k 5 --n-cond-plot 500 --dpi 150 \
       --ckpt-dir "$REPO/experiments/mnist/checkpoints"
     ;;
 

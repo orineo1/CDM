@@ -119,7 +119,7 @@ def plot_all_seeds_grid(payload, plots_dir, ncols=5, dpi=100):
     return path
 
 
-def plot_top_k_images(payload, plots_dir, top_k=5, dpi=100, save_no_title=False):
+def plot_top_k_images(payload, plots_dir, top_k=5, dpi=100, save_no_title=False, save_titled=True):
     results, loss_log, seed_log = (
         payload['results'], payload['loss_log'], payload['seed_log']
     )
@@ -152,23 +152,26 @@ def plot_top_k_images(payload, plots_dir, top_k=5, dpi=100, save_no_title=False)
         return fig
 
     base = os.path.join(plots_dir, f'{experiment_name}_top{k}.png')
-    fig  = _make(show_titles=True)
-    fig.savefig(base, dpi=dpi, bbox_inches='tight')
-    plt.close(fig)
-    print(f'  Saved: {base}')
+    if save_titled:
+        fig  = _make(show_titles=True)
+        fig.savefig(base, dpi=dpi, bbox_inches='tight')
+        plt.close(fig)
+        print(f'  Saved: {base}')
 
     if save_no_title:
         base_nt = os.path.join(plots_dir, f'{experiment_name}_top{k}_notitle.png')
         fig_c   = _make(show_titles=False)
         fig_c.savefig(base_nt, dpi=dpi, bbox_inches='tight')
         plt.close(fig_c)
+        print(f'  Saved: {base_nt}')
 
     return top_ix
 
 
 def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
                               top_k_dist=5, dpi=150, save_no_title=False,
-                              device='cpu', n_cond_plot=500):
+                              device='cpu', n_cond_plot=500,
+                              save_titled=True, save_cart=True):
     results, loss_log, seed_log = (
         payload['results'], payload['loss_log'], payload['seed_log']
     )
@@ -269,14 +272,21 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
 
     base_cart  = os.path.join(plots_dir, f'{experiment_name}_dist_cart.png')
     base_polar = os.path.join(plots_dir, f'{experiment_name}_dist_polar.png')
-    _make_cart(True, True).savefig(base_cart,  dpi=dpi, bbox_inches='tight'); plt.close()
-    _make_polar(True, True).savefig(base_polar, dpi=dpi, bbox_inches='tight'); plt.close()
-    print(f'  Saved: {base_cart}')
-    print(f'  Saved: {base_polar}')
-
+    saved = []
+    if save_titled and save_cart:
+        _make_cart(True, True).savefig(base_cart, dpi=dpi, bbox_inches='tight'); plt.close()
+        saved.append(base_cart)
+    if save_titled:
+        _make_polar(True, True).savefig(base_polar, dpi=dpi, bbox_inches='tight'); plt.close()
+        saved.append(base_polar)
+    if save_no_title and save_cart:
+        path = base_cart.replace('.png', '_notitle.png')
+        _make_cart(False, False).savefig(path, dpi=dpi, bbox_inches='tight'); plt.close()
+        saved.append(path)
     if save_no_title:
-        _make_cart(False, False).savefig(
-            base_cart.replace('.png', '_notitle.png'),  dpi=dpi, bbox_inches='tight'); plt.close()
-        _make_polar(False, False).savefig(
-            base_polar.replace('.png', '_notitle.png'), dpi=dpi, bbox_inches='tight'); plt.close()
+        path = base_polar.replace('.png', '_notitle.png')
+        _make_polar(False, False).savefig(path, dpi=dpi, bbox_inches='tight'); plt.close()
+        saved.append(path)
+    for path in saved:
+        print(f'  Saved: {path}')
 

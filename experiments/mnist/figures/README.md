@@ -4,16 +4,16 @@ Draws the MNIST figures from Table 2's run records (`../table_mlgdf/outputs/full
 Nothing is optimised again; the angle histograms sample the conditional model, so a
 small GPU helps but a CPU works.
 
-Per target (one file set per row of Table 2):
+Three files per target (one set per row of Table 2):
 
 | file | contents |
 |---|---|
 | `<run>_all_seeds.png` | all 15 recovered digits, each titled `Seed \| Loss \| label` |
-| `<run>_all_row1..3.png` | the same digits, one row of 5 per file |
-| top-k images | the 5 digits with the lowest SWD |
-| top-k distributions | for those 5, the sampled angle histogram (cartesian and polar) against the target |
+| `<run>_top5_notitle.png` | the 5 digits with the lowest SWD, without titles (for the paper) |
+| `<run>_dist_polar_notitle.png` | for those 5, the sampled angle histogram against the target, polar, without titles |
 
-`_notitle` copies are written without titles, for the paper.
+The digits are displayed clipped to [-1, 1] and mapped to [0, 1]; the histograms sample
+the conditional model given those displayed images (as the paper's figure code did).
 
 ## Run
 
