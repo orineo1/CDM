@@ -1,0 +1,1 @@
+--n-cond 1000 1500 --steps 100 125 150 --n-mc 3 10 --step-size-mode original double --bimodal-var 252 300

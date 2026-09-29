@@ -18,5 +18,8 @@ pandas
 scikit-learn
 tqdm
 
+# MNIST grid search logging (experiments/mnist/grid_search)
+wandb
+
 # Tests
 pytest>=7.0
