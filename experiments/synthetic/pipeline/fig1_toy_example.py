@@ -777,11 +777,11 @@ def main():
     st = make_setting(args.setting)
     print(f"[setup] setting={st.name} device={args.device} seed={args.seed} quick={args.quick}")
 
-    if args.rerun_sweep:   # takes precedence over --rerun-sim: the methods are kept from the cache
-        sim, sweep = rerun_sweep(st, args)
+    if args.rerun_sweep and not args.rerun_sim and load_sim(args) is not None:
+        sim, sweep = rerun_sweep(st, args)          # keep the cached methods, redo the sweep
     else:
         cached = None if args.rerun_sim else load_sim(args)
-        sim, sweep = cached if cached is not None else simulate(st, args)
+        sim, sweep = cached if cached is not None else simulate(st, args)   # everything
     smc = load_smc(args.smc_npz, sorted(sweep)) if args.smc_npz else None
     make_figure(st, sim, sweep, args.out, layout=args.layout, smc=smc)
 

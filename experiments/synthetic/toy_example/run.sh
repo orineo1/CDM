@@ -34,7 +34,7 @@ case "$TIER" in
         --setting "$s" --n-restarts 10 --n-cond 250 --n-mc 3 \
         --methods MLGD MLGD-F PMLGD PMLGD-F \
         --betas 0 2 8 16 --n-beta-samples 2000 \
-        --rerun-sim --rerun-sweep --device cuda \
+        --rerun-sim --device cuda \
         --ckpt-dir "$OUT/ckpt" --out "$OUT/fig1_$s"
     done
     # 2. the twisted-SMC correction of the hard setting's beta sweep, on the same networks

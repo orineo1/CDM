@@ -42,7 +42,7 @@ case "$TIER" in
         --setting hard --n-restarts 10 --n-cond 250 --n-mc 3 \
         --methods MLGD MLGD-F PMLGD PMLGD-F \
         --betas 0 2 8 16 --n-beta-samples 2000 \
-        --rerun-sim --rerun-sweep --device cuda \
+        --rerun-sim --device cuda \
         --ckpt-dir "$CKPT" --out "$OUT/fig1_hard"
     fi
     "$PY" experiments/synthetic/pipeline/fig_smc_correction.py \
