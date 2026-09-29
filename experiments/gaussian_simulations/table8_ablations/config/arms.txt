@@ -1,5 +1,0 @@
-# Table 8, the four arms and the flag that distinguishes them.
-(i)   no refinement        --refine-steps 0
-(ii)  refined              == table1_main_grid (not re-run here)
-(iii) annealed resampling  --resample-schedule linear   (PMLGD, PMLGD-F only)
-(iv)  oracle f_phi         --methods MLGD-X PMLGD-X     (find_xstar --sampler exact)

@@ -4,19 +4,16 @@ CPU, seconds. Untrained tiny models: values are meaningless, we check structure 
 reductions to the single-trajectory algorithm.
 """
 
-import os
-import sys
 
 import torch
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models.diffusion import DiffusionModel
-from models.samplers.consistency import ConsistencyModel
-from losses.functions import MMDLoss, RBF
-from guidance import (GuidanceConfig, optimize_guided, optimize_guided_population, init_randn,
+from cdm.models.diffusion import DiffusionModel
+from cdm.models.samplers.consistency import ConsistencyModel
+from cdm.losses.functions import MMDLoss, RBF
+from cdm.guidance import (GuidanceConfig, optimize_guided, optimize_guided_population, init_randn,
                       perturb_beta_ratio)
-from guidance.core import _systematic_resample
+from cdm.guidance.core import _systematic_resample
 
 DEVICE = "cpu"
 SEED = 20260921
@@ -102,8 +99,8 @@ def test_linear_resample_schedule_ramps_and_runs():
 
 
 def test_exact_conditional_sampler_matches_analytic_conditional():
-    from models.samplers.exact import ExactConditionalSampler
-    from utils.dist import compute_conditionals, compute_alpha
+    from cdm.models.samplers.exact import ExactConditionalSampler
+    from cdm.utils.dist import compute_conditionals, compute_alpha
     torch.manual_seed(0)
     mu = [torch.tensor([0., 1., 0.5]), torch.tensor([2., -1., 1.])]
     S = [torch.tensor([[1., .3, .2], [.3, 1., .1], [.2, .1, 1.]]), torch.eye(3) * 0.5]
@@ -119,7 +116,7 @@ def test_exact_conditional_sampler_matches_analytic_conditional():
 
 
 def test_adam_guidance_runs_single_and_population():
-    from guidance import AdamGuidance
+    from cdm.guidance import AdamGuidance
     mu, mc = _models()
     loss = MMDLoss(kernel=RBF(device=DEVICE))
     single = optimize_guided(mu, mc, loss, _cfg(update_fn=AdamGuidance(), step_size_fn=lambda t, i: 0.05))

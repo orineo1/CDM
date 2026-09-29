@@ -14,12 +14,10 @@ reorg fixed, and each was demonstrated to FAIL on the pre-fix tree:
 
 import ast
 import os
-import sys
 
 import pytest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, REPO)
 
 
 # --------------------------------------------------------------------------
@@ -30,15 +28,15 @@ def test_consistency_model_builds_from_utils_nn():
     """The network is resolved at runtime, so ask the object, not the source.
 
     Pre-Item-4 this returned "models.samplers.consistency" (the shadowing local
-    class) instead of "utils.nn".
+    class) instead of "cdm.utils.nn".
     """
-    from models.samplers.consistency import ConsistencyModel
+    from cdm.models.samplers.consistency import ConsistencyModel
 
     model = ConsistencyModel(nfeatures=1, condition_on=1, nunits=8, depth=2)
-    assert type(model.net).__module__ == "utils.nn", (
+    assert type(model.net).__module__ == "cdm.utils.nn", (
         f"ConsistencyModel.net is {type(model.net).__module__}."
-        f"{type(model.net).__name__}; expected the utils.nn class. A local "
-        f"redefinition in models/samplers/consistency.py is shadowing the import "
+        f"{type(model.net).__name__}; expected the cdm.utils.nn class. A local "
+        f"redefinition in cdm/models/samplers/consistency.py is shadowing the import "
         f"again -- see Item 4."
     )
 
@@ -48,14 +46,12 @@ def test_ict_model_keeps_its_own_network():
 
     The Item 4 fix renamed the shadowing classes rather than deleting them, so
     this pins that ConsistencyModeliCT still gets its own, and the rename did
-    not quietly repoint it at utils.nn.
+    not quietly repoint it at cdm.utils.nn.
     """
-    consistency = pytest.importorskip("models.samplers.consistency")
-    if not hasattr(consistency, "ConsistencyModeliCT"):
-        pytest.skip("no ConsistencyModeliCT in this tree")
+    from cdm.models.samplers import consistency
     model = consistency.ConsistencyModeliCT(nfeatures=1, condition_on=1,
                                             nunits=8, depth=2)
-    assert type(model.net).__module__ == "models.samplers.consistency"
+    assert type(model.net).__module__ == "cdm.models.samplers.consistency"
 
 
 # --------------------------------------------------------------------------

@@ -8,18 +8,15 @@ some kernels are nondeterministic by default; if that is the cause, set
 and re-run, then record in revision/CHANGES.md that determinism requires it.
 """
 
-import os
-import sys
 
 import pytest
 import torch
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models.diffusion import DiffusionModel
-from models.samplers.consistency import ConsistencyModel
-from losses.functions import MMDLoss, RBF
-from guidance import GuidanceConfig, optimize_guided, init_randn, perturb_beta_ratio
+from cdm.models.diffusion import DiffusionModel
+from cdm.models.samplers.consistency import ConsistencyModel
+from cdm.losses.functions import MMDLoss, RBF
+from cdm.guidance import GuidanceConfig, optimize_guided, init_randn, perturb_beta_ratio
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 SEED = 20260816

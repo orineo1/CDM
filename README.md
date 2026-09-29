@@ -6,6 +6,9 @@ induced conditional `P(Y|X=x*)` matches `G`. The solver is loss-guided diffusion
 over `X` with a plug-in distributional loss (MMD or SWD) estimated from samples
 of a fast conditional sampler (MLGD-F in the paper).
 
+The method is the `cdm` package; `experiments/` holds one directory per paper
+experiment (synthetic Gaussian mixtures, rotated MNIST, Stable Diffusion), each
+with the exact command, its requirements and the published reference numbers.
 Everything is run from the repository root on the command line; every script
 prints `--help`, auto-detects a GPU and falls back to CPU (`--device` overrides).
 
@@ -16,25 +19,27 @@ git clone https://github.com/orineo1/GlobalConditional.git
 cd GlobalConditional
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt            # CPU is enough for the synthetic examples
+pip install -e .                           # makes `import cdm` work from anywhere
 # GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121
+# Stable Diffusion experiment only: pip install -r experiments/stable_diffusion/requirements.txt
 ```
 
 ## Finding x*: the main script
 
-`scripts/find_xstar.py` is the method. It takes a prior over `X`, a conditional
+`experiments/synthetic/pipeline/find_xstar.py` is the method. It takes a prior over `X`, a conditional
 sampler for `Y|X` and a target `G(Y)`, runs guided reverse diffusion with the
 distributional loss as guidance, as independent restarts or as a resampled particle
 population, and returns the best `x_hat`:
 
 ```bash
-python scripts/find_xstar.py \
+python experiments/synthetic/pipeline/find_xstar.py \
     --prior   runs/mog4d/models/model_unconditional.pt \
     --sampler runs/mog4d/models/model_conditional.pt \
     --target  runs/mog4d/data.pt \
     --n-attempts 10 --out runs/mog4d/xstar.json
 ```
 
-The prior and sampler are checkpoints written by `scripts/train_models.py` (see
+The prior and sampler are checkpoints written by `experiments/synthetic/pipeline/train_models.py` (see
 the next section for producing them); the target is either a `generate_data.py`
 file, which describes `G` as a mixture and also carries `x*` for evaluation, or a
 `.pt`/`.npy` array of target samples. The algorithm is chosen on the command line:
@@ -54,8 +59,7 @@ file, which describes `G` as a mixture and also carries `x*` for evaluation, or 
 
 Every attempt prints its `x_hat`, final loss and, when `x*` is known, the
 distance to it and the exact L2 distance between `P(Y|X=x_hat)` and `G`; the
-JSON holds all of them and the best. Attempts are also appended to
-`results/runs.jsonl`.
+JSON holds all of them and the best.
 
 ## Producing a prior, a sampler and a target: the synthetic pipeline
 
@@ -64,7 +68,7 @@ sampler on `Y|X`, runs the guided optimisation and evaluates the recovered
 `x_hat` against the known optimum (a few minutes on CPU, most of it training):
 
 ```bash
-python scripts/run_experiment.py --random-mog --dim 4 --n-components 3 --condition-on 3 \
+python experiments/synthetic/pipeline/run_experiment.py --random-mog --dim 4 --n-components 3 --condition-on 3 \
     --n-samples 10000 --epochs 2000 --method LGD_CM --n-attempts 5 --work-dir runs/mog4d
 ```
 
@@ -77,17 +81,17 @@ The same run as three separate steps:
 
 ```bash
 # 1. data + target: draws from P(X,Y), and G(Y) = P(Y | X = x*)
-python scripts/generate_data.py --random-mog --dim 4 --n-components 3 --condition-on 3 \
+python experiments/synthetic/pipeline/generate_data.py --random-mog --dim 4 --n-components 3 --condition-on 3 \
     --n-samples 10000 --output runs/mog4d/data.pt
 #    or one of the paper's fixed settings:
-python scripts/generate_data.py --params-file SimulationParameters/mog_2d_full.txt --output runs/mog2d/data.pt
+python experiments/synthetic/pipeline/generate_data.py --params-file experiments/synthetic/configs/mog/mog_2d_full.txt --output runs/mog2d/data.pt
 
 # 2. models: unconditional diffusion on X, conditional sampler on Y|X
-python scripts/train_models.py --data runs/mog4d/data.pt --model both --architecture cm \
+python experiments/synthetic/pipeline/train_models.py --data runs/mog4d/data.pt --model both --architecture cm \
     --epochs 2000 --batch-size 1024 --output-dir runs/mog4d/models
 
 # 3. guided optimisation + evaluation
-python scripts/run_optimization.py --data runs/mog4d/data.pt --model-dir runs/mog4d/models \
+python experiments/synthetic/pipeline/run_optimization.py --data runs/mog4d/data.pt --model-dir runs/mog4d/models \
     --method LGD_CM --n-attempts 25 --optim-samples 250 --output runs/mog4d/results.pt
 ```
 
@@ -95,10 +99,10 @@ python scripts/run_optimization.py --data runs/mog4d/data.pt --model-dir runs/mo
 
 | Figure | Command |
 |---|---|
-| Fig. 1, toy example: joint, induced conditional vs. target, CDMS beta-sweep | `python scripts/fig1_toy_example.py` |
-| Model check: score network vs. exact noised-mixture score, unguided samples vs. P(X), conditional sampler vs. exact P(Y\|X=x) at x*, the cluster centres and over x | `python scripts/check_models.py --setting hard` or `--prior ... --sampler ... --data ...` |
-| Table 1, all scenarios: data, networks, model check, the four search algorithms, and the table (`--settings 5x5 10x1 ...` for a subset; `scripts/slurm_table1.sh` runs one scenario per SLURM array task) | `python scripts/make_table1.py` |
-| App. G subsampling control on the 10D setting | `python scripts/control_subsample.py --sim-dir /path/to/conditional-matching-paper/simulations --n-restarts 25` |
+| Fig. 1, toy example: joint, induced conditional vs. target, CDMS beta-sweep | `python experiments/synthetic/pipeline/fig1_toy_example.py` |
+| Model check: score network vs. exact noised-mixture score, unguided samples vs. P(X), conditional sampler vs. exact P(Y\|X=x) at x*, the cluster centres and over x | `python experiments/synthetic/pipeline/check_models.py --setting hard` or `--prior ... --sampler ... --data ...` |
+| Table 1, all scenarios: data, networks, model check, the four search algorithms, and the table (`--settings 5x5 10x1 ...` for a subset; `experiments/synthetic/slurm/slurm_table1.sh` runs one scenario per SLURM array task) | `python experiments/synthetic/pipeline/make_table1.py` |
+| App. G subsampling control on the 10D setting | `python experiments/synthetic/pipeline/control_subsample.py --sim-dir /path/to/conditional-matching-paper/simulations --n-restarts 25` |
 
 `fig1_toy_example.py` trains its three small networks on first use (cached under
 `checkpoints/toy/<setting>/`), writes the simulation to `results/fig1_<setting>_sim.json`
@@ -115,14 +119,14 @@ against the target, and the beta-sweep against the analytic `Q_beta`
 (`--n-beta-samples`, `--betas`, `--layout lr|tb`). `--quick` is a smoke test,
 `--uncond/--cond/--cm {auto,train,load}` control each network. On a GPU the
 `hard` setting with four methods and ten restarts takes about 8 minutes;
-`scripts/slurm_fig1.sh` is the cluster job.
+`experiments/synthetic/slurm/slurm_fig1.sh` is the cluster job.
 `control_subsample.py` needs the paper repository's 10D checkpoints, downloaded
 from HuggingFace on first use.
 
 `experiments/` holds one directory per paper table and figure — the Gaussian
 simulations, the MNIST rotated-digits task and the Stable Diffusion experiment —
 each with the exact command, its requirements and the published reference
-numbers. Start at `experiments/gaussian_simulations/README.md`.
+numbers. Start at `experiments/synthetic/README.md`.
 
 ## Using the optimizer from Python
 
@@ -140,60 +144,40 @@ subsampling through `cond_output_transform`.
 ## Layout
 
 ```
-guidance/       the guided-diffusion optimizer: core.py (optimize_guided), config.py (GuidanceConfig)
-models/         the frozen networks: diffusion.py (discrete-time DiffusionModel), plus priors/ (P(X)) and
-                samplers/ (P(Y|X): consistency models, exact)
-losses/         MMD/RBF, circular, sliced Wasserstein
-utils/          networks, mixtures and the exact L2 between GMMs, evaluation
-gcio/           run persistence (results/runs.jsonl)
-scripts/        all command-line entry points (find_xstar.py is the method), test runners, cluster templates
-experiments/    one directory per paper experiment: what it produces, the command, the reference numbers
-sdxl/           the Stable Diffusion experiment's own code (pipelines, HED, CLIP); see sdxl/README.md
-tests/          smoke, determinism, population, targeted guards (see tests/README.md)
-SimulationParameters/   the paper's fixed MoG settings
-MnistModels/    a small pretrained MNIST checkpoint
+cdm/                          THE METHOD (Section 2 of the paper), installable: `import cdm`
+  guidance/                   Algorithm 1, the guided reverse-diffusion outer loop:
+                              core.py (optimize_guided, optimize_guided_population), config.py (GuidanceConfig)
+  losses/                     Algorithm 2, the inner estimator: MMD/RBF (functions.py), sliced Wasserstein, circular
+  models/                     the frozen networks: diffusion.py (DiffusionModel), priors/ (P(X)),
+                              samplers/ (P(Y|X): consistency models, exact),
+                              mnist/ and sd/ (the MNIST and Stable Diffusion instantiations)
+  utils/                      Gaussian mixtures, the exact L2 / TV between GMMs, network blocks, evaluation
+experiments/                  THE EXPERIMENTS (Section 3), one directory per paper table or figure
+  synthetic/                  3.1  Gaussian mixtures: pipeline/ (the scripts), configs/mog/, slurm/, one dir per experiment
+  mnist/                      3.2  rotated digits: train/, table_mlgdf/, figures/, checkpoints/
+  stable_diffusion/           3.3  sketch-to-portrait: four_targets/, its own requirements.txt
+tests/                        smoke, determinism, population, targeted guards (see tests/README.md)
 ```
+
+Each experiment directory has the same shape: `README.md` (what it produces, which
+paper table or figure, the command), `run.sh` (a reduced `smoke` configuration and
+the paper's `full` one), `config/`, `results/` (the published numbers) and
+`outputs/` (gitignored, written by a local run).
 
 ## Tests
 
 ```bash
-bash scripts/run_all_tests.sh        # smoke, determinism, population, guards
+bash tests/run_all_tests.sh        # smoke, determinism, population, guards
 ```
 
 The same suite runs on GitHub Actions for every push. It is CPU-only and uses
 tiny untrained models: it shows the code runs and is deterministic, not that it
 reproduces the paper's numbers (see `tests/README.md`).
 
-## Results
-
-`gcio` is a small run store: `save_run(...)` appends one JSON object per run to
-`results/runs.jsonl` (override the path with `GC_RESULTS_STORE`), and
-`load_runs(...)` / `to_dataframe(...)` read it back. It exists so a published
-table can be regenerated from data instead of pasted from console output.
-
-**It is wired into some entry points, not all.** Three entry points call `save_run`:
-`scripts/find_xstar.py` (unless `--no-store`),
-`scripts/control_subsample.py` and
-`experiments/image_generation/mnist/table2_mlgdf/run_mlgdf.py`. The other scripts do not — they write their own
-JSON next to their output (`find_xstar.py --out`, `make_table1.py`
-`<out>.json/.md/.tex`), and that is what the tables are actually built from:
-`make_table1.py` reads the per-run `<METHOD>.json` files under `--runs-dir`, and
-in fact invokes `find_xstar.py` with `--no-store`. Nothing in the repo reads the
-store back.
-
-`results/runs.jsonl` is in `.gitignore`, so a fresh clone starts with an empty
-store, and no published number can be regenerated from it as things stand.
-Wiring the remaining entry points into the store — and making `make_table1.py`
-build from it rather than from loose JSON — is open work.
-`checks/check_gcio_claims.py` pins the caller count so this paragraph and the
-code stay in agreement.
-
-<!-- gcio-callers: scripts/find_xstar.py scripts/control_subsample.py experiments/image_generation/mnist/table2_mlgdf/run_mlgdf.py -->
-
 ## Cluster
 
-`scripts/cluster_setup.txt` explains the environment (modules, venv, CUDA
-torch). `scripts/slurm_fig1.sh` is a ready SLURM job for the Figure 1 runs
-(`sbatch scripts/slurm_fig1.sh hard`, `N_RESTARTS=50` to change the restart
+`experiments/synthetic/slurm/cluster_setup.txt` explains the environment (modules, venv, CUDA
+torch). `experiments/synthetic/slurm/slurm_fig1.sh` is a ready SLURM job for the Figure 1 runs
+(`sbatch experiments/synthetic/slurm/slurm_fig1.sh hard`, `N_RESTARTS=50` to change the restart
 count); it writes the figures and their simulation caches to `results/`, which
 you copy back and redraw locally without recomputing.

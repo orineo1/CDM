@@ -7,7 +7,8 @@ POT>=0.9
 
 scipy>=1.10
 
-# Diffusion schedulers (MNIST: DDIMScheduler)
+# MNIST and Stable Diffusion experiments
+torchvision
 diffusers>=0.27
 transformers>=4.38
 

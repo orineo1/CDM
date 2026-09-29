@@ -1,10 +1,10 @@
 # tests/
 
-Cheapest first. `scripts/run_all_tests.sh` runs all of them.
+Cheapest first. `tests/run_all_tests.sh` runs all of them.
 
 | file | tier | what it establishes |
 |---|---|---|
-| `test_smoke.py` | 0 | the packages import and one tiny run completes |
+| `test_smoke.py` | 0 | `cdm` imports and one tiny run completes |
 | `test_determinism.py` | 2 | the same seed twice gives the same answer |
 | `test_population.py` | — | particle/refinement plumbing, structure only (the file says outright that its values are meaningless) |
 | `test_refactor_guards.py` | 0.5 | narrow guards that inspect an object directly, one per defect they pin |
