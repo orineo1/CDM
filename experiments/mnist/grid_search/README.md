@@ -58,3 +58,18 @@ step rule {original, half, double}. `grids/bimodal.args`: n_cond {1000, 1500} x
 T {100, 125, 150} x n_MC {3, 10} x step rule {original, double} x variance {252, 300}.
 The paper's configurations (uniform 600 / 290 / 3 / original; bimodal 1500 / 125 / 10
 / original / 252) are included. Edit the files to change the grid.
+
+## Re-classifying the finished grid
+
+`reclassify.py` labels the saved images of every finished configuration again, by
+default after clamping them to [-1, 1] (as the figures show them; `--no-clamp` gives
+the paper's raw-image labelling), and writes `outputs/<target>/classification_<tag>.csv`
+with one row per configuration: `top5_n_labelled`, `top5_n_0`, `n_labelled`, `n_none`
+and `digit_0`..`digit_9` over all seeds, plus the configuration and SWDs, sorted best
+first. `classification_<tag>_seeds.csv` has one row per seed. Nothing is re-run.
+
+```bash
+python experiments/mnist/grid_search/reclassify.py --target uniform \
+    --classifier-path experiments/mnist/checkpoints/robust_classifier_code.pth
+```
+
