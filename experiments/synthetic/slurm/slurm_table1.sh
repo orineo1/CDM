@@ -34,9 +34,19 @@ echo "=== task $SLURM_ARRAY_TASK_ID: scenario $S on $(hostname) ==="
 python -c "import torch; print('torch', torch.__version__, '| cuda', torch.cuda.is_available())"
 SETTINGS="$S" bash experiments/synthetic/main_grid/run.sh full --no-collect
 
-# the last task to finish collects (cheap; a re-run of --collect is always safe)
-if [ "$SLURM_ARRAY_TASK_ID" = "$((${#ARR[@]} - 1))" ]; then
+# collect once every scenario has all four method JSONs (the tasks finish in any order;
+# a re-run of --collect is always safe, so the last task to finish builds the table)
+RUNS=experiments/synthetic/main_grid/outputs/runs
+missing=0
+for s in $ALL_SETTINGS; do
+    d="$RUNS/x${s%x*}_y${s#*x}"
+    for m in MLGD MLGD-F PMLGD PMLGD-F; do [ -f "$d/$m.json" ] || missing=$((missing + 1)); done
+done
+if [ "$missing" = 0 ]; then
     echo "=== collect ==="
     SETTINGS="$ALL_SETTINGS" bash experiments/synthetic/main_grid/run.sh full --collect || true
+else
+    echo "=== $missing method JSONs still missing; the last task to finish collects. To collect by hand:"
+    echo "    SETTINGS=\"$ALL_SETTINGS\" bash experiments/synthetic/main_grid/run.sh full --collect"
 fi
 echo "done"

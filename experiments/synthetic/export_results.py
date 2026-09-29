@@ -16,6 +16,7 @@ import argparse
 import datetime
 import glob
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -43,6 +44,12 @@ def run_info():
         except Exception:
             return "unknown"
     gpu = sh([sys.executable, "-c", "import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu')"])
+    if gpu in ("cpu", "unknown"):        # exported from a login node: take the GPU from the newest job log
+        for log in sorted(glob.glob(os.path.join(REPO, "cdm-*.out")), key=os.path.getmtime, reverse=True):
+            m = re.search(r"\| (NVIDIA [^\n|]+)", open(log, errors="ignore").read())
+            if m:
+                gpu = m.group(1).strip() + f" (from {os.path.basename(log)})"
+                break
     torch_v = sh([sys.executable, "-c", "import torch; print(torch.__version__, 'cuda', torch.version.cuda)"])
     return (f"date:        {datetime.datetime.now().isoformat(timespec='seconds')}\n"
             f"git commit:  {sh(['git', '-C', REPO, 'rev-parse', '--short', 'HEAD'])}\n"
