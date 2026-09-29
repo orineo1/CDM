@@ -2,7 +2,7 @@
 
 Both checkpoints live in the HuggingFace repo named in the paper's appendix,
 under the `MNIST/` subfolder. A local path always wins, so a run can be pointed
-at `experiments/mnist/checkpoints/` (which already carries the conditional checkpoint) or at a
+at `experiments/mnist/checkpoints/` (see its README) or at a
 scratch directory without touching the network.
 """
 

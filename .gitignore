@@ -26,3 +26,7 @@ runs/
 experiments/*/*/outputs/*
 !experiments/*/*/outputs/.gitkeep
 !experiments/*/*/outputs/.gitignore
+
+# MNIST checkpoints are downloaded (or, for the classifier, trained) on first use
+experiments/mnist/checkpoints/*.pt
+experiments/mnist/checkpoints/*.pth
