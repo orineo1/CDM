@@ -165,6 +165,9 @@ def parse_args():
                    help="run the simulation again even if <out>_sim.json exists (default: plot from cache)")
     p.add_argument("--rerun-sweep", action="store_true",
                    help="recompute only the beta sweep (and the loss curves) from the cached run; methods are kept")
+    p.add_argument("--smc-npz", default=None,
+                   help="panel (d) from fig_smc_correction.py output (e.g. results/fig_smc_hard.npz): plain guided "
+                        "samples plus the twisted-SMC corrected population and the TV of each")
     p.add_argument("--layout", choices=["lr", "tb"], default="lr",
                    help="lr: left column (joint, conditionals, loss) + right 2x2 beta sweep; tb: top 1x3 + bottom 1x4")
     for name, what in [("uncond", "score network for P(X)"), ("cond", "conditional diffusion sampler for Y|X (MLGD)"),
@@ -557,7 +560,19 @@ def analytic_curves(st, betas):
     return x_grid.numpy(), px.numpy(), Q
 
 
-def make_figure(st, sim, sweep, out_png, layout="lr"):
+def load_smc(path, betas):
+    """Plain and twisted-SMC-corrected guided samples saved by fig_smc_correction.py (<stem>.npz + <stem>.json)."""
+    d = np.load(path)
+    smc = {"plain": {b: d[f"plain_{float(b)}"] for b in betas}, "corr": {b: d[f"corr_{float(b)}"] for b in betas}}
+    js = os.path.splitext(path)[0] + ".json"
+    if os.path.exists(js):
+        with open(js) as f:
+            per = json.load(f)["per_beta"]
+        smc["tv"] = {k: (v["tv_plain_vs_Q"], v["tv_corrected_vs_Q"]) for k, v in per.items()}
+    return smc
+
+
+def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -709,10 +724,19 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
 
     # ---- right: the CDMS beta-sweep, 2 x 2 -------------------------------------
     ymax = 1.1 * max(max(Q[b].max(), px.max()) for b in betas)
+    smc_tv = (smc or {}).get("tv", {})
     for i, beta in enumerate(betas):
         ax = sweep_axes[i]
-        ax.hist(sweep[beta], bins=80, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
+        plain = smc["plain"][beta] if smc else sweep[beta]
+        ax.hist(plain, bins=80, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
                 edgecolor="white", linewidth=0.3, label="guided samples")
+        if smc:   # twisted-SMC corrected population of fig_smc_correction.py, same setting and betas
+            ax.hist(smc["corr"][beta], bins=80, range=(xlo, xhi), density=True, histtype="step",
+                    color="black", linewidth=1.3, label="twisted-SMC corrected", zorder=4)
+            if str(float(beta)) in smc_tv:
+                tp, tc = smc_tv[str(float(beta))]
+                ax.text(0.98, 0.9, rf"TV {tp:.2f}$\to${tc:.2f}", transform=ax.transAxes, ha="right", va="top",
+                        fontsize=fs_leg)
         ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"$\mathcal{Q}_\beta(x)$", zorder=3)
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
         ax.axvline(x_star, color=c_true, ls="--", lw=1.8, zorder=4)
@@ -733,10 +757,15 @@ def make_figure(st, sim, sweep, out_png, layout="lr"):
             ax.set_ylabel("density")
         if sweep_xlabel(i):
             ax.set_xlabel("x")
-        if i == (len(betas) - 1 if layout == "lr" else 0):   # legend: last (stacked) or first (row) panel, where there is room
+        if i == (0 if (smc or layout != "lr") else len(betas) - 1):   # legend where the panel has room
             h, l = ax.get_legend_handles_labels()
-            order = [l.index(k) for k in (r"prior $\mathcal{P}(x)$", r"$\mathcal{Q}_\beta(x)$", "guided samples")]
-            ax.legend([h[j] for j in order], [l[j] for j in order], fontsize=fs_leg - 1, loc="upper right", frameon=False)
+            keys = [r"prior $\mathcal{P}(x)$", r"$\mathcal{Q}_\beta(x)$", "guided samples"]
+            if smc:
+                keys.append("twisted-SMC corrected")
+            order = [l.index(k) for k in keys]
+            ax.legend([h[j] for j in order], [l[j] for j in order], fontsize=fs_leg - 1,
+                      loc="upper right" if not smc else "upper left",
+                      bbox_to_anchor=None if not smc else (0.0, 0.78), frameon=False)
 
     fig.savefig(out_png, dpi=200, bbox_inches="tight")
     print(f"[figure] wrote {out_png}")
@@ -753,7 +782,8 @@ def main():
     else:
         cached = None if args.rerun_sim else load_sim(args)
         sim, sweep = cached if cached is not None else simulate(st, args)
-    make_figure(st, sim, sweep, args.out, layout=args.layout)
+    smc = load_smc(args.smc_npz, sorted(sweep)) if args.smc_npz else None
+    make_figure(st, sim, sweep, args.out, layout=args.layout, smc=smc)
 
 
 if __name__ == "__main__":

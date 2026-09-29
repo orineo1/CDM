@@ -10,6 +10,7 @@ Paper text. There is no counterpart in `conditional-matching-paper`, whose `simu
 |---|---|---|---|---|
 | `PUBLISHED.md` | — | — | — | transcribed from `paper.txt` |
 | `fig_smc_hard.json` | `orineo1/GlobalConditional` | `master` | `9ddf570` | `results/fig_smc_hard.json` |
+| `fig_smc_hard.npz` | `orineo1/GlobalConditional` | `master` | `1a5edcd` | `results/fig_smc_hard.npz` (plain and corrected populations; read by `pipeline/fig1_toy_example.py --smc-npz`) |
 | `fig_smc_hard_cpu.json` | `orineo1/GlobalConditional` | `master` | `9ddf570` | `results/fig_smc_hard_cpu.json` |
 | `ms0.25_ess1.0.json` | `orineo1/GlobalConditional` | `master` | `9ddf570` | `results/smc_sweep/ms0.25_ess1.0.json` |
 | `ms0.5_ess0.5.json` | `orineo1/GlobalConditional` | `master` | `9ddf570` | `results/smc_sweep/ms0.5_ess0.5.json` |
