@@ -6,7 +6,7 @@ with the Average-prompt and SDEdit-Best baselines.
 
 | | |
 |---|---|
-| Entry points | `python -m cdm.models.sd.run_mlgd_f`, `python -m cdm.models.sd.eval_baselines` |
+| Entry points | `python -m cdm.models.sd.run_mlgd_f` (the optimisation), `python -m cdm.models.sd.eval_all_experiments` (the N = 2,000 evaluation), `python -m cdm.models.sd.eval_baselines` (the baseline scribbles) |
 | Config | `config/<scenario>.env` — T=250, t_start=125, ζ=10.0, uniform selection at n_sel/n_cond = 0.5, ControlNet scale 0.5; `config/models.env` — the pinned model revisions |
 | Full configuration | the paper's settings; GPU: L40S 48 GB for the optimisation, A100 80 GB for the 2,000-image evaluation |
 | Reduced configuration (`smoke`) | 6 guided steps (12-step schedule from step 6), 6 variations; GPU required, loads the same pipelines |
@@ -20,7 +20,8 @@ bash run.sh smoke  balanced                # GPU; reduced configuration, for a q
 bash run.sh full   balanced                # GPU; the full, published configuration
 bash run.sh full   all                     # the four scenarios one after another
 bash run.sh full   skewed --base_zeta 5 --seed 2   # override any default from the CLI
-bash run.sh baselines balanced             # GPU; Avg-prompt / SDEdit / SDEdit-Best for the finished full run
+bash run.sh baselines balanced             # GPU; Avg-prompt + SDEdit-Best for the finished full run, then `eval` on it
+bash run.sh eval   balanced                # GPU, ~1 h: the paper's N = 2,000 evaluation of the run's scribbles
 bash run.sh help                           # every flag run_mlgd_f accepts
 bash run.sh help-baselines                 # every flag eval_baselines accepts
 ```
@@ -55,14 +56,15 @@ and warns if there is no W&B login. On nodes without internet use `WANDB_MODE=of
 then `wandb sync experiments/stable_diffusion/four_targets/outputs/wandb/offline-run-*` from
 a login node.
 
-## The baselines (Avg prompt, SDEdit, SDEdit-Best)
+## The baselines: `run.sh baselines` (Avg prompt, SDEdit-Best), then `eval`
 
 Table 3 compares MLGD-F with two baselines built from the same source scribble. They are
 a second job, run **after** a `full` run has finished, because SDEdit-Best gets that run's
-optimisation time as its search budget:
+optimisation time as its search budget; the same job then runs the N = 2,000 evaluation
+(next section) on the run, so one submission gives the whole Table 3 row:
 
 ```
-sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=08:00:00 --output=logs/bl-%j.out \
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=10:00:00 --output=logs/bl-%j.out \
        --wrap "bash experiments/stable_diffusion/four_targets/run.sh baselines balanced"
 sbatch ... --array=0-3 --output=logs/bl-%A_%a.out --wrap "bash experiments/stable_diffusion/four_targets/run.sh baselines all"
 ```
@@ -70,35 +72,33 @@ sbatch ... --array=0-3 --output=logs/bl-%A_%a.out --wrap "bash experiments/stabl
 `run.sh baselines <scenario>` takes `outputs/full_<Scenario>/` (`RUN_DIR=/path` for a run
 kept elsewhere, e.g. a copied `full_BalancedTarget` folder: it needs the run's
 `scribble.png`, `final_scribble_mlgd_f.png` and `metrics.json`) and runs
-`cdm.models.sd.eval_baselines` with the same pinned model revisions:
+`cdm.models.sd.eval_baselines` with the same pinned model revisions and deterministic
+kernels as the run:
 
-- **Avg prompt** — one Sprinter portrait per target prompt, HED scribble of each,
-  averaged with the target weights;
-- **SDEdit** — the source scribble noised to `t_start` and denoised by SDXL Base under a
-  text prompt describing the target (cfg 7.5);
-- **SDEdit-Best** — unguided SDEdit candidates (new noise seed each), as many as fit in
-  the MLGD-F run's `optimization_time_sec`, each scored by the MMD of 250 neutral-prompt
-  portraits against the search target; the lowest wins.
+- **Avg prompt** — the target prompts are encoded once each by the Sprinter's text
+  encoders, `prompt_embeds` and `pooled_prompt_embeds` are averaged with the target
+  fractions, one portrait is generated from that averaged embedding (ControlNet on the
+  source scribble) and its HED scribble is the baseline. Interpolation in prompt space,
+  not a blend of images or latents.
+- **SDEdit-Best** — unguided SDEdit candidates from the source scribble (noised to
+  `t_start`, denoised by SDXL Base, a new noise seed each), as many as fit in the MLGD-F
+  run's `optimization_time_sec`, each scored by the MMD of 250 neutral-prompt portraits
+  against a 250-image search target; the lowest wins.
 
-At the end every scribble — source, avg, sdedit, sdedit_best and the run's MLGD-F
-scribble — is scored the same way, so the run prints one table (`baselines_table.md`).
-These are search-target numbers at n = 250, the same estimator as the run's final
-`final_mlgd_f_mmd`; the paper's Table 3 numbers are the N = 2,000 protocol of the
-evaluation notebook (see *Not covered here* in `../README.md`).
+Output goes to `outputs/full_<Scenario>/baselines/`: `scribble_avg_prompt.png`,
+`scribble_sdedit_best.png`, `scribbles_all.png` (source, the two baselines and the MLGD-F
+scribble side by side), `sdedit_search.png` (the candidate MMDs), `target_*.png`,
+`baselines_meta.json` (the budget, every candidate's MMD, the best seed, the MLGD-F run it
+belongs to, model revisions, W&B link) and `run_info.txt`. W&B project `sdxl-baselines`
+(`WANDB_PROJECT` overrides), run `baselines_<scenario>`.
 
-Output goes to `outputs/full_<Scenario>/baselines/`: `scribble_<method>.png`,
-`scribbles_all.png`, `sdedit_search.png` (the candidate MMDs), `target_*.png`,
-`baselines_table.md`, `baselines_meta.json` (all candidate MMDs, the best seed, every
-scribble's MMD, the MLGD-F run it belongs to, model revisions, W&B link) and
-`run_info.txt`. W&B project `sdxl-baselines` (`WANDB_PROJECT` overrides), run
-`baselines_<scenario>`. `export_results.py` copies it to `results/<Scenario>/baselines/`
-and writes `results/baselines_runs.md`.
-
-Options after the scenario go to `eval_baselines`: `--max_candidates 3` for a quick smoke
-run (an hour or so: the search is capped, the models still load), `--lgd_cm_minutes 60`
-to set the budget by hand, `--seed 7`, `--no_deterministic`. The SDEdit search is
-sequential, one candidate at a time, so its wall time is about the MLGD-F run's
-optimisation time plus model loading, target building and the final scoring.
+Then, unless `EVAL=0`, `run.sh eval <scenario>` runs on the same run directory and picks
+the two scribbles up from `baselines/` (see the next section; `EVAL_ARGS="--n_eval 200"`
+passes flags to it). Options after the scenario go to `eval_baselines`:
+`--max_candidates 3` for a quick smoke run (the models still load and the target is still
+built), `--lgd_cm_minutes 60` to set the budget by hand, `--seed 7`, `--no_deterministic`.
+The SDEdit search is sequential, one candidate at a time, so the job takes about the
+MLGD-F run's optimisation time plus model loading, plus about an hour for the evaluation.
 
 Nothing is written to `$HOME`: `run.sh` puts the model weights (~tens of GB) and the
 matplotlib, torch and wandb caches in `<repo>/.cache/` (gitignored; `CACHE_DIR=/path` moves
@@ -123,6 +123,39 @@ downloads. The SD dependencies are in `experiments/stable_diffusion/requirements
   `losses.functions.compute_mmd`, reproduces the upstream formula to 1e-6, and gradients
   flow through the generated samples while the target stays detached.
 
+## Final evaluation: `run.sh eval` (Table 3 / Table 15)
+
+The optimisation's own numbers (the per-step MMD, the final MMD on 250 images against the
+100-image target pool) are the optimisation's signal, not the paper's measurement. The
+tables use the protocol of `cdm/models/sd/eval_all_experiments.py`, a port of the paper's
+`eval_all_experiments.ipynb`:
+
+1. a **2,000-image target** generated from the **source** scribble with the scenario's
+   prompts and fractions (age: 40 ages × 50, seed 42), CLIP-encoded;
+2. for every scribble found in `outputs/full_<Scenario>/`: **2,000 portraits** under the
+   neutral prompt, then **MMD** and **SWD** against the target and, in the gender scenarios,
+   **p(male)** by CLIP zero-shot with a binomial 95% CI; Δ% is the improvement over the
+   source scribble.
+
+Right after a run the scribbles are `source` and `mlgd_f` (and `unguided` with
+`--run_unguided`); `avg_prompt` and `sdedit_best` are picked up from `baselines/` once
+`run.sh baselines` has produced them (which then runs this evaluation itself), and any
+other scribble (`avg`, `avg_latent`, `sdedit`, ...) is passed with `--scribbles name=path`. The paper's own six scribbles (`SD_cond_SD_controlnet/experiments/
+<Scenario>/` in the paper repository) can be evaluated with `--run_dir <that directory>`.
+
+```
+bash run.sh eval balanced                                           # outputs/full_BalancedTarget -> outputs/eval_BalancedTarget
+bash run.sh eval balanced --n_eval 200 --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget --output_dir experiments/stable_diffusion/four_targets/outputs/eval_smoke   # quick check
+bash run.sh eval all                                                # the four scenarios
+```
+
+It writes `eval_results.json`, `eval_table.md` (the Table 3 / 15 rows), `embeddings.npz`
+(target and per-method CLIP embeddings, to recompute the metrics without a GPU),
+`preview_<method>.png` and `target_preview_<group>.png` (5 images each), the MMD / SWD bars
+and the p(male) CI plot, `run_info.txt` and `pip_freeze.txt`. **The 2,000 photos per method
+are not saved.** Logged to W&B (`sdxl-eval`): the table, previews, plots and every number.
+Deterministic and pinned like the run (`--seed 42` is the notebook's).
+
 ## Saved results
 
 A run writes to `outputs/<tier>_<Scenario>/` (not in git):
@@ -136,7 +169,7 @@ A run writes to `outputs/<tier>_<Scenario>/` (not in git):
 | `final_photos_mlgd_f.png`, `photos_mlgd_f/` | portraits generated from the final scribble (250) |
 | `target_clip_pca.png`, `target_samples_*.png`, `targets_*/` | the target distribution |
 | `npy/` | the images as arrays |
-| `baselines/` | written by `run.sh baselines`: the baseline scribbles, the SDEdit search curve, `baselines_table.md`, `baselines_meta.json` |
+| `baselines/` | written by `run.sh baselines`: `scribble_avg_prompt.png`, `scribble_sdedit_best.png`, `scribbles_all.png`, `sdedit_search.png`, `baselines_meta.json`, `run_info.txt` |
 
 Then, as for MNIST, copy the finished runs into the committed `results/`:
 
@@ -145,14 +178,16 @@ python experiments/stable_diffusion/export_results.py                  # outputs
 python experiments/stable_diffusion/export_results.py --tier smoke --dest /tmp/x   # try it on smoke runs
 ```
 
-This writes `results/mlgdf_runs.md` (one row per scenario: final MMD next to the paper's,
+This also copies `outputs/eval_<Scenario>/` into `results/<Scenario>/eval/` (JSON, table,
+previews, plots, run info) and writes `results/eval_table.md` with every scenario's
+evaluation. It writes `results/mlgdf_runs.md` (one row per scenario: final MMD next to the paper's,
 unguided MMD, steps, settings, time, commit, W&B link) and `results/<Scenario>/` with
 `metrics.json`, `steps.csv`, `run_info.txt`, `curves.png` (the per-step curves),
 the scribbles (`scribble_source.png` is `scribble.png` under the name `eval_baselines`
 uses), the source portrait, the final photos and the target plots. When
 `run.sh baselines` has run too, it also copies `outputs/full_<Scenario>/baselines/` to
 `results/<Scenario>/baselines/` and writes `results/baselines_runs.md` (one row per
-scenario: source / Avg prompt / SDEdit / SDEdit-Best / MLGD-F MMD, candidates, budget).
+scenario: the SDEdit-Best search, its budget and candidates, the best seed and search MMD).
 The large arrays stay in `outputs/`.
 
 ## Reproducibility

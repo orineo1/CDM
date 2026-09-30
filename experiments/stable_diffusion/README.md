@@ -8,7 +8,8 @@ gitignored).
 
 | directory | paper artifact | entry point |
 |---|---|---|
-| `four_targets` | Table 3, Table 15 | `cdm.models.sd.run_mlgd_f`, `cdm.models.sd.eval_baselines` |
+| `four_targets` | Table 3, Table 15 | `cdm.models.sd.run_mlgd_f` (optimisation), `cdm.models.sd.eval_all_experiments` (the N = 2,000 evaluation), `cdm.models.sd.eval_baselines` (the Avg-prompt and SDEdit-Best baselines) |
+| `interpolation` | the gender / age interpolation figures: portraits sorted along the target axis, PCA scatter | `interpolation.ipynb` over `cdm.models.sd.interpolation` |
 | `jacobian_error` | theory appendix, Jacobian-fidelity figure and table | `eps_g_experiment.ipynb` (self-contained) |
 
 **The code lives in the `cdm.models.sd` package**, taken from
@@ -77,25 +78,37 @@ them, e.g. `run.sh full skewed --base_zeta 5 --seed 2`. `DRY_RUN=1 bash .../run.
 prints the command without running it. Watch a job with `squeue -u $USER` and
 `tail -f logs/sd-<jobid>.out`; the W&B link is printed near the top of the log.
 
-**5. The baselines.** Once a full run has finished, the Avg-prompt / SDEdit / SDEdit-Best
-baselines of Table 3 are a second job on the same scenario (SDEdit-Best's search budget is
-the finished run's optimisation time, read from its `metrics.json`):
+**5. The baselines, then the paper's evaluation (Table 3 / 15).** Once a full run has
+finished, one more job on the same scenario builds the two Table 3 baselines from that
+run and evaluates everything the way the paper does:
 
 ```bash
-sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=08:00:00 \
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=10:00:00 \
        --output=logs/bl-%j.out \
        --wrap "bash experiments/stable_diffusion/four_targets/run.sh baselines balanced"
 ```
 
 It reads `four_targets/outputs/full_BalancedTarget/` (`RUN_DIR=/path` for a run kept
-elsewhere), writes `.../full_BalancedTarget/baselines/` and ends with a table of every
-scribble's MMD against the search target, MLGD-F included. `four_targets/README.md`,
-*The baselines*, has the details and the smoke option (`--max_candidates 3`).
-
-**6. Keep the results.** When the full runs (and the baselines) are done:
+elsewhere), writes the **Avg-prompt** scribble (one portrait from the frac-weighted average
+of the target prompts' CLIP text embeddings, HED) and the **SDEdit-Best** scribble (the
+best of as many unguided SDEdit candidates as fit in the run's own optimisation time,
+read from its `metrics.json`) to `.../full_BalancedTarget/baselines/`, and then runs
+`run.sh eval` on the run: the N = 2,000 evaluation of source, avg_prompt, sdedit_best and
+MLGD-F together, to `outputs/eval_BalancedTarget/`. `EVAL=0` stops after the baselines;
+`run.sh eval balanced` alone re-runs the evaluation (about an hour):
 
 ```bash
-python experiments/stable_diffusion/export_results.py                # outputs/full_* -> four_targets/results/
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=03:00:00 \
+       --output=logs/sd-eval-%j.out \
+       --wrap "bash experiments/stable_diffusion/four_targets/run.sh eval balanced"
+```
+
+`four_targets/README.md` has the details and the smoke option (`--max_candidates 3`).
+
+**6. Keep the results.** When the runs, baselines and evaluations are done:
+
+```bash
+python experiments/stable_diffusion/export_results.py                # outputs/full_*, eval_*, interpolation -> results/
 ```
 
 ## Requirements
@@ -133,7 +146,10 @@ code for them is in notebooks under `SD_cond_SD_controlnet/notebooks/` at the sa
 | Fig. 10, saliency + correlation | `gender_saliency_eval.ipynb` |
 | Table 17 step timing; memory ablation | `measure_dps_step_memory.ipynb` |
 | Table 18, Fig. 20 Jacobian fidelity | `eps_g_experiment.ipynb` |
-| the 2,000-image evaluation protocol | `eval_all_experiments.ipynb` |
+
+Ported: the 2,000-image evaluation (`eval_all_experiments.ipynb` ->
+`cdm/models/sd/eval_all_experiments.py`, `four_targets/run.sh eval`) and the interpolation
+notebooks (`eval_scribbl_interpolation*.ipynb` -> `interpolation/`, without their MMD).
 
 `cdm/models/sd/analysis.py` and `cdm/models/sd/visualization.py` carry the scribble-diff heatmap and the
 step plots, but the saliency computation itself is not among them.

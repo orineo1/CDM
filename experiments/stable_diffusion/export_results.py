@@ -19,12 +19,20 @@ commit, so the results can be read without re-running:
         (with --run_unguided also final_scribble_regular.png, scribble_heatmap.png,
          final_photos_regular.png)
         baselines/                              when run.sh baselines <scenario> has run:
-                                                baselines_meta.json, baselines_table.md,
-                                                run_info.txt, scribble_<method>.png,
-                                                scribbles_all.png, sdedit_search.png
-    four_targets/results/baselines_runs.md      one row per scenario: search-target MMD of
-                                                source / Avg prompt / SDEdit / SDEdit-Best /
-                                                MLGD-F scribbles, SDEdit candidates, budget
+                                                scribble_avg_prompt.png, scribble_sdedit_best.png,
+                                                scribbles_all.png, sdedit_search.png,
+                                                baselines_meta.json, run_info.txt
+    four_targets/results/baselines_runs.md      one row per scenario: the SDEdit-Best search
+                                                (budget, candidates, best seed, search MMD)
+
+    four_targets/results/eval_table.md          Table 3 / 15 of this code: every scenario's
+                                                N = 2,000 evaluation (from outputs/eval_*)
+    four_targets/results/<Scenario>/eval/
+        eval_results.json, eval_table.md, run_info.txt, the 5-image previews of every
+        method and target group, the MMD / SWD bars and the p(male) CI plot
+    interpolation/results/<Scenario>/
+        sorted_grid.png, pca_scatter.png, ranked_all.png, picks.json (from the notebook's
+        outputs/<Scenario>)
 
 Everything here is also in the run's wandb log. The per-step visualisations are logged
 to wandb only and not saved to disk; the large arrays (npy/, the 250 evaluation
@@ -47,6 +55,9 @@ import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 EXP = os.path.join(HERE, "four_targets")
+INTERP = os.path.join(HERE, "interpolation")
+EVAL_FILES = ["eval_results.json", "eval_table.md", "run_info.txt", "mmd_bar.png", "swd_bar.png", "p_male_ci.png"]
+INTERP_FILES = ["sorted_grid.png", "pca_scatter.png", "ranked_all.png", "picks.json"]
 ORDER = ["BalancedTarget", "SkewedTarget", "GenderInterpolation", "AgeInterpolation"]
 # MLGD-F MMD from paper Table 3 (N = 2,000 evaluation images; see results/table3_sd_results.md)
 PAPER_MMD = {"BalancedTarget": 0.386, "SkewedTarget": 0.373,
@@ -54,9 +65,9 @@ PAPER_MMD = {"BalancedTarget": 0.386, "SkewedTarget": 0.373,
 SINGLE_FILES = ["run_info.txt", "source_portrait.png", "final_scribble_mlgd_f.png",
                 "final_photos_mlgd_f.png", "target_clip_pca.png",
                 "final_scribble_regular.png", "scribble_heatmap.png", "final_photos_regular.png"]
-BASELINE_FILES = ["baselines_meta.json", "baselines_table.md", "run_info.txt",
-                  "scribbles_all.png", "sdedit_search.png"]
-BASELINE_METHODS = ["source", "avg", "sdedit", "sdedit_best", "lgd_cm"]
+BASELINE_FILES = ["baselines_meta.json", "run_info.txt", "scribbles_all.png", "sdedit_search.png",
+                  "avg_prompt_portrait.png"]
+BASELINE_METHODS = ["avg_prompt", "sdedit_best"]
 MAX_GALLERIES = 8   # the age target has one gallery per age; beyond this only the ends are kept
 CURVES = [("mmd_loss", "MMD (per-step estimate)"), ("gradient_norm", "gradient norm"),
           ("zeta_i", "zeta"), ("correction_norm", "correction norm")]
@@ -142,6 +153,47 @@ def fmt(x, nd=3):
     return "--" if x is None else f"{x:.{nd}f}"
 
 
+def export_evals(run_dir, dest):
+    """outputs/eval_<Scenario>/ -> results/<Scenario>/eval/ (no photos, only previews);
+    returns the per-scenario tables for the combined results/eval_table.md."""
+    tables = []
+    for d in sorted(glob.glob(os.path.join(run_dir, "eval_*"))):
+        if not os.path.exists(os.path.join(d, "eval_results.json")):
+            print(f"skip {d}: no eval_results.json (evaluation not finished?)")
+            continue
+        name = os.path.basename(d)[len("eval_"):]
+        out = os.path.join(dest, name, "eval")
+        os.makedirs(out, exist_ok=True)
+        for f in EVAL_FILES + [os.path.basename(p) for p in glob.glob(os.path.join(d, "*preview_*.png"))]:
+            if os.path.exists(os.path.join(d, f)):
+                shutil.copy2(os.path.join(d, f), out)
+        with open(os.path.join(d, "eval_table.md")) as fh:
+            tables.append((name, fh.read().strip()))
+        print(f"exported {d} -> {out}")
+    if tables:
+        with open(os.path.join(dest, "eval_table.md"), "w") as fh:
+            fh.write("# Final evaluation (N = 2,000), every scenario\n\n"
+                     "Written by `experiments/stable_diffusion/export_results.py` from `outputs/eval_*`; the\n"
+                     "protocol of the paper's Table 3 / Table 15 (`cdm/models/sd/eval_all_experiments.py`).\n"
+                     "Delta% is the improvement over the source scribble.\n\n")
+            fh.write("\n\n".join(t.replace("# ", "## ", 1) for _, t in tables) + "\n")
+        print(f"wrote {os.path.join(dest, 'eval_table.md')}")
+    return tables
+
+
+def export_interpolation(run_dir, dest):
+    """interpolation/outputs/<Scenario>/ -> interpolation/results/<Scenario>/."""
+    for d in sorted(glob.glob(os.path.join(run_dir, "*"))):
+        if not os.path.exists(os.path.join(d, "picks.json")):
+            continue
+        out = os.path.join(dest, os.path.basename(d))
+        os.makedirs(out, exist_ok=True)
+        for f in INTERP_FILES:
+            if os.path.exists(os.path.join(d, f)):
+                shutil.copy2(os.path.join(d, f), out)
+        print(f"exported {d} -> {out}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--tier", default="full", help="export outputs/<tier>_* (default full)")
@@ -149,7 +201,13 @@ def main():
                    help="where run.sh wrote the runs (default four_targets/outputs)")
     p.add_argument("--dest", default=os.path.join(EXP, "results"),
                    help="where to write (default four_targets/results, which is committed)")
+    p.add_argument("--interp-dir", default=os.path.join(INTERP, "outputs"),
+                   help="the interpolation notebook's outputs (default interpolation/outputs)")
+    p.add_argument("--interp-dest", default=os.path.join(INTERP, "results"))
     args = p.parse_args()
+
+    export_evals(args.run_dir, args.dest)
+    export_interpolation(args.interp_dir, args.interp_dest)
 
     runs = {}
     for d in sorted(glob.glob(os.path.join(args.run_dir, f"{args.tier}_*"))):
@@ -158,8 +216,9 @@ def main():
         elif os.path.isdir(d):
             print(f"skip {d}: no metrics.json (run not finished?)")
     if not runs:
-        raise SystemExit(f"no finished runs ({args.tier}_*/metrics.json) in {args.run_dir}; "
-                         f"run four_targets/run.sh {args.tier} <scenario> first")
+        print(f"no finished runs ({args.tier}_*/metrics.json) in {args.run_dir}; "
+              f"run four_targets/run.sh {args.tier} <scenario> first")
+        return
     names = [n for n in ORDER if n in runs] + sorted(set(runs) - set(ORDER))
 
     rows, brows = [], []
@@ -168,14 +227,15 @@ def main():
         metrics, steps = export_run(runs[name], dest)
         bmeta = export_baselines(runs[name], dest)
         if bmeta:
-            mmd = bmeta.get("scribble_mmd") or {}
             bwb = bmeta.get("wandb") or {}
             brows.append({
                 "scenario": name,
-                **{m: mmd.get(m) for m in BASELINE_METHODS},
                 "n": bmeta.get("n_eval_search"),
                 "cands": bmeta.get("n_candidates"),
                 "min": bmeta.get("lgd_cm_minutes") or 0,
+                "sec": bmeta.get("sec_per_candidate"),
+                "best_seed": bmeta.get("best_candidate_seed"),
+                "best_mmd": bmeta.get("best_candidate_mmd"),
                 "seed": bmeta.get("seed"),
                 "wandb": f"[{bwb.get('name')}]({bwb['url']})" if bwb.get("url") else (bwb.get("name") or "--"),
             })
@@ -228,19 +288,19 @@ def main():
             f"# Baselines ({args.tier}), exported from `outputs/{args.tier}_*/baselines`",
             "",
             "Written by `experiments/stable_diffusion/export_results.py` from",
-            "`run.sh baselines <scenario>` (`cdm.models.sd.eval_baselines`). Every scribble is",
-            "scored the same way: n neutral-prompt portraits from the Sprinter, CLIP, (MMD²)^(1/2)",
-            "against the search target built from the source scribble. SDEdit-Best is the best",
-            "of the unguided SDEdit candidates that fit in the MLGD-F run's optimisation time.",
-            "The paper's Table 3 uses N = 2,000 (see results/table3_sd_results.md).",
+            "`run.sh baselines <scenario>` (`cdm.models.sd.eval_baselines`): the Avg-prompt scribble",
+            "(prompt-embedding interpolation) and the SDEdit-Best search, whose candidates are",
+            "unguided SDEdit draws from the source scribble, as many as fit in the MLGD-F run's",
+            "optimisation time, scored by the MMD of n neutral-prompt portraits against a search",
+            "target of the same size. The Table 3 numbers of every scribble are the N = 2,000",
+            "evaluation in results/eval_table.md.",
             "",
-            "| Scenario | source | Avg prompt | SDEdit | SDEdit-Best | MLGD-F | n | SDEdit candidates | budget (min) | seed | wandb |",
-            "|---|---|---|---|---|---|---|---|---|---|---|",
+            "| Scenario | budget (min) | s / candidate | SDEdit candidates | best seed | best search MMD (n) | seed | wandb |",
+            "|---|---|---|---|---|---|---|---|",
         ]
         for r in brows:
-            blines.append(f"| {r['scenario']} | {fmt(r['source'])} | {fmt(r['avg'])} | {fmt(r['sdedit'])} | "
-                          f"{fmt(r['sdedit_best'])} | {fmt(r['lgd_cm'])} | {r['n']} | {r['cands']} | "
-                          f"{r['min']:.1f} | {r['seed']} | {r['wandb']} |")
+            blines.append(f"| {r['scenario']} | {r['min']:.1f} | {fmt(r['sec'], 1)} | {r['cands']} | "
+                          f"{r['best_seed']} | {fmt(r['best_mmd'])} ({r['n']}) | {r['seed']} | {r['wandb']} |")
         bsummary = os.path.join(args.dest, "baselines_runs.md")
         with open(bsummary, "w") as fh:
             fh.write("\n".join(blines) + "\n")

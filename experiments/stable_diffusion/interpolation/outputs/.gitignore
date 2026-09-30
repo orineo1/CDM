@@ -1,0 +1,3 @@
+# Local run products only. Never a published result.
+*
+!.gitignore

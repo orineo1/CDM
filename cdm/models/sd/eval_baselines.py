@@ -2,25 +2,34 @@
 # Entry point. Run as:  python -m cdm.models.sd.eval_baselines --help
 
 """
-eval_baselines.py — Build the baseline scribbles (Avg prompt, SDEdit, SDEdit-Best) for a
-finished MLGD-F run and score every scribble against the same target.
-Runs on the SLURM cluster (no N=2000 eval — that protocol is the Colab notebook).
+eval_baselines.py — The two Table 3 baselines for a finished MLGD-F run: Avg prompt and
+SDEdit-Best. Runs on the SLURM cluster; the N = 2,000 evaluation of every scribble is
+eval_all_experiments.py, which four_targets/run.sh baselines runs right after this.
 
 Input: the directory a `run_mlgd_f` run wrote (four_targets/outputs/full_<Scenario>/):
     scribble.png                 the source HED scribble the MLGD-F run started from
-    final_scribble_mlgd_f.png    the final MLGD-F scribble
+    final_scribble_mlgd_f.png    the final MLGD-F scribble (shown next to the baselines)
     metrics.json                 optimization_time_sec -> the SDEdit-Best time budget
 (or, upstream's layout, `--repo_path/experiments/<Experiment>/scribble_source.png` and
 `scribble_mlgdd.png` with an explicit `--lgd_cm_minutes`).
 
-Output, in --out_dir (default <run_dir>/baselines/): scribble_<method>.png for
-source / avg / sdedit / sdedit_best / lgd_cm, scribbles_all.png, sdedit_search.png,
-target previews, and baselines_meta.json with the search curve and, for every
-scribble, the MMD of n_eval_search neutral-prompt portraits against the search target
-(same estimator and n as the MLGD-F run's final MMD; N = 2,000 is the paper protocol).
+Avg prompt:   each target prompt is encoded once by the Sprinter's text encoders, the
+              (prompt_embeds, pooled_prompt_embeds) are averaged with the target fractions,
+              ONE portrait is generated from that averaged embedding (ControlNet on the
+              source scribble) and its HED scribble is the baseline. Interpolation in
+              prompt space, not a blend of images or latents.
+SDEdit-Best:  unguided SDEdit candidates from the source scribble (a new noise seed each),
+              as many as fit in the MLGD-F run's optimisation time, each scored by the MMD
+              of n_eval_search neutral-prompt portraits against a search target built from
+              the source scribble; the lowest wins.
+
+Output, in --out_dir (default <run_dir>/baselines/): scribble_avg_prompt.png,
+scribble_sdedit_best.png, scribbles_all.png (source, the two baselines, MLGD-F),
+sdedit_search.png, target previews, baselines_meta.json (budget, every candidate's MMD,
+the best seed, the run this belongs to, model revisions, W&B link).
 
 Usage (four_targets/run.sh baselines <scenario> wraps this with the pinned revisions):
-    python -m cdm.models.sd.eval_baselines --experiment BalancedTarget \
+    python -m cdm.models.sd.eval_baselines --experiment BalancedTarget \\
         --run_dir experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget
 """
 
@@ -40,6 +49,7 @@ from tqdm import tqdm
 
 # ── EXPERIMENT CONFIGS ────────────────────────────────────────────────────────
 
+# sdedit_cfg / sdedit_prompt: upstream's prompted-SDEdit baseline, not built here (kept for the record)
 EXPERIMENT_CONFIGS = {
 
     'SkewedTarget': dict(
@@ -243,14 +253,11 @@ def build_target_embeddings(cfg, source_scribble, sprinter, clip_model, clip_pro
     return target_clip, group_imgs
 
 
-# ── AVG SCRIBBLE ──────────────────────────────────────────────────────────────
+# ── AVG PROMPT SCRIBBLE ───────────────────────────────────────────────────────
 
-def build_avg_scribble(cfg, source_scribble, sprinter, hed, device):
-    SEED     = cfg['seed']
-    cn_scale = cfg['controlnet_scale']
-    mode     = cfg['mode']
-
-    if mode == 'age':
+def target_prompts_and_fracs(cfg):
+    """The target's prompts and their weights, for either mode."""
+    if cfg['mode'] == 'age':
         ages = list(range(cfg['age_min'], cfg['age_max'], cfg['age_step']))
         prompts = [
             f'a superrealistic portrait photograph of a {age}-year-old man, studio lighting, sharp focus, photographic'
@@ -259,33 +266,58 @@ def build_avg_scribble(cfg, source_scribble, sprinter, hed, device):
     else:
         prompts = [g['prompt'] for g in cfg['groups']]
         fracs   = [g['frac']   for g in cfg['groups']]
+    return prompts, fracs
 
-    sprinter.vae.to(dtype=torch.float16)
-    hed_scribbles = []
-    for i, (prompt, frac) in enumerate(zip(prompts, fracs)):
-        gen = torch.Generator(device=sprinter.device).manual_seed(SEED + i)
+
+def build_avg_scribble_prompt_interp(cfg, source_scribble, sprinter, hed, device):
+    """
+    Interpolates in CLIP TEXT-PROMPT EMBEDDING space: encode each group's prompt
+    once, take the frac-weighted average of (prompt_embeds, pooled_prompt_embeds),
+    and generate a SINGLE image from that one averaged embedding -- unlike a
+    pixel- or latent-space average, which generates one image PER group and
+    blends those post-hoc.
+    """
+    SEED     = cfg['seed']
+    cn_scale = cfg['controlnet_scale']
+    prompts, fracs = target_prompts_and_fracs(cfg)
+
+    avg_embeds, avg_pooled = None, None
+    for prompt, frac in zip(prompts, fracs):
         with torch.no_grad():
-            portrait = sprinter(
-                prompt=[prompt], image=[source_scribble],
-                num_inference_steps=2, guidance_scale=0.0,
-                controlnet_conditioning_scale=cn_scale,
-                output_type='pil', generator=gen,
-            ).images[0]
-        hed_scribbles.append(np.array(hed(portrait, scribble=True)).astype(np.float32))
+            prompt_embeds, _, pooled_embeds, _ = sprinter.encode_prompt(
+                prompt=prompt, device=device,
+                num_images_per_prompt=1, do_classifier_free_guidance=False,
+            )
+        avg_embeds = frac * prompt_embeds if avg_embeds is None else avg_embeds + frac * prompt_embeds
+        avg_pooled = frac * pooled_embeds if avg_pooled is None else avg_pooled + frac * pooled_embeds
+
+    gen = torch.Generator(device=sprinter.device).manual_seed(SEED)
+    sprinter.vae.to(dtype=torch.float16)
+    with torch.no_grad():
+        portrait = sprinter(
+            prompt_embeds=avg_embeds, pooled_prompt_embeds=avg_pooled,
+            image=[source_scribble],
+            num_inference_steps=2, guidance_scale=0.0,
+            controlnet_conditioning_scale=cn_scale,
+            output_type='pil', generator=gen,
+        ).images[0]
     sprinter.vae.to(dtype=torch.float32)
 
-    avg_np = sum(f * s for f, s in zip(fracs, hed_scribbles)).clip(0, 255).astype(np.uint8)
-    return Image.fromarray(avg_np)
+    scribble_np = np.array(hed(portrait, scribble=True)).astype(np.uint8)
+    return Image.fromarray(scribble_np), portrait
 
 
 # ── SAVE HELPERS ──────────────────────────────────────────────────────────────
 
-def save_scribble_grid(scribbles_dict, out_dir):
+def save_scribble_grid(scribbles_dict, out_dir, save=None):
+    """Save scribble_<name>.png for the names in `save` (default: all) and one grid of all."""
     names  = list(scribbles_dict.keys())
     images = list(scribbles_dict.values())
     n      = len(names)
 
     for name, img in zip(names, images):
+        if save is not None and name not in save:
+            continue
         img.save(out_dir / f'scribble_{name}.png')
         print(f'  Saved scribble_{name}.png')
 
@@ -481,18 +513,11 @@ def main():
             target_log[f'target/{safe}_{j}'] = wandb.Image(img)
     wandb.log(target_log)
 
-    # ── Avg scribble ──
-    print('\nBuilding avg scribble...')
-    avg_scribble = build_avg_scribble(cfg, source_scribble, sprinter, hed, device)
-
-    # ── Guided SDEdit scribble ──
-    print('\nBuilding guided SDEdit scribble...')
-    sdedit_scribble = run_sdedit(
-        source_scribble, seed=SEED,
-        architect=architect, device=device,
-        cfg_scale=cfg['sdedit_cfg'], n_steps_total=cfg['n_steps'],
-        sdedit_start=cfg['sdedit_start'], prompt=cfg['sdedit_prompt'],
-    )
+    # ── Avg-prompt scribble ──
+    print('\nBuilding avg-prompt scribble (prompt-embedding interpolation)...')
+    avg_prompt_scribble, avg_prompt_portrait = build_avg_scribble_prompt_interp(
+        cfg, source_scribble, sprinter, hed, device)
+    avg_prompt_portrait.save(out_dir / 'avg_prompt_portrait.png')
 
     # ── Measure first candidate time, then compute budget ──
     print('\nMeasuring first SDEdit candidate...')
@@ -520,10 +545,9 @@ def main():
     # ── Sanity check: scribbles + neutral + conditional images ──
     print('\nLogging sanity check to W&B...')
     sanity_scribbles = {
-        'source':      source_scribble,
-        'lgd_cm':      lgd_scribble,
-        'avg':         avg_scribble,
-        'sdedit':      sdedit_scribble,
+        'source':       source_scribble,
+        'lgd_cm':       lgd_scribble,
+        'avg_prompt':   avg_prompt_scribble,
         'sdedit_cand0': first_cand,
     }
     sanity_log = {}
@@ -580,53 +604,22 @@ def main():
 
     # ── Save everything ──
     print('\nSaving outputs...')
-    scribbles_dict = {
+    scribbles_dict = {              # the two baselines are saved; source and MLGD-F only appear in the grid
         'source':      source_scribble,
-        'avg':         avg_scribble,
-        'sdedit':      sdedit_scribble,
+        'avg_prompt':  avg_prompt_scribble,
         'sdedit_best': sdedit_best,
         'lgd_cm':      lgd_scribble,
     }
-    save_scribble_grid(scribbles_dict, out_dir)
+    save_scribble_grid(scribbles_dict, out_dir, save=('avg_prompt', 'sdedit_best'))
     save_sdedit_search_plot(candidate_mmds, best_idx, out_dir)
-
-    # ── Score every scribble against the search target ──
-    # Same protocol as the candidates and as run_mlgd_f's final MMD: n_eval_search
-    # neutral-prompt portraits from the Sprinter, CLIP, sqrt(MMD^2). The MLGD-F number
-    # here is a re-evaluation of its final scribble (the run's own final_mlgd_f_mmd used
-    # a different target draw). The paper's Table 3 uses N = 2,000 (the Colab notebook).
-    print(f'\nScoring every scribble (n={cfg["n_eval_search"]})...')
-    scribble_mmds = {}
-    for name, scribble in scribbles_dict.items():
-        if name == 'sdedit_best':
-            scribble_mmds[name] = candidate_mmds[best_idx]     # already scored in the search
-        else:
-            imgs = gen_images(sprinter, scribble, cfg['neutral_prompt'],
-                              cfg['n_eval_search'], cfg['controlnet_scale'], seed=SEED)
-            embs = clip_embed(imgs, clip_model, clip_processor, device)
-            scribble_mmds[name] = mmd_report(compute_mmd(embs, target_clip)).item()
-        print(f'  {name:12s} MMD={scribble_mmds[name]:.5f}')
-    src_mmd = scribble_mmds['source']
-    delta = {k: (src_mmd - v) / (src_mmd + 1e-8) for k, v in scribble_mmds.items()}
-
-    table = ['| method | MMD (n=%d) | dMMD vs source |' % cfg['n_eval_search'], '|---|---|---|']
-    for k in ('source', 'avg', 'sdedit', 'sdedit_best', 'lgd_cm'):
-        table.append(f'| {k} | {scribble_mmds[k]:.4f} | {100 * delta[k]:+.1f}% |')
-    with open(out_dir / 'baselines_table.md', 'w') as f:
-        f.write(f'# {args.experiment}: baselines vs MLGD-F (search-target MMD, n={cfg["n_eval_search"]})\n\n'
-                + '\n'.join(table) + '\n')
-    print('\n' + '\n'.join(table))
-    print('  Saved baselines_table.md')
 
     # ── Log final results to W&B ──
     wandb.log({
-        **{f'final/mmd_{k}': v for k, v in scribble_mmds.items()},
-        **{f'final/delta_{k}': v for k, v in delta.items()},
         'best_candidate_idx': best_idx,
         'best_candidate_mmd': candidate_mmds[best_idx],
         'scribble/source':      wandb.Image(source_scribble),
-        'scribble/avg':         wandb.Image(avg_scribble),
-        'scribble/sdedit':      wandb.Image(sdedit_scribble),
+        'scribble/avg_prompt':  wandb.Image(avg_prompt_scribble),
+        'avg_prompt_portrait':  wandb.Image(avg_prompt_portrait),
         'scribble/sdedit_best': wandb.Image(sdedit_best),
         'scribble/lgd_cm':      wandb.Image(lgd_scribble),
         'search_curve': wandb.plot.line_series(
@@ -652,8 +645,8 @@ def main():
         best_candidate_seed = SEED + best_idx,
         best_candidate_mmd  = candidate_mmds[best_idx],
         all_candidate_mmds  = candidate_mmds,
-        scribble_mmd        = scribble_mmds,
-        scribble_delta_vs_source = delta,
+        methods             = dict(avg_prompt='scribble_avg_prompt.png', sdedit_best='scribble_sdedit_best.png'),
+        avg_prompt          = dict(prompts=target_prompts_and_fracs(cfg)[0], fracs=target_prompts_and_fracs(cfg)[1]),
         mlgd_f_run          = dict(final_mlgd_f_mmd=run_metrics.get('final_mlgd_f_mmd'),
                                    optimization_time_sec=run_metrics.get('optimization_time_sec'),
                                    wandb=run_metrics.get('wandb'),
