@@ -157,19 +157,50 @@ def _prior_score(model_uncond, x, t=None):
     return -eps / torch.sqrt(1 - model_uncond.baralphas[t])
 
 
+class _SharedNoise:
+    """Within the block, torch.randn / torch.randn_like calls whose first dimension is a multiple of
+    `blocks` return one draw of size first_dim / blocks tiled `blocks` times, so B stacked copies of a
+    sampler batch see identical noise (common random numbers) in one batched call."""
+    def __init__(self, blocks):
+        self.B = blocks
+
+    def __enter__(self):
+        self.randn, self.randn_like = torch.randn, torch.randn_like
+        B, randn = self.B, self.randn
+
+        def tiled(size, **kw):
+            size = tuple(size)
+            if size and size[0] % B == 0 and size[0] >= B:
+                small = randn((size[0] // B,) + size[1:], **kw)
+                return small.repeat((B,) + (1,) * (len(size) - 1))
+            return randn(size, **kw)
+
+        def randn_new(*size, **kw):
+            if "size" in kw:
+                size = kw.pop("size")
+            elif len(size) == 1 and isinstance(size[0], (tuple, list, torch.Size)):
+                size = size[0]
+            return tiled(size, **kw)
+
+        def randn_like_new(t, **kw):
+            kw.setdefault("dtype", t.dtype)
+            kw.setdefault("device", t.device)
+            return tiled(t.shape, **kw)
+
+        torch.randn, torch.randn_like = randn_new, randn_like_new
+        return self
+
+    def __exit__(self, *exc):
+        torch.randn, torch.randn_like = self.randn, self.randn_like
+        return False
+
+
 def _zo_grad(model_cond, loss_function, cfg, view, x, n_ref, seed):
     """Zeroth-order gradient of the sample loss at x: central differences along coordinate (or random)
-    directions, every evaluation drawn with the same seed (common random numbers), so the sampling
-    noise largely cancels in each difference. Returns (loss at x, gradient)."""
-    def L(z):
-        torch.manual_seed(seed)
-        if cfg.device == "cuda":
-            torch.cuda.manual_seed_all(seed)
-        with torch.no_grad():
-            pred = _draw_conditional(model_cond, z, view)
-            tgt = cfg.target_generator(n_ref, cfg.device)
-            return loss_function(pred, tgt).detach()
-    flat = x.view(-1)
+    directions with common random numbers. All 1 + 2M evaluation points go through the sampler in one
+    batched call with the same noise tiled across them, so the sampling noise largely cancels in each
+    difference and the cost is close to one large forward pass. Returns (loss at x, gradient)."""
+    flat = x.detach().view(-1)
     d = flat.numel()
     eps = cfg.zo_eps
     if cfg.zo_dirs and cfg.zo_dirs > 0:
@@ -177,13 +208,29 @@ def _zo_grad(model_cond, loss_function, cfg, view, x, n_ref, seed):
         U = torch.randn(cfg.zo_dirs, d, generator=gen).to(flat.device, flat.dtype)
     else:
         U = torch.eye(d, device=flat.device, dtype=flat.dtype)
-    g = torch.zeros_like(flat)
-    for u in U:
-        diff = L((flat + eps * u).view_as(x)) - L((flat - eps * u).view_as(x))
-        g = g + (diff / (2 * eps)) * u
+    pts = torch.cat([flat.view(1, -1), flat + eps * U, flat - eps * U], 0)          # (1 + 2M, d)
+    B = pts.shape[0]
+    torch.manual_seed(seed)
+    if cfg.device == "cuda":
+        torch.cuda.manual_seed_all(seed)
+    with torch.no_grad():
+        tgt = cfg.target_generator(n_ref, cfg.device)
+        cond = pts.repeat_interleave(n_ref, dim=0).to(cfg.device)                    # block b = point b
+        with _SharedNoise(B):
+            out = model_cond.sample(nsamples=B * n_ref, condition_x=cond, device=cfg.device, **cfg.cond_sample_kwargs)
+        samples = out[0] if isinstance(out, tuple) else out
+        if cfg.condition_on_slice:
+            samples = samples[:, model_cond.condition_on:]
+        if cfg.cond_output_transform is not None:
+            samples = cfg.cond_output_transform(samples)
+        losses = torch.stack([loss_function(samples[b * n_ref:(b + 1) * n_ref], tgt).detach().reshape(())
+                              for b in range(B)])
+    M = U.shape[0]
+    diffs = (losses[1:1 + M] - losses[1 + M:]) / (2 * eps)                             # (M,)
+    g = (diffs.view(-1, 1) * U).sum(0)
     if cfg.zo_dirs and cfg.zo_dirs > 0:
-        g = g / U.shape[0]
-    return L(x), g.view_as(x)
+        g = g / M
+    return losses[0], g.to(x.dtype).view_as(x)
 
 
 def refine(model_uncond, model_cond, loss_function, cfg, x0):

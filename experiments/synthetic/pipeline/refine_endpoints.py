@@ -32,7 +32,13 @@ def main():
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = p.parse_args()
     r = json.load(open(a.result))
-    args = argparse.Namespace(**r["args"])
+    # current defaults first (results written before a flag existed lack it), then the saved settings
+    argv0 = sys.argv
+    sys.argv = ["find_xstar.py", "--prior", "_", "--sampler", "_", "--target", "_"]
+    args = fx.parse_args()
+    sys.argv = argv0
+    for k, v in r["args"].items():
+        setattr(args, k, v)
     for k in ("refine_grad", "zo_eps", "zo_dirs", "select_top", "select_n", "device"):
         setattr(args, k, getattr(a, k))
     if a.sampler is not None:
