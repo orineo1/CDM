@@ -333,7 +333,8 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
         x_t = x_next
         n_steps += 1
         trace.append({"i": i, "t": int(t) if not torch.is_tensor(t) else float(t),
-                      **info, "elapsed_s": time.time() - t_start})
+                      **info, "elapsed_s": time.time() - t_start,
+                      **({"x_t": x_t.detach().view(-1).tolist()} if getattr(cfg, "record_x", False) else {})})
 
     # ---- optional final unguided step (MNIST takes one, using its
     #      pred_x0 as the returned sample) ----

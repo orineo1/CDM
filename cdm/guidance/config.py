@@ -250,6 +250,7 @@ class GuidanceConfig:
     # "zo" = zeroth-order central differences of the sample loss with common random numbers (the same
     # sampler and target draws on both sides), which also sees how the mixture of modes of P(Y|X=x)
     # shifts with x, a change pathwise gradients through samples largely miss
+    record_x: bool = False               # store x_t after every reverse step in the trace (diagnostics)
     refine_grad: str = "pathwise"
     zo_eps: float = 0.05                 # finite-difference step (whitened units)
     zo_dirs: int = 0                     # 0: all coordinate directions (2 d loss evaluations); M > 0: M random Gaussian directions
