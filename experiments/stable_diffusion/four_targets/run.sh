@@ -1,50 +1,100 @@
 #!/usr/bin/env bash
-# MLGD-F on four distributional targets, plus the baseline scribbles.
+# MLGD-F on four distributional targets (paper Table 3 / Table 15).
 #
-# Three tiers, and they are NOT interchangeable:
+#   bash run.sh check                              CPU, seconds, no downloads, no GPU.
+#                                                  Static integrity of the ported package +
+#                                                  proof that the SD MMD is the shared compute_mmd.
+#   bash run.sh smoke <scenario> [flags...]        GPU. 6 guided steps, 6 variations. Proves the
+#                                                  pipeline runs end to end; reproduces NO
+#                                                  published number.
+#   bash run.sh full  <scenario> [flags...]        GPU (paper: L40S 48 GB). The published
+#                                                  configuration, from config/<scenario>.env.
+#   bash run.sh help                               every flag run_mlgd_f accepts.
 #
-#   bash run.sh check              CPU, seconds, no downloads, no GPU.
-#                                  Static integrity of the ported package + proof that
-#                                  the SD MMD is the shared compute_mmd.
-#                                  This is the ONLY tier that runs without a GPU.
+# <scenario>: balanced | skewed | gender_interpolation | age_interpolation | all
 #
-#   bash run.sh smoke <scenario>   GPU REQUIRED. Tiny: 6 guided steps, 6 variations.
-#                                  Proves the pipeline runs end to end. It reproduces
-#                                  NO published number and must never be reported as if
-#                                  it did.
+# Defaults come from config/<scenario>.env (tracked in git). Any run_mlgd_f flag given
+# after the scenario overrides them -- it is passed last and the last value wins:
+#   bash run.sh full balanced --base_zeta 5 --seed 2
+#   bash run.sh full skewed   --num_variations 50 --backsel_k 25 --run_unguided
 #
-#   bash run.sh full <scenario>    GPU REQUIRED (L40S 48 GB for the optimisation;
-#                                  the paper's 2,000-image evaluation used an A100 80 GB).
-#                                  The published configuration, from config/<scenario>.env.
+# Logging: every run goes to Weights & Biases (per-step MMD, gradient norm, zeta,
+# correction norm, the per-step visualisation, input and final scribbles, final MMD;
+# console output under the run's Logs tab). Local copies go to outputs/<tier>_<Scenario>/,
+# with run_info.txt recording the commit, GPU and exact command.
 #
-# <scenario> is one of: balanced | skewed | gender_interpolation | age_interpolation
-# Every flag is literal in this file or in config/; nothing is read from a hidden default.
+# Environment (optional):
+#   PYTHON=/path/to/python   interpreter (default: python on PATH)
+#   WANDB_PROJECT=<name>     default sdxl-smoke for smoke, sdxl-mlgdf for full
+#   WANDB_ENTITY=<team>      default: the logged-in user
+#   WANDB_NAME=<run name>    default <tier>_<scenario>[_<slurm job id>]
+#   DRY_RUN=1                print the command instead of running it
 set -euo pipefail
 export PYTHONUNBUFFERED=1   # print lines reach the log as they happen, also under sbatch
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 PY="${PYTHON:-python}"
 OUT="$HERE/outputs"
+SCENARIOS=(balanced skewed gender_interpolation age_interpolation)
 TIER="${1:-check}"
-mkdir -p "$OUT"
 cd "$REPO"
 
-load_cfg() {
-  local name="${1:?usage: bash run.sh $TIER <scenario>}"
-  local f="$HERE/config/${name}.env"
-  [ -f "$f" ] || { echo "no such scenario config: $f" >&2; exit 64; }
-  # shellcheck disable=SC1090
-  set -a; source "$f"; set +a
-}
+usage() { echo "usage: bash run.sh [check | help | smoke|full <balanced|skewed|gender_interpolation|age_interpolation|all> [run_mlgd_f flags...]]" >&2; exit 64; }
 
-common_args() {
-  echo --mode "$MODE" \
-       --base_zeta "$BASE_ZETA" \
-       --guidance_scale "$GUIDANCE_SCALE" \
-       --controlnet_scale "$CONTROLNET_SCALE" \
-       --backsel_rule "$BACKSEL_RULE" \
-       --loss_fn "$LOSS_FN" \
-       --seed "$SEED"
+run_one() {   # run_one <tier> <scenario> [extra flags...]
+  local tier="$1" name="$2"; shift 2
+  local cfg="$HERE/config/${name}.env"
+  [ -f "$cfg" ] || { echo "no such scenario: $name (config/$name.env)" >&2; usage; }
+  # the config sets SCENARIO, MODE, N_STEPS, ...; a subshell keeps scenarios from leaking into each other
+  (
+    set -a; source "$cfg"; set +a
+
+    local outdir="$OUT/${tier}_${SCENARIO}" project
+    local a
+    for a in "$@"; do [ "${prev:-}" = --output_dir ] && outdir="$a"; prev="$a"; done
+
+    local args=( --mode "$MODE" --base_zeta "$BASE_ZETA" --guidance_scale "$GUIDANCE_SCALE"
+                 --controlnet_scale "$CONTROLNET_SCALE" --backsel_rule "$BACKSEL_RULE"
+                 --loss_fn "$LOSS_FN" --seed "$SEED" )
+    if [ "$tier" = smoke ]; then
+      project="${WANDB_PROJECT:-sdxl-smoke}"
+      args+=( --n_steps 12 --start_step 6 --num_variations 6 --backsel_k 3 )
+      [ "$MODE" = age ] && args+=( --age_min "$AGE_MIN" --age_max "$AGE_MAX" --age_step 10
+                                   --n_per_age 1 --age_gender "$AGE_GENDER" )
+    else
+      project="${WANDB_PROJECT:-sdxl-mlgdf}"
+      args+=( --n_steps "$N_STEPS" --start_step "$START_STEP"
+              --num_variations "$NUM_VARIATIONS" --backsel_k "$BACKSEL_K" )
+      [ "$MODE" = age ] && args+=( --age_min "$AGE_MIN" --age_max "$AGE_MAX" --age_step "$AGE_STEP"
+                                   --n_per_age "$N_PER_AGE" --age_gender "$AGE_GENDER" )
+    fi
+    if [ "$MODE" != age ]; then
+      local tp; IFS='|' read -r -a tp <<< "$TARGET_PROMPTS"
+      args+=( --target_prompts "${tp[@]}" )
+    fi
+    args+=( --output_dir "$outdir" --wandb_project "$project" )
+    [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
+    args+=( "$@" )   # CLI overrides, last so they win
+
+    export WANDB_NAME="${WANDB_NAME:-${tier}_${name}${SLURM_JOB_ID:+_$SLURM_JOB_ID}}"
+    export WANDB_TAGS="${WANDB_TAGS:-$tier,$name}"
+    local cmd=( "$PY" -m cdm.models.sd.run_mlgd_f "${args[@]}" )
+
+    echo "=== $tier | $name | wandb $project/$WANDB_NAME ==="
+    printf '%q ' "${cmd[@]}"; echo
+    [ -n "${DRY_RUN:-}" ] && exit 0
+
+    mkdir -p "$outdir"
+    {   # what produced this run
+      echo "date:       $(date -Iseconds)"
+      echo "git commit: $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)$(git -C "$REPO" diff --quiet 2>/dev/null || echo ' (dirty)')"
+      echo "host:       $(hostname)  slurm job: ${SLURM_JOB_ID:-none}"
+      "$PY" -c "import torch; print('gpu:       ', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none', '| torch', torch.__version__)"
+      echo "config:     config/$name.env  overrides: ${*:-none}"
+      printf 'command:    '; printf '%q ' "${cmd[@]}"; echo
+    } > "$outdir/run_info.txt"
+    "${cmd[@]}"
+  )
 }
 
 case "$TIER" in
@@ -53,43 +103,19 @@ case "$TIER" in
     "$PY" -m cdm.models.sd.check_mmd_equivalence
     ;;
 
-  smoke)
-    load_cfg "${2:-}"
-    ARGS=( $(common_args)
-           --n_steps 12 --start_step 6
-           --num_variations 6 --backsel_k 3
-           --output_dir "$OUT/smoke_${SCENARIO}"
-           --wandb_project sdxl-smoke )
-    if [ "$MODE" = age ]; then
-      ARGS+=( --age_min "$AGE_MIN" --age_max "$AGE_MAX" --age_step 10 --n_per_age 1 --age_gender "$AGE_GENDER" )
-    else
-      IFS='|' read -r -a TP <<< "$TARGET_PROMPTS"
-      ARGS+=( --target_prompts "${TP[@]}" )
-    fi
-    "$PY" -m cdm.models.sd.run_mlgd_f "${ARGS[@]}"
+  help)
+    "$PY" -m cdm.models.sd.run_mlgd_f --help
     ;;
 
-  full)
-    load_cfg "${2:-}"
-    ARGS=( $(common_args)
-           --n_steps "$N_STEPS" --start_step "$START_STEP"
-           --num_variations "$NUM_VARIATIONS" --backsel_k "$BACKSEL_K"
-           --output_dir "$OUT/full_${SCENARIO}"
-           --wandb_project sdxl-mlgdf )
-    if [ "$MODE" = age ]; then
-      ARGS+=( --age_min "$AGE_MIN" --age_max "$AGE_MAX" --age_step "$AGE_STEP" \
-              --n_per_age "$N_PER_AGE" --age_gender "$AGE_GENDER" )
+  smoke|full)
+    SCEN="${2:-}"; [ -n "$SCEN" ] || usage
+    shift 2
+    if [ "$SCEN" = all ]; then
+      for s in "${SCENARIOS[@]}"; do run_one "$TIER" "$s" "$@"; done
     else
-      IFS='|' read -r -a TP <<< "$TARGET_PROMPTS"
-      ARGS+=( --target_prompts "${TP[@]}" )
+      run_one "$TIER" "$SCEN" "$@"
     fi
-    "$PY" -m cdm.models.sd.run_mlgd_f "${ARGS[@]}"
-
-    # Baseline scribbles (Average prompt, SDEdit Best). Needs the MLGD-F wall-clock
-    # in minutes, which sets the SDEdit candidate budget, and an experiments/<SCENARIO>/
-    # directory holding scribble_source.png and scribble_mlgdd.png.
-    # "$PY" -m cdm.models.sd.eval_baselines --experiment "$SCENARIO" --lgd_cm_minutes <minutes>
     ;;
 
-  *) echo "usage: bash run.sh [check | smoke <scenario> | full <scenario>]" >&2; exit 64 ;;
+  *) usage ;;
 esac
