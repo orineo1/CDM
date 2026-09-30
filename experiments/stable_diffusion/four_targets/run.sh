@@ -55,7 +55,8 @@ TIER="${1:-check}"
 cd "$REPO"
 
 # Keep every cache next to the repo (e.g. lab storage), not in $HOME: model weights,
-# matplotlib, wandb, torch, pip. Anything already set in the environment is kept.
+# matplotlib, wandb, torch, pip, CUDA/Triton kernels. Anything already set in the
+# environment is kept. The wandb key: `wandb login` (writes ~/.netrc) or WANDB_API_KEY.
 CACHE_DIR="${CACHE_DIR:-$REPO/.cache}"
 export HF_HOME="${HF_HOME:-$CACHE_DIR/huggingface}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$CACHE_DIR}"
@@ -66,6 +67,9 @@ export WANDB_DIR="${WANDB_DIR:-$OUT}"                  # wandb/ run files (and o
 export WANDB_CACHE_DIR="${WANDB_CACHE_DIR:-$CACHE_DIR/wandb}"
 export WANDB_DATA_DIR="${WANDB_DATA_DIR:-$CACHE_DIR/wandb-data}"
 export WANDB_ARTIFACT_DIR="${WANDB_ARTIFACT_DIR:-$CACHE_DIR/wandb-artifacts}"
+export WANDB_CONFIG_DIR="${WANDB_CONFIG_DIR:-$CACHE_DIR/wandb-config}"
+export CUDA_CACHE_PATH="${CUDA_CACHE_PATH:-$CACHE_DIR/nv}"
+export TRITON_CACHE_DIR="${TRITON_CACHE_DIR:-$CACHE_DIR/triton}"
 mkdir -p "$CACHE_DIR" "$MPLCONFIGDIR" "$OUT"
 
 usage() { echo "usage: bash run.sh [check | help | smoke|full <balanced|skewed|gender_interpolation|age_interpolation|all> [run_mlgd_f flags...]]" >&2; exit 64; }
