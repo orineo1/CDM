@@ -2,17 +2,26 @@
 # Entry point. Run as:  python -m cdm.models.sd.eval_baselines --help
 
 """
-eval_baselines.py — Build candidate scribbles for all methods, save to disk.
-Runs on SLURM cluster (no N=2000 eval — that happens in Colab).
+eval_baselines.py — Build the baseline scribbles (Avg prompt, SDEdit, SDEdit-Best) for a
+finished MLGD-F run and score every scribble against the same target.
+Runs on the SLURM cluster (no N=2000 eval — that protocol is the Colab notebook).
 
-Each experiment folder under experiments/<ExperimentName>/ must contain:
-    scribble.png   — source oval/HED scribble used during the MLGD-F run
-    mlgdd.png      — final MLGD-F output scribble (from best_jid run)
+Input: the directory a `run_mlgd_f` run wrote (four_targets/outputs/full_<Scenario>/):
+    scribble.png                 the source HED scribble the MLGD-F run started from
+    final_scribble_mlgd_f.png    the final MLGD-F scribble
+    metrics.json                 optimization_time_sec -> the SDEdit-Best time budget
+(or, upstream's layout, `--repo_path/experiments/<Experiment>/scribble_source.png` and
+`scribble_mlgdd.png` with an explicit `--lgd_cm_minutes`).
 
-Usage:
-    python -m cdm.models.sd.eval_baselines \
-        --experiment SkewedTarget \
-        --lgd_cm_minutes 241
+Output, in --out_dir (default <run_dir>/baselines/): scribble_<method>.png for
+source / avg / sdedit / sdedit_best / lgd_cm, scribbles_all.png, sdedit_search.png,
+target previews, and baselines_meta.json with the search curve and, for every
+scribble, the MMD of n_eval_search neutral-prompt portraits against the search target
+(same estimator and n as the MLGD-F run's final MMD; N = 2,000 is the paper protocol).
+
+Usage (four_targets/run.sh baselines <scenario> wraps this with the pinned revisions):
+    python -m cdm.models.sd.eval_baselines --experiment BalancedTarget \
+        --run_dir experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget
 """
 
 import os, sys, copy, argparse, json, time
@@ -323,10 +332,23 @@ def save_sdedit_search_plot(candidate_mmds, best_idx, out_dir):
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--experiment',     required=True, choices=list(EXPERIMENT_CONFIGS.keys()))
-    parser.add_argument('--lgd_cm_minutes', type=float, required=True,
-                        help='MLGD-F runtime in minutes — sets N_SDEDIT_CANDIDATES')
+    parser.add_argument('--run_dir',        type=str, default='',
+                        help='directory of the finished run_mlgd_f run (its scribble.png, '
+                             'final_scribble_mlgd_f.png and metrics.json). Default: '
+                             '<repo_path>/experiments/<experiment>/ holding upstream\'s '
+                             'scribble_source.png and scribble_mlgdd.png')
+    parser.add_argument('--out_dir',        type=str, default='',
+                        help='where to write (default <run_dir>/baselines)')
+    parser.add_argument('--lgd_cm_minutes', type=float, default=None,
+                        help='MLGD-F runtime in minutes — the SDEdit-Best search budget. '
+                             'Default: optimization_time_sec from <run_dir>/metrics.json')
+    parser.add_argument('--max_candidates', type=int, default=None,
+                        help='cap on the number of SDEdit candidates (smoke runs); '
+                             'default: as many as fit in the time budget')
+    parser.add_argument('--seed',           type=int, default=None,
+                        help='override the experiment\'s seed (targets, SDEdit noise, eval)')
     parser.add_argument('--repo_path',      type=str, default='.',
                         help='Path to repo root (default: current directory)')
     parser.add_argument('--gdrive_root',    type=str, default='',
@@ -334,51 +356,114 @@ def main():
     parser.add_argument('--wandb_project',  type=str, default='eval-baselines')
     parser.add_argument('--wandb_entity',   type=str, default='',
                         help='wandb entity/team (leave empty to use logged-in user)')
+    # pinned weights, as run_mlgd_f (four_targets/config/models.env); None = the hub's main
+    parser.add_argument('--controlnet_revision', type=str, default=None)
+    parser.add_argument('--sprinter_revision',   type=str, default=None)
+    parser.add_argument('--architect_revision',  type=str, default=None)
+    parser.add_argument('--hed_revision',        type=str, default=None)
+    parser.add_argument('--clip_revision',       type=str, default=None)
+    parser.add_argument('--no_deterministic', action='store_true',
+                        help='do not force deterministic GPU kernels (faster, not repeatable)')
     args = parser.parse_args()
 
     repo_path = Path(args.repo_path).resolve()
 
-    cfg     = EXPERIMENT_CONFIGS[args.experiment]
+    cfg     = dict(EXPERIMENT_CONFIGS[args.experiment])
+    if args.seed is not None:
+        cfg['seed'] = args.seed
     device  = 'cuda' if torch.cuda.is_available() else 'cpu'
     SEED    = cfg['seed']
     jid     = cfg['best_jid']
 
-    # experiments/<ExperimentName>/ must already contain scribble.png and mlgdd.png
-    run_dir = repo_path / 'experiments' / args.experiment
-    out_dir = run_dir / 'baselines'
+    # ── Where the MLGD-F run is ──
+    if args.run_dir:
+        run_dir = Path(args.run_dir).resolve()
+        source_path = run_dir / 'scribble.png'                 # run_mlgd_f's names
+        lgd_path    = run_dir / 'final_scribble_mlgd_f.png'
+        if not source_path.exists() and (run_dir / 'scribble_source.png').exists():
+            source_path = run_dir / 'scribble_source.png'      # export_results.py's name
+    else:   # upstream layout: experiments/<ExperimentName>/scribble_source.png + scribble_mlgdd.png
+        run_dir = repo_path / 'experiments' / args.experiment
+        source_path = run_dir / 'scribble_source.png'
+        lgd_path    = run_dir / 'scribble_mlgdd.png'
+    for pth in (source_path, lgd_path):
+        if not pth.exists():
+            sys.exit(f'missing {pth}: --run_dir must be a finished run_mlgd_f output directory')
+    out_dir = Path(args.out_dir).resolve() if args.out_dir else run_dir / 'baselines'
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f'\n=== {args.experiment} | jid={jid} | measuring candidate time... ===\n')
+    # ── Time budget: the MLGD-F run's optimisation time ──
+    run_metrics = {}
+    if (run_dir / 'metrics.json').exists():
+        with open(run_dir / 'metrics.json') as f:
+            run_metrics = json.load(f)
+    lgd_cm_minutes = args.lgd_cm_minutes
+    if lgd_cm_minutes is None:
+        if run_metrics.get('optimization_time_sec') is None:
+            sys.exit('no --lgd_cm_minutes and no optimization_time_sec in '
+                     f'{run_dir / "metrics.json"}: give the MLGD-F runtime explicitly')
+        lgd_cm_minutes = run_metrics['optimization_time_sec'] / 60
+        print(f'Time budget from metrics.json: {lgd_cm_minutes:.1f} min')
+
+    if not args.no_deterministic:
+        from cdm.models.sd.models import make_deterministic
+        make_deterministic(SEED)
+    else:
+        torch.manual_seed(SEED)
+        np.random.seed(SEED)
+
+    print(f'\n=== {args.experiment} | run {run_dir} | budget {lgd_cm_minutes:.1f} min ===\n')
 
     # ── W&B init ──
     import wandb
     wandb.init(
         project=args.wandb_project,
         entity=args.wandb_entity or None,   # None = use whoever is logged in
-        name=f'{args.experiment}',
+        name=os.environ.get('WANDB_NAME') or f'baselines_{args.experiment}',
         config=dict(
             experiment=args.experiment,
-            lgd_cm_minutes=args.lgd_cm_minutes,
+            run_dir=str(run_dir),
+            lgd_cm_minutes=lgd_cm_minutes,
+            max_candidates=args.max_candidates,
+            mlgd_f_final_mmd=run_metrics.get('final_mlgd_f_mmd'),
+            mlgd_f_wandb=(run_metrics.get('wandb') or {}).get('url'),
+            deterministic=not args.no_deterministic,
             **{k: v for k, v in cfg.items() if k != 'groups'},
         ),
     )
 
     # ── Load models ──
-    from cdm.models.sd.models     import load_models
-    from cdm.models.sd.clip_utils import load_clip_model
-    from controlnet_aux import HEDdetector
+    from cdm.models.sd.models     import load_models, resolved_revision, \
+        DEFAULT_ARCHITECT_MODEL_ID, DEFAULT_SPRINTER_MODEL_ID, DEFAULT_CONTROLNET_MODEL_ID
+    from cdm.models.sd.clip_utils import load_clip_model, CLIP_MODEL_ID
+    from cdm.models.sd.hed        import load_hed, HED_ANNOTATOR_ID
 
-    architect, sprinter        = load_models(device)
-    clip_model, clip_processor = load_clip_model(device)
-    hed                        = HEDdetector.from_pretrained('lllyasviel/Annotators')
-    print('Models loaded.')
+    architect, sprinter        = load_models(
+        device,
+        controlnet_revision=args.controlnet_revision,
+        sprinter_revision=args.sprinter_revision,
+        architect_revision=args.architect_revision,
+    )
+    clip_model, clip_processor = load_clip_model(device, revision=args.clip_revision)
+    hed                        = load_hed(args.hed_revision)
+    model_revisions = {
+        DEFAULT_ARCHITECT_MODEL_ID:  resolved_revision(DEFAULT_ARCHITECT_MODEL_ID, args.architect_revision),
+        DEFAULT_SPRINTER_MODEL_ID:   resolved_revision(DEFAULT_SPRINTER_MODEL_ID, args.sprinter_revision),
+        DEFAULT_CONTROLNET_MODEL_ID: resolved_revision(DEFAULT_CONTROLNET_MODEL_ID, args.controlnet_revision),
+        HED_ANNOTATOR_ID:            resolved_revision(HED_ANNOTATOR_ID, args.hed_revision),
+        CLIP_MODEL_ID:               resolved_revision(CLIP_MODEL_ID, args.clip_revision),
+    }
+    print('Models loaded. Revisions: ' + ', '.join(f'{k}@{(v or "unknown")[:12]}' for k, v in model_revisions.items()))
+    run_revs = run_metrics.get('model_revisions') or {}
+    for k, v in model_revisions.items():
+        if run_revs.get(k) and v and run_revs[k] != v:
+            print(f'  warning: {k} is {v[:12]} here but the MLGD-F run loaded {run_revs[k][:12]}')
+    wandb.config.update({'model_revisions': model_revisions})
 
     # ── Load scribbles ──
-    # scribble.png  — source oval/HED scribble used during the MLGD-F run
-    # mlgdd.png     — final MLGD-F output scribble for this experiment
-    source_scribble = Image.open(run_dir / 'scribble_source.png')
-    lgd_scribble    = Image.open(run_dir / 'scribble_mlgdd.png')
-    print('Scribbles loaded.')
+    source_scribble = Image.open(source_path).convert('RGB')
+    lgd_scribble    = Image.open(lgd_path).convert('RGB')
+    print(f'Scribbles loaded: {source_path.name}, {lgd_path.name}')
 
     # ── Build target (small, for search only) ──
     print('\nBuilding search target...')
@@ -425,8 +510,10 @@ def main():
     first_mmd  = mmd_report(compute_mmd(first_embs, target_clip)).item()
     sec_per_candidate = time.time() - t0
 
-    n_candidates = max(1, int(args.lgd_cm_minutes * 60 / sec_per_candidate))
-    print(f'  First candidate: {sec_per_candidate:.1f}s → budget={args.lgd_cm_minutes}min → {n_candidates} candidates')
+    n_candidates = max(1, int(lgd_cm_minutes * 60 / sec_per_candidate))
+    if args.max_candidates is not None:
+        n_candidates = min(n_candidates, max(1, args.max_candidates))
+    print(f'  First candidate: {sec_per_candidate:.1f}s → budget={lgd_cm_minutes:.1f}min → {n_candidates} candidates')
 
     wandb.log({'sec_per_candidate': sec_per_candidate, 'n_candidates': n_candidates})
 
@@ -503,8 +590,38 @@ def main():
     save_scribble_grid(scribbles_dict, out_dir)
     save_sdedit_search_plot(candidate_mmds, best_idx, out_dir)
 
+    # ── Score every scribble against the search target ──
+    # Same protocol as the candidates and as run_mlgd_f's final MMD: n_eval_search
+    # neutral-prompt portraits from the Sprinter, CLIP, sqrt(MMD^2). The MLGD-F number
+    # here is a re-evaluation of its final scribble (the run's own final_mlgd_f_mmd used
+    # a different target draw). The paper's Table 3 uses N = 2,000 (the Colab notebook).
+    print(f'\nScoring every scribble (n={cfg["n_eval_search"]})...')
+    scribble_mmds = {}
+    for name, scribble in scribbles_dict.items():
+        if name == 'sdedit_best':
+            scribble_mmds[name] = candidate_mmds[best_idx]     # already scored in the search
+        else:
+            imgs = gen_images(sprinter, scribble, cfg['neutral_prompt'],
+                              cfg['n_eval_search'], cfg['controlnet_scale'], seed=SEED)
+            embs = clip_embed(imgs, clip_model, clip_processor, device)
+            scribble_mmds[name] = mmd_report(compute_mmd(embs, target_clip)).item()
+        print(f'  {name:12s} MMD={scribble_mmds[name]:.5f}')
+    src_mmd = scribble_mmds['source']
+    delta = {k: (src_mmd - v) / (src_mmd + 1e-8) for k, v in scribble_mmds.items()}
+
+    table = ['| method | MMD (n=%d) | dMMD vs source |' % cfg['n_eval_search'], '|---|---|---|']
+    for k in ('source', 'avg', 'sdedit', 'sdedit_best', 'lgd_cm'):
+        table.append(f'| {k} | {scribble_mmds[k]:.4f} | {100 * delta[k]:+.1f}% |')
+    with open(out_dir / 'baselines_table.md', 'w') as f:
+        f.write(f'# {args.experiment}: baselines vs MLGD-F (search-target MMD, n={cfg["n_eval_search"]})\n\n'
+                + '\n'.join(table) + '\n')
+    print('\n' + '\n'.join(table))
+    print('  Saved baselines_table.md')
+
     # ── Log final results to W&B ──
     wandb.log({
+        **{f'final/mmd_{k}': v for k, v in scribble_mmds.items()},
+        **{f'final/delta_{k}': v for k, v in delta.items()},
         'best_candidate_idx': best_idx,
         'best_candidate_mmd': candidate_mmds[best_idx],
         'scribble/source':      wandb.Image(source_scribble),
@@ -524,13 +641,27 @@ def main():
     meta = dict(
         experiment          = args.experiment,
         best_jid            = jid,
-        lgd_cm_minutes      = args.lgd_cm_minutes,
+        run_dir             = str(run_dir),
+        seed                = SEED,
+        lgd_cm_minutes      = lgd_cm_minutes,
+        n_eval_search       = cfg['n_eval_search'],
         n_candidates        = n_candidates,
+        max_candidates      = args.max_candidates,
         sec_per_candidate   = round(sec_per_candidate, 2),
         best_candidate_idx  = best_idx,
         best_candidate_seed = SEED + best_idx,
         best_candidate_mmd  = candidate_mmds[best_idx],
         all_candidate_mmds  = candidate_mmds,
+        scribble_mmd        = scribble_mmds,
+        scribble_delta_vs_source = delta,
+        mlgd_f_run          = dict(final_mlgd_f_mmd=run_metrics.get('final_mlgd_f_mmd'),
+                                   optimization_time_sec=run_metrics.get('optimization_time_sec'),
+                                   wandb=run_metrics.get('wandb'),
+                                   model_revisions=run_revs),
+        model_revisions     = model_revisions,
+        deterministic       = not args.no_deterministic,
+        wandb               = dict(project=wandb.run.project, entity=wandb.run.entity,
+                                   name=wandb.run.name, id=wandb.run.id, url=wandb.run.url),
     )
     with open(out_dir / 'baselines_meta.json', 'w') as f:
         json.dump(meta, f, indent=2)

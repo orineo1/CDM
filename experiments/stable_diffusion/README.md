@@ -77,7 +77,22 @@ them, e.g. `run.sh full skewed --base_zeta 5 --seed 2`. `DRY_RUN=1 bash .../run.
 prints the command without running it. Watch a job with `squeue -u $USER` and
 `tail -f logs/sd-<jobid>.out`; the W&B link is printed near the top of the log.
 
-**5. Keep the results.** When the full runs are done:
+**5. The baselines.** Once a full run has finished, the Avg-prompt / SDEdit / SDEdit-Best
+baselines of Table 3 are a second job on the same scenario (SDEdit-Best's search budget is
+the finished run's optimisation time, read from its `metrics.json`):
+
+```bash
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=08:00:00 \
+       --output=logs/bl-%j.out \
+       --wrap "bash experiments/stable_diffusion/four_targets/run.sh baselines balanced"
+```
+
+It reads `four_targets/outputs/full_BalancedTarget/` (`RUN_DIR=/path` for a run kept
+elsewhere), writes `.../full_BalancedTarget/baselines/` and ends with a table of every
+scribble's MMD against the search target, MLGD-F included. `four_targets/README.md`,
+*The baselines*, has the details and the smoke option (`--max_candidates 3`).
+
+**6. Keep the results.** When the full runs (and the baselines) are done:
 
 ```bash
 python experiments/stable_diffusion/export_results.py                # outputs/full_* -> four_targets/results/
@@ -93,8 +108,8 @@ dependencies in `cdm/models/sd/requirements.txt` (`transformers`, `diffusers`, `
 described in the experiment's README.
 
 In `four_targets/results/`, `table3_sd_results.md` and `table15_sd_swd.md` are transcribed
-from the paper; `mlgdf_runs.md` and the `<Scenario>/` folders are runs of this code,
-written by `export_results.py` (see below).
+from the paper; `mlgdf_runs.md`, `baselines_runs.md` and the `<Scenario>/` folders are
+runs of this code, written by `export_results.py` (see below).
 
 ## Saving results
 

@@ -9,7 +9,16 @@
 #                                                  published number.
 #   bash run.sh full  <scenario> [flags...]        GPU (paper: L40S 48 GB). The published
 #                                                  configuration, from config/<scenario>.env.
+#   bash run.sh baselines <scenario> [flags...]    GPU. The Avg-prompt / SDEdit / SDEdit-Best
+#                                                  baselines for a FINISHED full run
+#                                                  (outputs/full_<Scenario>/), scored next to
+#                                                  the MLGD-F scribble; SDEdit-Best gets the
+#                                                  run's own optimisation time as its budget.
+#                                                  Writes outputs/full_<Scenario>/baselines/.
+#                                                  RUN_DIR=/path scores another run directory;
+#                                                  --max_candidates 3 for a quick smoke run.
 #   bash run.sh help                               every flag run_mlgd_f accepts.
+#   bash run.sh help-baselines                     every flag eval_baselines accepts.
 #
 # <scenario>: balanced | skewed | gender_interpolation | age_interpolation | all
 #
@@ -24,6 +33,7 @@
 #   sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=12:00:00 \
 #          --output=logs/sd-%j.out --wrap "bash experiments/stable_diffusion/four_targets/run.sh full balanced"
 #   sbatch ... --array=0-3 --output=logs/sd-%A_%a.out --wrap "bash experiments/stable_diffusion/four_targets/run.sh full all"
+#   sbatch ... --time=08:00:00 --output=logs/bl-%j.out --wrap "bash experiments/stable_diffusion/four_targets/run.sh baselines balanced"
 # Under an array, `all` runs only scenario SLURM_ARRAY_TASK_ID (0 balanced, 1 skewed,
 # 2 gender_interpolation, 3 age_interpolation); otherwise the four run one after another.
 # Nodes without internet: WANDB_MODE=offline, then `wandb sync experiments/stable_diffusion/four_targets/outputs/wandb/offline-run-*`.
@@ -38,7 +48,8 @@
 #
 # Environment (optional):
 #   PYTHON=/path/to/python   interpreter (default: python on PATH)
-#   WANDB_PROJECT=<name>     default sdxl-smoke for smoke, sdxl-mlgdf for full
+#   WANDB_PROJECT=<name>     default sdxl-smoke for smoke, sdxl-mlgdf for full, sdxl-baselines for baselines
+#   RUN_DIR=/path            baselines only: the finished run to score (default outputs/full_<Scenario>)
 #   WANDB_ENTITY=<team>      default: the logged-in user
 #   WANDB_NAME=<run name>    default <tier>_<scenario>[_<slurm job id>]
 #   CACHE_DIR=/path          where model weights and all caches go (default <repo>/.cache;
@@ -75,7 +86,7 @@ mkdir -p "$CACHE_DIR" "$MPLCONFIGDIR" "$OUT"
 # before the interpreter starts, which is what cuBLAS requires)
 export CUBLAS_WORKSPACE_CONFIG="${CUBLAS_WORKSPACE_CONFIG:-:4096:8}"
 
-usage() { echo "usage: bash run.sh [check | help | smoke|full <balanced|skewed|gender_interpolation|age_interpolation|all> [run_mlgd_f flags...]]" >&2; exit 64; }
+usage() { echo "usage: bash run.sh [check | help | help-baselines | smoke|full|baselines <balanced|skewed|gender_interpolation|age_interpolation|all> [flags...]]" >&2; exit 64; }
 
 run_one() {   # run_one <tier> <scenario> [extra flags...]
   local tier="$1" name="$2"; shift 2
@@ -142,6 +153,61 @@ run_one() {   # run_one <tier> <scenario> [extra flags...]
   )
 }
 
+run_baselines() {   # run_baselines <scenario> [eval_baselines flags...]
+  local name="$1"; shift
+  local cfg="$HERE/config/${name}.env"
+  [ -f "$cfg" ] || { echo "no such scenario: $name (config/$name.env)" >&2; usage; }
+  (
+    set -a
+    source "$HERE/config/models.env"
+    source "$cfg"
+    set +a
+
+    local run_dir="${RUN_DIR:-$OUT/full_${SCENARIO}}" outdir project
+    local a prev=
+    for a in "$@"; do [ "$prev" = --run_dir ] && run_dir="$a"; prev="$a"; done
+    outdir="$run_dir/baselines"
+    prev=; for a in "$@"; do [ "$prev" = --out_dir ] && outdir="$a"; prev="$a"; done
+    if [ -z "${DRY_RUN:-}" ]; then
+      for f in scribble.png final_scribble_mlgd_f.png metrics.json; do
+        [ -f "$run_dir/$f" ] || { echo "no finished MLGD-F run in $run_dir ($f missing): run 'run.sh full $name' first, or RUN_DIR=/path" >&2; exit 66; }
+      done
+    fi
+    project="${WANDB_PROJECT:-sdxl-baselines}"
+
+    local args=( --experiment "$SCENARIO" --run_dir "$run_dir" --out_dir "$outdir" --repo_path "$REPO" )
+    for rev in ARCHITECT SPRINTER CONTROLNET HED CLIP; do   # pinned weights (config/models.env)
+      local v="${rev}_REVISION"
+      [ -n "${!v:-}" ] && args+=( "--$(tr 'A-Z' 'a-z' <<< "$rev")_revision" "${!v}" )
+    done
+    args+=( --wandb_project "$project" )
+    [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
+    args+=( "$@" )   # CLI overrides, last so they win
+
+    export WANDB_NAME="${WANDB_NAME:-baselines_${name}${SLURM_JOB_ID:+_${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}}${SLURM_ARRAY_TASK_ID:+_$SLURM_ARRAY_TASK_ID}}"
+    export WANDB_TAGS="${WANDB_TAGS:-baselines,$name}"
+    local cmd=( "$PY" -m cdm.models.sd.eval_baselines "${args[@]}" )
+
+    echo "=== baselines | $name | run $run_dir | wandb $project/$WANDB_NAME ==="
+    printf '%q ' "${cmd[@]}"; echo
+    [ -n "${DRY_RUN:-}" ] && exit 0
+
+    mkdir -p "$outdir"
+    {   # what produced this run
+      echo "date:       $(date -Iseconds)"
+      echo "git commit: $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)$(git -C "$REPO" diff --quiet 2>/dev/null || echo ' (dirty)')"
+      echo "host:       $(hostname)  slurm job: ${SLURM_JOB_ID:-none}"
+      "$PY" -c "import torch; print('gpu:       ', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none', '| torch', torch.__version__)"
+      echo "mlgd-f run: $run_dir"
+      echo "config:     config/$name.env  overrides: ${*:-none}"
+      printf 'command:    '; printf '%q ' "${cmd[@]}"; echo
+      "$PY" -c "from cdm.models.sd.run_mlgd_f import library_versions as v; print('versions:   ', v())"
+    } > "$outdir/run_info.txt"
+    "$PY" -m pip freeze > "$outdir/pip_freeze.txt" 2>/dev/null || true
+    "${cmd[@]}"
+  )
+}
+
 case "$TIER" in
   check)
     "$PY" -m cdm.models.sd.check_imports
@@ -150,6 +216,30 @@ case "$TIER" in
 
   help)
     "$PY" -m cdm.models.sd.run_mlgd_f --help
+    ;;
+
+  help-baselines)
+    "$PY" -m cdm.models.sd.eval_baselines --help
+    ;;
+
+  baselines)
+    SCEN="${2:-}"; [ -n "$SCEN" ] || usage
+    shift 2
+    if [ -z "${DRY_RUN:-}" ]; then   # fail now, not after loading the models
+      "$PY" -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 'no CUDA GPU visible (sbatch: add --gres=gpu:1)')"
+      if [ -z "${WANDB_API_KEY:-}" ] && [ "${WANDB_MODE:-}" != offline ] && ! grep -q api.wandb.ai ~/.netrc 2>/dev/null; then
+        echo "warning: no wandb login found; run 'wandb login' once, or export WANDB_API_KEY / WANDB_MODE=offline" >&2
+      fi
+    fi
+    if [ "$SCEN" = all ] && [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
+      SCEN="${SCENARIOS[$SLURM_ARRAY_TASK_ID]:?array index must be 0-3}"
+    fi
+    if [ "$SCEN" = all ]; then
+      for s in "${SCENARIOS[@]}"; do run_baselines "$s" "$@"; done
+    else
+      run_baselines "$SCEN" "$@"
+    fi
+    if [ -z "${DRY_RUN:-}" ]; then echo "save into results/: python experiments/stable_diffusion/export_results.py"; fi
     ;;
 
   smoke|full)
