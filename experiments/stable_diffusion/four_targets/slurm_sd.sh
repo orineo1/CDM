@@ -21,7 +21,7 @@
 #   HF_HOME=/scratch/...     where the ~tens of GB of SDXL/ControlNet/CLIP weights are cached
 #
 #SBATCH --job-name=cdm-sd
-#SBATCH --partition=catfish        # override: sbatch --partition=<name> ...
+#SBATCH --partition=salmon         # override: sbatch --partition=<name> ...
 #SBATCH --gres=gpu:1               # needs a large GPU: the paper used an L40S (48 GB)
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
