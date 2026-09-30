@@ -98,6 +98,7 @@ sys.path.insert(0, HERE)   # sibling pipeline modules
 
 from cdm.guidance import GuidanceConfig, optimize_guided, optimize_guided_population, AdamGuidance   # noqa: E402
 from cdm.guidance.config import update_ddim_minus_grad                                             # noqa: E402
+from cdm.losses.exact_mmd import ExactConditionalMMD, IdentitySampler                  # noqa: E402
 from cdm.guidance.core import refine as refine_x, _final_loss                                  # noqa: E402
 import dataclasses                                                                           # noqa: E402
 from cdm.guidance.config import (init_randn, init_zeros, perturb_beta_ratio,               # noqa: E402
@@ -300,14 +301,20 @@ def main():
         assert info0.get("mu_list") is not None, "--sampler exact needs a target file with the mixture"
         c0 = torch.load(args.target, map_location="cpu", weights_only=False)["condition_on"]
         sampler, sampler_arch = ExactConditionalSampler(info0["mu_list"], info0["Sigma_list"], info0["alpha"], c0), "exact"
+    elif args.sampler == "exactloss":   # oracle for the loss: closed-form MMD^2 of the mixture, exact gradient in x
+        sampler, sampler_arch = IdentitySampler(), "exactloss"
     else:
         sampler, sampler_arch = load_model(args.sampler, dev)
     assert prior_arch == "diffusion", "--prior must be an unconditional diffusion checkpoint"
     sampler_type = sampler_arch if args.sampler_type == "auto" else args.sampler_type
-    method = ("P" if args.algo == "particles" else "") + {"cm": "MLGD-F", "exact": "MLGD-X"}.get(sampler_type, "MLGD")
+    method = ("P" if args.algo == "particles" else "") + {"cm": "MLGD-F", "exact": "MLGD-X", "exactloss": "MLGD-E"}.get(sampler_type, "MLGD")
     R = args.n_particles if args.algo == "particles" else args.n_restarts
     target_generator, info = load_target(args.target, dev)
     loss_fn = make_loss(args)
+    if sampler_arch == "exactloss":
+        assert info.get("mu_list") is not None, "--sampler exactloss needs a target file with the mixture"
+        _exact = ExactConditionalMMD(info["mu_list"], info["Sigma_list"], info["alpha"], info["target"])
+        loss_fn = lambda pred, target: _exact(pred[0]).float().to(pred.device)   # noqa: E731
     print(f"[find_xstar] {method} with {args.guidance.upper()} guidance | loss={args.loss} n_cond={args.n_cond} "
           f"n_mc={args.n_mc} perturb={args.perturb} aggregate={args.aggregate} step={args.step_size} "
           f"select={args.select}{'' if args.select == 'all' else f'(n_sel={args.n_sel})'} init={args.init} eta={args.eta} "
