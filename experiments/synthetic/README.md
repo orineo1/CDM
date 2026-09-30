@@ -32,7 +32,7 @@ git-ignored.
 | `fig_smc_correction.py` | twisted-SMC correction of the β-sweep (Figure 1(d)) |
 | `refine_endpoints.py`, `diag_trajectories.py`, `diag_xT_vs_noise.py`, `diag_sampler_at_xstar.py` | diagnostics of the (10, 1) cell (research, not in the paper) |
 
-## Smoke test (CPU, a few minutes)
+## Smoke test (CPU, about 15 minutes)
 
 ```bash
 python experiments/synthetic/pipeline/make_table1.py --settings 1x1 \
