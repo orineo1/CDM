@@ -157,6 +157,35 @@ def _prior_score(model_uncond, x, t=None):
     return -eps / torch.sqrt(1 - model_uncond.baralphas[t])
 
 
+def _zo_grad(model_cond, loss_function, cfg, view, x, n_ref, seed):
+    """Zeroth-order gradient of the sample loss at x: central differences along coordinate (or random)
+    directions, every evaluation drawn with the same seed (common random numbers), so the sampling
+    noise largely cancels in each difference. Returns (loss at x, gradient)."""
+    def L(z):
+        torch.manual_seed(seed)
+        if cfg.device == "cuda":
+            torch.cuda.manual_seed_all(seed)
+        with torch.no_grad():
+            pred = _draw_conditional(model_cond, z, view)
+            tgt = cfg.target_generator(n_ref, cfg.device)
+            return loss_function(pred, tgt).detach()
+    flat = x.view(-1)
+    d = flat.numel()
+    eps = cfg.zo_eps
+    if cfg.zo_dirs and cfg.zo_dirs > 0:
+        gen = torch.Generator(device="cpu").manual_seed(seed + 1)
+        U = torch.randn(cfg.zo_dirs, d, generator=gen).to(flat.device, flat.dtype)
+    else:
+        U = torch.eye(d, device=flat.device, dtype=flat.dtype)
+    g = torch.zeros_like(flat)
+    for u in U:
+        diff = L((flat + eps * u).view_as(x)) - L((flat - eps * u).view_as(x))
+        g = g + (diff / (2 * eps)) * u
+    if cfg.zo_dirs and cfg.zo_dirs > 0:
+        g = g / U.shape[0]
+    return L(x), g.view_as(x)
+
+
 def refine(model_uncond, model_cond, loss_function, cfg, x0):
     """Post-refinement: gradient steps (Adam or SGD) on the plug-in loss L_hat(x) (Algorithm 2
     called at the clean x with refine_n_cond samples, gradient with respect to x, no diffusion),
@@ -170,10 +199,14 @@ def refine(model_uncond, model_cond, loss_function, cfg, x0):
     t_start = time.time()
     for k in range(cfg.refine_steps):
         opt.zero_grad()
-        pred_samples = _draw_conditional(model_cond, x, view)
-        target_samples = cfg.target_generator(n_ref, cfg.device)
-        loss_val = loss_function(pred_samples, target_samples)
-        grad = torch.autograd.grad(loss_val, x)[0]
+        if getattr(cfg, "refine_grad", "pathwise") == "zo":
+            loss_val, grad = _zo_grad(model_cond, loss_function, cfg, view, x.detach(), n_ref,
+                                      seed=(cfg.seed or 0) * 100003 + k)
+        else:
+            pred_samples = _draw_conditional(model_cond, x, view)
+            target_samples = cfg.target_generator(n_ref, cfg.device)
+            loss_val = loss_function(pred_samples, target_samples)
+            grad = torch.autograd.grad(loss_val, x)[0]
         prior_norm = 0.0
         if cfg.refine_lambda > 0:
             with torch.no_grad():

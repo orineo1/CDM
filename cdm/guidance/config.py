@@ -246,6 +246,13 @@ class GuidanceConfig:
     refine_lambda: float = 0.0
     refine_optim: str = "adam"           # "adam" or "sgd"
     refine_n_cond: Optional[int] = None  # conditional samples per refinement step (default: n_cond)
+    # gradient used by the refinement: "pathwise" = backpropagation through the sampler (default);
+    # "zo" = zeroth-order central differences of the sample loss with common random numbers (the same
+    # sampler and target draws on both sides), which also sees how the mixture of modes of P(Y|X=x)
+    # shifts with x, a change pathwise gradients through samples largely miss
+    refine_grad: str = "pathwise"
+    zo_eps: float = 0.05                 # finite-difference step (whitened units)
+    zo_dirs: int = 0                     # 0: all coordinate directions (2 d loss evaluations); M > 0: M random Gaussian directions
 
     # --- bookkeeping ---
     device: str = "cuda"

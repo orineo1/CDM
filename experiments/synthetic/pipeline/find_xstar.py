@@ -165,6 +165,14 @@ def parse_args():
     g.add_argument("--refine-lambda", type=float, default=0.0, help="weight of the prior score term")
     g.add_argument("--refine-optim", choices=["adam", "sgd"], default="adam")
     g.add_argument("--refine-n-cond", type=int, default=None, help="conditional samples per refinement step (default n_cond)")
+    g.add_argument("--refine-grad", choices=["pathwise", "zo"], default="pathwise",
+                   help="refinement gradient: backpropagation through the sampler, or zeroth-order central differences "
+                        "of the sample loss with common random numbers")
+    g.add_argument("--zo-eps", type=float, default=0.05, help="--refine-grad zo: finite-difference step")
+    g.add_argument("--zo-dirs", type=int, default=0, help="--refine-grad zo: 0 = all coordinates, M = M random directions")
+    g.add_argument("--select-top", type=int, default=0,
+                   help="re-estimate the final loss of the best K trajectories with --select-n samples before choosing (0: off)")
+    g.add_argument("--select-n", type=int, default=10000, help="--select-top: conditional samples for the re-estimate")
     g = p.add_argument_group("inner estimator")
     g.add_argument("--n-cond", type=int, default=250)
     g.add_argument("--n-target", type=int, default=None)
@@ -273,6 +281,7 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
         resample_schedule=args.resample_schedule,
         refine_steps=args.refine_steps, refine_lr=args.refine_lr, refine_lambda=args.refine_lambda,
         refine_optim=args.refine_optim, refine_n_cond=args.refine_n_cond,
+        refine_grad=args.refine_grad, zo_eps=args.zo_eps, zo_dirs=args.zo_dirs,
         device=args.device, seed=seed, progress=args.progress,
         tag=f"find_xstar:{args.guidance}:{args.algo}:{'MLGD-F' if sampler_type == 'cm' else 'MLGD'}",
     )
@@ -341,6 +350,17 @@ def main():
             rec["refine"] = {k: (v.tolist() if torch.is_tensor(v) else v) for k, v in res["refine"].items()}
         return rec, cfg
 
+    def reselect(runs, cfg):
+        """--select-top K: fresh loss estimate with select_n samples for the K best, then the minimum."""
+        if not args.select_top or len(runs) <= 1:
+            return min(runs, key=lambda q: q["final_loss"])
+        cand = sorted(runs, key=lambda q: q["final_loss"])[:args.select_top]
+        cfg_sel = dataclasses.replace(cfg, final_n_cond=args.select_n)
+        for q in cand:
+            x = torch.tensor(q["x_hat"], device=dev).view(1, -1)
+            q["select_loss"] = float(_final_loss(sampler, loss_fn, cfg_sel, x))
+        return min(cand, key=lambda q: q["select_loss"])
+
     def screened_attempt(a):
         """--init screen: rank n_screen unguided prior samples by the sample loss (forward only), keep the
         best R, finish each (refinement only, or re-noised guided diffusion + refinement), return the best."""
@@ -376,7 +396,7 @@ def main():
             x_hat = x_f.detach().float().view(-1)
             runs.append({"seed": seed_r, "screen_index": int(idx), "screen_loss": float(losses[idx]),
                          "x_hat": x_hat.cpu().tolist(), "final_loss": fl, "time_s": time.time() - t1, **evaluate(x_hat, info)})
-        best = min(runs, key=lambda q: q["final_loss"])
+        best = reselect(runs, cfg0)
         q = torch.quantile(losses, torch.tensor([0.0, 0.01, 0.1, 0.5]))
         return {"attempt": a, **best, "restarts": runs,
                 "screen": {"n": int(X.shape[0]), "n_cond": cfg_s.final_n_cond, "finish": args.screen_finish,
@@ -395,8 +415,9 @@ def main():
             rec, cfg = one_trajectory(args.seed * 1000 + a, optimize_guided_population)
             att = {"attempt": a, **rec}
         else:   # R independent restarts, the smallest final loss wins: that is the algorithm's answer
-            runs = [one_trajectory(args.seed * 1000 + a * R + r, optimize_guided)[0] for r in range(R)]
-            best = min(runs, key=lambda q: q["final_loss"])
+            outs = [one_trajectory(args.seed * 1000 + a * R + r, optimize_guided) for r in range(R)]
+            runs = [o[0] for o in outs]
+            best = reselect(runs, outs[0][1])
             att = {"attempt": a, **{k: v for k, v in best.items() if k != "trace"},
                    "restarts": [{k: v for k, v in q.items() if k != "trace"} for q in runs],
                    "traces": [q["trace"] for q in runs], "time_s": sum(q["time_s"] for q in runs)}
