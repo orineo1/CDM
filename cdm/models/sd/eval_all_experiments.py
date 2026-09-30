@@ -51,7 +51,7 @@ from cdm.models.sd.models import (
     make_deterministic,
     resolved_revision,
 )
-from cdm.models.sd.run_mlgd_f import library_versions
+from cdm.models.sd.run_mlgd_f import compute_clip_softmax, library_versions
 from cdm.models.sd.visualization import plot_row
 
 NEUTRAL_PROMPT = "a superrealistic professional photograph of"
@@ -241,20 +241,6 @@ def clip_embed(images, clip_model, clip_processor, device, batch=32):
     return torch.cat(out, dim=0)
 
 
-def gender_counts(image_embs, clip_model, clip_processor, device):
-    """CLIP zero-shot man/woman on already-encoded images: run_mlgd_f.compute_clip_softmax
-    without re-encoding. Returns (n_male, p_male per image)."""
-    clip_model.to(device)
-    inputs = clip_processor(text=[MAN_PROMPT, WOMAN_PROMPT], return_tensors="pt", padding=True).to(device)
-    with torch.no_grad():
-        text = clip_model.get_text_features(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"])
-        text = text / text.norm(dim=-1, keepdim=True)
-        probs = torch.softmax((image_embs.to(device).float() @ text.T.float()) * 100.0, dim=-1)
-    clip_model.to("cpu")
-    p_male = probs[:, 0].cpu().numpy()
-    return int((p_male > 0.5).sum()), p_male
-
-
 def main(argv=None):
     args = parse_args(argv)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -348,10 +334,14 @@ def main(argv=None):
         embeddings[f"method_{name}"] = embs.cpu().numpy()
         with torch.no_grad():
             mmd = compute_mmd(embs, target_clip).item()          # already sqrt(|MMD^2| + eps)
+            # SWD: the notebook's adaptive estimator (projections added until it moves by
+            # < 1e-3). The notebook drew the projections from the unseeded global RNG, so its
+            # SWD differed run to run; here they come from a generator seeded with --seed.
             swd = compute_swd(embs, target_clip, seed=args.seed).item()
         r = {"mmd": mmd, "swd": swd, "n": args.n_eval}
-        if gender:
-            n_male, _ = gender_counts(embs, clip_model, clip_processor, device)
+        if gender:   # the notebook's classifier, unchanged: CLIP zero-shot man vs woman
+            sr, _ = compute_clip_softmax(imgs, clip_model, clip_processor, MAN_PROMPT, WOMAN_PROMPT, device)
+            n_male = sum(1 for x in sr if x["label"] == "male")
             p, lo, hi = binomial_ci(n_male, args.n_eval)
             r.update(p_male=p, ci_lo=lo, ci_hi=hi, n_male=n_male, n_female=args.n_eval - n_male)
             print(f"    MMD={mmd:.5f}  SWD={swd:.5f}  p(male)={p:.3f}  95%CI=[{lo:.3f},{hi:.3f}]", flush=True)
