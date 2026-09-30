@@ -4,7 +4,7 @@
 #
 # From the repo root (logs/ must exist before sbatch, SLURM opens the log file first):
 #   mkdir -p logs
-#   sbatch experiments/stable_diffusion/four_targets/slurm_sd.sh balanced            # full run, one target
+#   sbatch --partition=salmon experiments/stable_diffusion/four_targets/slurm_sd.sh balanced   # full run, one target
 #   TIER=smoke sbatch --time=01:00:00 experiments/stable_diffusion/four_targets/slurm_sd.sh balanced
 #   sbatch --array=0-3 experiments/stable_diffusion/four_targets/slurm_sd.sh         # all four targets
 #   sbatch --partition=<gpu partition> --gres=gpu:a100:1 experiments/stable_diffusion/four_targets/slurm_sd.sh skewed
@@ -21,7 +21,6 @@
 #   HF_HOME=/scratch/...     where the ~tens of GB of SDXL/ControlNet/CLIP weights are cached
 #
 #SBATCH --job-name=cdm-sd
-#SBATCH --partition=salmon         # override: sbatch --partition=<name> ...
 #SBATCH --gres=gpu:1               # needs a large GPU: the paper used an L40S (48 GB)
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
