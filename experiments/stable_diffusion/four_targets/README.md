@@ -23,6 +23,15 @@ bash run.sh full   balanced                # GPU; the full, published configurat
 Scenarios: `balanced`, `skewed`, `gender_interpolation`, `age_interpolation`.
 Set `PYTHON=/path/to/python` if the interpreter on `PATH` is not the project one.
 
+On a SLURM cluster, from the repo root (`slurm_sd.sh` wraps `run.sh`; its header lists
+`TIER`, `VENV`, `WANDB_MODE`, `HF_HOME`):
+
+```
+mkdir -p logs && wandb login                                            # once
+sbatch experiments/stable_diffusion/four_targets/slurm_sd.sh balanced   # one target, full
+sbatch --array=0-3 experiments/stable_diffusion/four_targets/slurm_sd.sh   # all four
+```
+
 The `smoke` configuration reproduces no published number; its output is not a result.
 
 ## Requirements
