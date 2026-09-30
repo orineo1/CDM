@@ -48,7 +48,7 @@ from sklearn.decomposition import PCA
 # resolve. Not needed: this is a package now and the imports are absolute.
 
 from cdm.models.sd.analysis import compare_scribbles_heatmap
-from cdm.models.sd.clip_utils import encode_images_clip, load_clip_model
+from cdm.models.sd.clip_utils import CLIP_MODEL_ID, encode_images_clip, load_clip_model
 from cdm.models.sd.generation import (
     compute_pred_x0_direct,
     denoise_step,
@@ -58,7 +58,17 @@ from cdm.models.sd.generation import (
 )
 from cdm.models.sd.image_utils import build_base_image, latent_to_pil, sobel_proxy
 from cdm.models.sd.metrics import compute_mmd, compute_swd, evaluate_distribution_mmd, mmd_report
-from cdm.models.sd.models import DEFAULT_CONTROLNET_MODEL_ID, load_models, setup_gradient_checkpointing
+from cdm.models.sd.hed import load_hed
+from cdm.models.sd.models import (
+    DEFAULT_ARCHITECT_MODEL_ID,
+    DEFAULT_CONTROLNET_MODEL_ID,
+    DEFAULT_SPRINTER_MODEL_ID,
+    HED_ANNOTATOR_ID,
+    load_models,
+    make_deterministic,
+    resolved_revision,
+    setup_gradient_checkpointing,
+)
 from cdm.models.sd.visualization import plot_row, visualize_step
 
 LOSS_FNS = {"mmd": compute_mmd, "swd": compute_swd}
@@ -191,12 +201,24 @@ def parse_args():
                         "no override) -- both default to the same "
                         "models.DEFAULT_CONTROLNET_MODEL_ID, so they can't silently "
                         "drift apart unless this flag is explicitly overridden.")
-    p.add_argument("--sprinter_model_id",   type=str,
-                   default="stabilityai/sdxl-turbo")
-    p.add_argument("--architect_model_id",  type=str,
-                   default="stabilityai/stable-diffusion-xl-base-1.0")
+    p.add_argument("--sprinter_model_id",   type=str, default=DEFAULT_SPRINTER_MODEL_ID)
+    p.add_argument("--architect_model_id",  type=str, default=DEFAULT_ARCHITECT_MODEL_ID)
+    # Hub commit to pin each model to (None = the hub's current main). Whatever was
+    # loaded is recorded in metrics.json["model_revisions"]; copy those shas here (or
+    # into config/) to freeze a run's weights for good.
+    p.add_argument("--controlnet_revision", type=str, default=None)
+    p.add_argument("--sprinter_revision",   type=str, default=None)
+    p.add_argument("--architect_revision",  type=str, default=None)
+    p.add_argument("--hed_revision",        type=str, default=None,
+                   help=f"revision of {HED_ANNOTATOR_ID} (the HED scribble extractor)")
+    p.add_argument("--clip_revision",       type=str, default=None,
+                   help=f"revision of {CLIP_MODEL_ID}")
 
-    p.add_argument("--seed", type=int, default=None)
+    p.add_argument("--seed", type=int, default=1,
+                   help="seeds every RNG; the run is never unseeded (default 1)")
+    p.add_argument("--no_deterministic", action="store_true",
+                   help="skip the deterministic-kernel settings (faster; two runs with the "
+                        "same seed are then NOT guaranteed to give the same numbers)")
     p.add_argument("--run_unguided", action="store_true",
                    help="Also run the regular (unguided) path in parallel for "
                         "comparison -- an extra full UNet forward pass every step, "
@@ -228,6 +250,22 @@ def parse_args():
 # Helpers
 # ---------------------------------------------------------------------------
 
+def library_versions():
+    """Versions of everything whose numerics shape the result, for run provenance."""
+    import importlib
+    import platform
+    out = {"python": platform.python_version(), "torch": torch.__version__,
+           "cuda": torch.version.cuda, "cudnn": torch.backends.cudnn.version(),
+           "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}
+    for name in ("diffusers", "transformers", "controlnet_aux", "peft", "accelerate",
+                 "numpy", "sklearn", "PIL", "huggingface_hub"):
+        try:
+            out[name] = importlib.import_module(name).__version__
+        except Exception:
+            out[name] = None
+    return out
+
+
 def pil_images_to_tensor(pil_list, device):
     tensors = [TF.to_tensor(img).unsqueeze(0) for img in pil_list]
     return torch.cat(tensors, dim=0).to(device)
@@ -239,11 +277,9 @@ def save_image_list_npy(pil_list, path):
     np.save(path, arr)
 
 
-def extract_scribble_hed(pil_image):
+def extract_scribble_hed(pil_image, revision=None):
     """Extract a HED scribble from a PIL portrait image."""
-    from controlnet_aux import HEDdetector
-    hed = HEDdetector.from_pretrained("lllyasviel/Annotators")
-    return hed(pil_image, scribble=True)
+    return load_hed(revision)(pil_image, scribble=True)
 
 
 def compute_clip_softmax(pil_list, clip_model, clip_processor,
@@ -364,7 +400,7 @@ def build_targets_gender(args, sprinter, clip_model, clip_processor, device,
     # Extract HED scribble from a male portrait
     print("Extracting HED scribble...", flush=True)
     source_image = _scribble_init_imgs[2]
-    scribble_pil = extract_scribble_hed(source_image)
+    scribble_pil = extract_scribble_hed(source_image, args.hed_revision)
 
     # Regenerate targets conditioned on HED scribble
     print(f"Regenerating {N_total} targets conditioned on HED scribble...", flush=True)
@@ -398,7 +434,7 @@ def build_targets_gender(args, sprinter, clip_model, clip_processor, device,
         clip_embs_per_group[group_names[0]].cpu().numpy(),
         clip_embs_per_group[group_names[-1]].cpu().numpy(),
     ])
-    pca_fixed = PCA(n_components=2)
+    pca_fixed = PCA(n_components=2, svd_solver="full")   # the default solver is randomized
     pca_fixed.fit(anchor_embs)
     fig, ax = plt.subplots(figsize=(8, 6))
     for (name, _, _, color, marker), embs in zip(target_groups, clip_embs_per_group.values()):
@@ -472,7 +508,7 @@ def build_targets_age(args, sprinter, clip_model, clip_processor, device,
     source_age = {"min": ages[0], "mid": ages[len(ages) // 2], "max": ages[-1]}[args.age_source]
     print(f"Extracting HED scribble from age-{source_age} portrait ({args.age_source})...", flush=True)
     source_image = target_images_per_group[str(source_age)][0]
-    scribble_pil = extract_scribble_hed(source_image)
+    scribble_pil = extract_scribble_hed(source_image, args.hed_revision)
 
     # Encode to CLIP
     print("Encoding age targets to CLIP...", flush=True)
@@ -489,7 +525,7 @@ def build_targets_age(args, sprinter, clip_model, clip_processor, device,
 
     # PCA — fit on youngest vs oldest bracket, colour by age
     n_anchor = min(n_per_age * max(1, len(ages)//10), len(ages) * n_per_age // 2)
-    pca_fixed = PCA(n_components=2)
+    pca_fixed = PCA(n_components=2, svd_solver="full")   # the default solver is randomized
     pca_fixed.fit(all_clip_embeddings.cpu().numpy())
 
     age_vals = np.array([int(n) for n in group_names for _ in range(n_per_age)])
@@ -542,9 +578,14 @@ def main():
 
     n_eval = 10  # number of Sprinter photos per MMD evaluation
 
-    if args.seed is not None:
+    # Seed everything and (unless --no_deterministic) force deterministic GPU kernels,
+    # before the first CUDA call so CUBLAS_WORKSPACE_CONFIG is honoured.
+    if args.no_deterministic:
         torch.manual_seed(args.seed)
         np.random.seed(args.seed)
+    else:
+        make_deterministic(args.seed)
+    print(f"Seed: {args.seed}  deterministic kernels: {not args.no_deterministic}", flush=True)
 
     import wandb
 
@@ -557,8 +598,20 @@ def main():
         controlnet_model_id=args.controlnet_model_id,
         sprinter_model_id=args.sprinter_model_id,
         architect_model_id=args.architect_model_id,
+        controlnet_revision=args.controlnet_revision,
+        sprinter_revision=args.sprinter_revision,
+        architect_revision=args.architect_revision,
     )
-    clip_model, clip_processor = load_clip_model(device)
+    clip_model, clip_processor = load_clip_model(device, revision=args.clip_revision)
+    model_revisions = {
+        args.architect_model_id:  resolved_revision(args.architect_model_id, args.architect_revision),
+        args.sprinter_model_id:   resolved_revision(args.sprinter_model_id, args.sprinter_revision),
+        args.controlnet_model_id: resolved_revision(args.controlnet_model_id, args.controlnet_revision),
+        HED_ANNOTATOR_ID:         resolved_revision(HED_ANNOTATOR_ID, args.hed_revision),
+        CLIP_MODEL_ID:            resolved_revision(CLIP_MODEL_ID, args.clip_revision),
+    }
+    print("Model revisions: " + ", ".join(f"{k}@{(v or 'unknown')[:12]}" for k, v in model_revisions.items()),
+          flush=True)
     print("Models loaded.", flush=True)
 
     # ── 2. Base oval image + Sobel (for initial target generation) ──────────
@@ -631,6 +684,9 @@ def main():
             "adam_beta1":                   args.adam_beta1,
             "adam_beta2":                   args.adam_beta2,
             "adam_eps":                     args.adam_eps,
+            "deterministic":                not args.no_deterministic,
+            "model_revisions":              model_revisions,
+            "versions":                     library_versions(),
         },
     )
     print(f"✅ wandb run: {run.name}", flush=True)
@@ -705,7 +761,12 @@ def main():
     steps_csv_path = os.path.join(args.output_dir, "steps.csv")
     with open(steps_csv_path, "w", newline="") as f:
         csv.DictWriter(f, fieldnames=STEP_FIELDS).writeheader()
-    backsel_generator = torch.Generator().manual_seed(args.seed) if args.seed is not None else None
+    backsel_generator = torch.Generator().manual_seed(args.seed)
+    # Side computations (per-step plots, the unguided comparison) get their own noise
+    # streams, so plotting or evaluating more or less often cannot change the guided
+    # trajectory: the trajectory only ever consumes the global RNG.
+    vis_generator  = torch.Generator(device=device).manual_seed(args.seed + 10_000)
+    eval_generator = torch.Generator(device=device).manual_seed(args.seed + 20_000)
 
     # Persistent Adam moment buffers across the whole guidance trajectory (only
     # used when --use_adam). Accumulated in float32 regardless of latents' own
@@ -722,8 +783,8 @@ def main():
     if args.loss_fn == "mmd":
         loss_fn = partial(compute_mmd, bandwidth_scale=args.bandwidth_scale,
                           kernel_alpha=args.kernel_alpha)
-    else:
-        loss_fn = LOSS_FNS[args.loss_fn]
+    else:   # swd: fixed projections per call, independent of the global RNG
+        loss_fn = partial(LOSS_FNS[args.loss_fn], seed=args.seed)
 
     # ── Baseline visualisation (before any correction) ──────────────────────
     with torch.no_grad():
@@ -748,6 +809,7 @@ def main():
                 guidance_scale=args.guidance_scale,
                 controlnet_conditioning_scale=args.controlnet_scale,
                 output_type="pil",
+                generator=vis_generator,
             ).images[0]
             for _ in range(n_eval)
         ]
@@ -776,7 +838,7 @@ def main():
     visualize_step(sd_baseline, architect, sprinter, target_clip_np,
                    num_cond=4, save_path=None,  # per-step plots go to wandb only
                    pca_fixed=pca_fixed, group_names=group_names, group_sizes=group_sizes,
-                   controlnet_scale=args.controlnet_scale)
+                   controlnet_scale=args.controlnet_scale, generator=vis_generator)
     print("✅ Baseline visualisation logged to wandb.", flush=True)
 
     # ── 9. MLGD-F guidance loop ─────────────────────────────────────────────
@@ -917,6 +979,7 @@ def main():
                 sprinter, clip_model, clip_processor,
                 all_clip_embeddings, args.sprinter_eval_prompt,
                 n_eval=n_eval, device=device, controlnet_scale=args.controlnet_scale,
+                generator=eval_generator,
             )
             wandb_log["intermediate/unguided_cond_mmd"] = unguided_mmd
             wandb_log["intermediate/mlgd_f_cond_mmd"]   = mmd_display.item()
@@ -948,7 +1011,7 @@ def main():
         visualize_step(sd, architect, sprinter, target_clip_np,
                        num_cond=5, save_path=None,  # per-step plots go to wandb only
                        pca_fixed=pca_fixed, group_names=group_names, group_sizes=group_sizes,
-                       controlnet_scale=args.controlnet_scale)
+                       controlnet_scale=args.controlnet_scale, generator=vis_generator)
 
         latents = denoise_step(
             architect.scheduler, noise_pred, t, latents_step, correction=correction
@@ -975,7 +1038,7 @@ def main():
     # resampled from the existing all_clip_embeddings pool (bootstrap if it has
     # fewer than 250 rows) rather than regenerated from scratch.
     FINAL_MMD_N = 250
-    final_mmd_generator = torch.Generator().manual_seed(args.seed) if args.seed is not None else None
+    final_mmd_generator = torch.Generator().manual_seed(args.seed)
     final_target_clip = sample_target_embeddings(
         all_clip_embeddings, FINAL_MMD_N, generator=final_mmd_generator
     )
@@ -1116,6 +1179,10 @@ def main():
             "mmd_relative_improvement": ((regular_mmd - mlgd_f_mmd) / (regular_mmd + 1e-8)
                                          if args.run_unguided else None),
             "final_mmd_n":            FINAL_MMD_N,
+            "seed":                   args.seed,
+            "deterministic":          not args.no_deterministic,
+            "model_revisions":        model_revisions,
+            "versions":               library_versions(),
             "wandb": {"project": run.project, "entity": run.entity, "name": run.name,
                       "id": run.id, "url": run.url},
             "final_mlgd_f_swd":       swd_mlgd_f,   # None — run analysis.py to compute

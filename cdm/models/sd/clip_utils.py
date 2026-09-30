@@ -14,15 +14,18 @@ import torch.nn.functional as F
 from transformers import CLIPModel, CLIPProcessor
 
 
-def load_clip_model(device, model_id="openai/clip-vit-large-patch14"):
+CLIP_MODEL_ID = "openai/clip-vit-large-patch14"
+
+
+def load_clip_model(device, model_id=CLIP_MODEL_ID, revision=None):
     """
-    Load and freeze a CLIP ViT-L/14 model.
+    Load and freeze a CLIP ViT-L/14 model. `revision` pins the hub commit (None = main).
 
     Returns:
         (clip_model, clip_processor)
     """
-    clip_processor = CLIPProcessor.from_pretrained(model_id)
-    clip_model = CLIPModel.from_pretrained(model_id).to(device)
+    clip_processor = CLIPProcessor.from_pretrained(model_id, revision=revision)
+    clip_model = CLIPModel.from_pretrained(model_id, revision=revision).to(device)
     clip_model.eval()
     for p in clip_model.parameters():
         p.requires_grad_(False)

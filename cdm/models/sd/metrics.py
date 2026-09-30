@@ -139,6 +139,7 @@ def evaluate_distribution_mmd(
     n_eval=10,
     device="cuda",
     controlnet_scale=0.8,
+    generator=None,
 ):
     """
     Full evaluation: latent -> scribble PIL -> sprinter photos -> CLIP -> MMD.
@@ -159,6 +160,9 @@ def evaluate_distribution_mmd(
                                  the guidance loop (run_dps_step_clip) uses, so eval is
                                  conditioned consistently with the rest of the pipeline
                                  (run_mlgd_f.py passes args.controlnet_scale).
+        generator:               torch.Generator for the Sprinter noise. With one, this
+                                 evaluation draws nothing from the global RNG, so calling
+                                 it (or not) leaves the guided trajectory unchanged.
 
     Returns:
         (mmd_scalar, eval_photos_list, clip_embs) -- mmd_scalar is
@@ -184,6 +188,7 @@ def evaluate_distribution_mmd(
                 controlnet_conditioning_scale=controlnet_scale,
                 output_type="pil",
                 return_dict=True,
+                generator=generator,
             )
             eval_photos.extend(result.images)
     sprinter.vae.to(dtype=original_vae_dtype)

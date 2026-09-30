@@ -12,9 +12,11 @@ Architect. Supports HuggingFace Hub paths via the `hf://` prefix.
 
 import logging
 import os
+import random
 import warnings
 import zipfile
 
+import numpy as np
 import torch
 from diffusers import (
     ControlNetModel,
@@ -94,6 +96,55 @@ def _resolve_lora_path(lora_path: str) -> str:
 # default) can't silently drift onto different weights -- both import this constant
 # instead of each hardcoding their own copy of the model id string.
 DEFAULT_CONTROLNET_MODEL_ID = "xinsir/controlnet-scribble-sdxl-1.0"
+DEFAULT_SPRINTER_MODEL_ID   = "stabilityai/sdxl-turbo"
+DEFAULT_ARCHITECT_MODEL_ID  = "stabilityai/stable-diffusion-xl-base-1.0"
+HED_ANNOTATOR_ID            = "lllyasviel/Annotators"
+
+
+def make_deterministic(seed):
+    """
+    Seed every RNG and force deterministic GPU kernels.
+
+    Seeding alone makes a run deterministic *in order* (which noise is drawn), but the
+    guidance backpropagates through the Sprinter, the VAE and CLIP at every step, and
+    cuDNN convolution backward, flash / memory-efficient attention backward and some
+    scatter ops pick non-deterministic kernels by default. Bit-level differences in the
+    gradient grow over the guided steps into a different scribble. So: deterministic
+    cuDNN, no autotuning, deterministic cuBLAS workspace, torch's deterministic-algorithm
+    mode (warn_only: an op with no deterministic kernel prints a warning naming it
+    instead of crashing) and the math attention kernel only. Slower, more memory in
+    attention; same GPU model + same library versions + same seed -> same numbers.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)                     # seeds CPU and every CUDA device
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")   # read at the first cuBLAS call
+    torch.use_deterministic_algorithms(True, warn_only=True)
+    for name in ("enable_flash_sdp", "enable_mem_efficient_sdp", "enable_cudnn_sdp"):
+        fn = getattr(torch.backends.cuda, name, None)
+        if fn is not None:
+            fn(False)
+    torch.backends.cuda.enable_math_sdp(True)
+
+
+def resolved_revision(repo_id, revision=None):
+    """
+    The commit sha of `repo_id` that from_pretrained loaded, read from the local
+    HuggingFace cache (works offline, after the download). `revision=None` means the
+    hub's `main`. Returns None if the cache has no entry (e.g. a local path).
+    """
+    if revision and len(revision) == 40 and all(c in "0123456789abcdef" for c in revision):
+        return revision
+    from huggingface_hub.constants import HF_HUB_CACHE
+    ref = os.path.join(HF_HUB_CACHE, "models--" + repo_id.replace("/", "--"),
+                       "refs", revision or "main")
+    try:
+        with open(ref) as f:
+            return f.read().strip()
+    except OSError:
+        return None
 
 
 def load_models(
@@ -101,8 +152,11 @@ def load_models(
     architect_lora_path=None,
     architect_unet_path=None,
     controlnet_model_id=DEFAULT_CONTROLNET_MODEL_ID,
-    sprinter_model_id="stabilityai/sdxl-turbo",
-    architect_model_id="stabilityai/stable-diffusion-xl-base-1.0",
+    sprinter_model_id=DEFAULT_SPRINTER_MODEL_ID,
+    architect_model_id=DEFAULT_ARCHITECT_MODEL_ID,
+    controlnet_revision=None,
+    sprinter_revision=None,
+    architect_revision=None,
 ):
     """
     Load Architect and Sprinter pipelines.
@@ -115,18 +169,22 @@ def load_models(
         controlnet_model_id:  HuggingFace model ID for the ControlNet.
         sprinter_model_id:    HuggingFace model ID for the Sprinter.
         architect_model_id:   HuggingFace model ID for the Architect.
+        *_revision:           hub commit sha / tag to pin each model to (None = main;
+                              the sha actually loaded is recorded by resolved_revision).
 
     Returns:
         (architect, sprinter) pipeline tuple.
     """
     controlnet = ControlNetModel.from_pretrained(
         controlnet_model_id,
+        revision=controlnet_revision,
         torch_dtype=torch.float16,
         use_safetensors=True,
     ).to(device)
 
     sprinter = StableDiffusionXLControlNetPipeline.from_pretrained(
         sprinter_model_id,
+        revision=sprinter_revision,
         controlnet=controlnet,
         torch_dtype=torch.float16,
         variant="fp16",
@@ -135,6 +193,7 @@ def load_models(
 
     architect = StableDiffusionXLPipeline.from_pretrained(
         architect_model_id,
+        revision=architect_revision,
         torch_dtype=torch.float16,
         use_safetensors=True,
     ).to(device)

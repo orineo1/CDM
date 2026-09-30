@@ -71,6 +71,9 @@ export WANDB_CONFIG_DIR="${WANDB_CONFIG_DIR:-$CACHE_DIR/wandb-config}"
 export CUDA_CACHE_PATH="${CUDA_CACHE_PATH:-$CACHE_DIR/nv}"
 export TRITON_CACHE_DIR="${TRITON_CACHE_DIR:-$CACHE_DIR/triton}"
 mkdir -p "$CACHE_DIR" "$MPLCONFIGDIR" "$OUT"
+# deterministic cuBLAS (run_mlgd_f.make_deterministic also sets it; here it is set
+# before the interpreter starts, which is what cuBLAS requires)
+export CUBLAS_WORKSPACE_CONFIG="${CUBLAS_WORKSPACE_CONFIG:-:4096:8}"
 
 usage() { echo "usage: bash run.sh [check | help | smoke|full <balanced|skewed|gender_interpolation|age_interpolation|all> [run_mlgd_f flags...]]" >&2; exit 64; }
 
@@ -125,7 +128,9 @@ run_one() {   # run_one <tier> <scenario> [extra flags...]
       "$PY" -c "import torch; print('gpu:       ', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none', '| torch', torch.__version__)"
       echo "config:     config/$name.env  overrides: ${*:-none}"
       printf 'command:    '; printf '%q ' "${cmd[@]}"; echo
+      "$PY" -c "from cdm.models.sd.run_mlgd_f import library_versions as v; print('versions:   ', v())"
     } > "$outdir/run_info.txt"
+    "$PY" -m pip freeze > "$outdir/pip_freeze.txt" 2>/dev/null || true   # the exact environment
     "${cmd[@]}"
   )
 }

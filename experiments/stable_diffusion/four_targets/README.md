@@ -103,6 +103,49 @@ unguided MMD, steps, settings, time, commit, W&B link) and `results/<Scenario>/`
 the scribbles (`scribble_source.png` is the name `eval_baselines` expects), the source
 portrait, the final photos and the target plots. The large arrays stay in `outputs/`.
 
+## Reproducibility
+
+Every random draw is seeded from `--seed` (`SEED` in `config/<scenario>.env`), and
+`run_mlgd_f` also forces deterministic GPU kernels (`make_deterministic` in
+`cdm/models/sd/models.py`: deterministic cuDNN, no autotuning, deterministic cuBLAS
+workspace, `torch.use_deterministic_algorithms`, math-kernel attention). The guidance
+backpropagates through the Sprinter, the VAE and CLIP at every step, and without these
+settings the gradient differs in its last bits between two identical runs, which over
+the guided steps grows into a different scribble. `--no_deterministic` turns the kernel
+settings off (faster, not repeatable).
+
+The per-step plots and the unguided comparison draw their noise from their own
+generators, so logging more or less often, or with another `num_cond`, does not change
+the guided trajectory.
+
+What a run reproduces exactly: **the same GPU model, the same library versions, the same
+model revisions and the same seed give the same numbers and images.** Another GPU or
+another `torch`/`diffusers` gives different floating-point results, and the guided
+trajectory amplifies them, so across machines only the statistics are comparable (run
+several seeds). Every run therefore records what produced it: `run_info.txt` (GPU,
+versions, exact command), `pip_freeze.txt` (the environment) and
+`metrics.json["model_revisions"]` (the hub commit sha of each model actually loaded).
+To freeze the weights for good, pass those shas back as `--architect_revision`,
+`--sprinter_revision`, `--controlnet_revision`, `--hed_revision`, `--clip_revision`
+(or add them to the config).
+
+**Checking it.** Run the same configuration twice in one job (so both land on the same
+GPU) and compare; `compare_runs.py` exits 0 only when every step, the final MMD and the
+images are identical:
+
+```
+R=experiments/stable_diffusion/four_targets
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=03:00:00 --output=logs/det-%j.out \
+  --wrap "bash $R/run.sh smoke balanced --output_dir $R/outputs/det_a && \
+          bash $R/run.sh smoke balanced --output_dir $R/outputs/det_b && \
+          python experiments/stable_diffusion/compare_runs.py $R/outputs/det_a $R/outputs/det_b"
+```
+
+The log ends with `RESULT: IDENTICAL` or a per-column report of where the runs diverge.
+Any `UserWarning` naming an operation without a deterministic implementation is printed
+during the run (`warn_only`); if one appears, that operation is the remaining source of
+drift.
+
 ## Reference numbers
 
 `results/table3_sd_results.md`, `results/table15_sd_swd.md` — transcribed from the paper.

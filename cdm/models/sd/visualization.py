@@ -46,6 +46,7 @@ def visualize_step(
     sd, architect, sprinter, target_clip_np,
     num_cond=4, save_path=None, pca_fixed=None,
     group_names=None, group_sizes=None, controlnet_scale=0.8,
+    generator=None,
 ):
     """
     Generate the per-step visualization grid: 2×(2+num_cond+1) when regular
@@ -73,6 +74,10 @@ def visualize_step(
                           pipeline uses (target-building, guidance, eval), so this
                           plot's samples are conditioned consistently with them
                           (run_mlgd_f.py passes args.controlnet_scale).
+        generator:      torch.Generator for the "Cond N" Sprinter noise. With one,
+                        this plot draws nothing from the global RNG, so plotting (or
+                        not, or with another num_cond) leaves the guided trajectory
+                        unchanged.
     """
     i = sd["step"]
     has_regular = sd.get("latents_step_regular_cpu") is not None
@@ -116,6 +121,7 @@ def visualize_step(
                 guidance_scale=0.0,
                 controlnet_conditioning_scale=controlnet_scale,
                 output_type="pil",
+                generator=generator,
             ).images[0]
             for _ in range(num_cond)
         ]
@@ -126,7 +132,7 @@ def visualize_step(
             pca_coords = pca_fixed.transform(combined)
             pca_var = pca_fixed.explained_variance_ratio_.sum()
         else:
-            pca = PCA(n_components=2)
+            pca = PCA(n_components=2, svd_solver="full")   # the default solver is randomized
             pca_coords = pca.fit_transform(combined)
             pca_var = pca.explained_variance_ratio_.sum()
 

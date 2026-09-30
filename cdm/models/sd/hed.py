@@ -14,10 +14,12 @@ from PIL import Image
 HED_ANNOTATOR_ID = "lllyasviel/Annotators"
 
 
-def load_hed():
-    """Load the HED detector. Requires `controlnet_aux` and a model download."""
+def load_hed(revision=None):
+    """Load the HED detector. Requires `controlnet_aux` and a model download.
+    `revision` pins the hub commit (None = main)."""
     from controlnet_aux import HEDdetector
-    return HEDdetector.from_pretrained(HED_ANNOTATOR_ID)
+    kwargs = {"revision": revision} if revision else {}
+    return HEDdetector.from_pretrained(HED_ANNOTATOR_ID, **kwargs)
 
 
 def extract_scribble(hed, image):
