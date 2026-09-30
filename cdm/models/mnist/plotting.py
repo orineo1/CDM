@@ -100,7 +100,7 @@ def plot_all_seeds_grid(payload, plots_dir, ncols=5, dpi=100):
     preds = payload.get("predicted_labels")
     n = len(results)
     nrows = math.ceil(n / ncols)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 2.2, nrows * 2.3),
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 3.4, nrows * 3.5),
                              squeeze=False)
     for k, ax in enumerate(axes.flat):
         ax.axis("off")
@@ -110,8 +110,8 @@ def plot_all_seeds_grid(payload, plots_dir, ncols=5, dpi=100):
         title = f"Seed {seed_log[k]} | Loss {loss_log[k]:.4f}"
         if preds is not None:
             title += f" | {preds[k] if preds[k] is not None else 'None'}"
-        ax.set_title(title, fontsize=8, pad=2)
-    fig.tight_layout(pad=0.3, h_pad=0.6, w_pad=0.3)
+        ax.set_title(title, fontsize=15, pad=4)
+    fig.tight_layout(pad=0.3, h_pad=0.8, w_pad=0.5)
     path = os.path.join(plots_dir, f"{payload['experiment_name']}_all_seeds.png")
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
@@ -257,7 +257,7 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
                     color='orange', linewidth=2.5, zorder=4, label='Target')
             ax.set_theta_zero_location('N'); ax.set_theta_direction(-1)
             ax.set_yticklabels([]); ax.set_yticks([])
-            ax.tick_params(axis='x', labelsize=12)
+            ax.tick_params(axis='x', labelsize=22, pad=8)
             ax.set_ylim(0, polar_ylim)
             if show_titles:
                 ax.set_title(f'Rank {rank+1} | Loss {loss_log[idx]:.4f} | Seed {seed_log[idx]}',
