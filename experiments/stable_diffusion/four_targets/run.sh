@@ -83,7 +83,10 @@ run_one() {   # run_one <tier> <scenario> [extra flags...]
   [ -f "$cfg" ] || { echo "no such scenario: $name (config/$name.env)" >&2; usage; }
   # the config sets SCENARIO, MODE, N_STEPS, ...; a subshell keeps scenarios from leaking into each other
   (
-    set -a; source "$cfg"; set +a
+    set -a
+    source "$HERE/config/models.env"   # pinned model revisions, shared by every scenario
+    source "$cfg"
+    set +a
 
     local outdir="$OUT/${tier}_${SCENARIO}" project
     local a
@@ -108,6 +111,10 @@ run_one() {   # run_one <tier> <scenario> [extra flags...]
       local tp; IFS='|' read -r -a tp <<< "$TARGET_PROMPTS"
       args+=( --target_prompts "${tp[@]}" )
     fi
+    for rev in ARCHITECT SPRINTER CONTROLNET HED CLIP; do   # pinned weights (config/models.env)
+      local v="${rev}_REVISION"
+      [ -n "${!v:-}" ] && args+=( "--$(tr 'A-Z' 'a-z' <<< "$rev")_revision" "${!v}" )
+    done
     args+=( --output_dir "$outdir" --wandb_project "$project" )
     [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
     args+=( "$@" )   # CLI overrides, last so they win

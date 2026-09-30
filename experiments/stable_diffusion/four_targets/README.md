@@ -7,7 +7,7 @@ with the Average-prompt and SDEdit-Best baselines.
 | | |
 |---|---|
 | Entry points | `python -m cdm.models.sd.run_mlgd_f`, `python -m cdm.models.sd.eval_baselines` |
-| Config | `config/<scenario>.env` — T=250, t_start=125, ζ=10.0, uniform selection at n_sel/n_cond = 0.5, ControlNet scale 0.5 |
+| Config | `config/<scenario>.env` — T=250, t_start=125, ζ=10.0, uniform selection at n_sel/n_cond = 0.5, ControlNet scale 0.5; `config/models.env` — the pinned model revisions |
 | Full configuration | the paper's settings; GPU: L40S 48 GB for the optimisation, A100 80 GB for the 2,000-image evaluation |
 | Reduced configuration (`smoke`) | 6 guided steps (12-step schedule from step 6), 6 variations; GPU required, loads the same pipelines |
 | Static check (`check`) | CPU, seconds, no model downloads |
@@ -125,9 +125,10 @@ trajectory amplifies them, so across machines only the statistics are comparable
 several seeds). Every run therefore records what produced it: `run_info.txt` (GPU,
 versions, exact command), `pip_freeze.txt` (the environment) and
 `metrics.json["model_revisions"]` (the hub commit sha of each model actually loaded).
-To freeze the weights for good, pass those shas back as `--architect_revision`,
-`--sprinter_revision`, `--controlnet_revision`, `--hed_revision`, `--clip_revision`
-(or add them to the config).
+The weights are frozen: `config/models.env` pins every model to a hub commit, and
+`run.sh` passes them as `--architect_revision`, `--sprinter_revision`,
+`--controlnet_revision`, `--hed_revision`, `--clip_revision`. To move to newer weights,
+change the sha there (or remove the line to follow the hub's `main`).
 
 **Checking it.** Run the same configuration twice in one job (so both land on the same
 GPU) and compare; `compare_runs.py` exits 0 only when every step, the final MMD and the
@@ -142,6 +143,8 @@ sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=03:00:
 ```
 
 The log ends with `RESULT: IDENTICAL` or a per-column report of where the runs diverge.
+Checked 2026-09-30 on an NVIDIA L40S, torch 2.11 (cu128): two `smoke balanced` runs were
+identical in every per-step value, the final MMD and all images.
 Any `UserWarning` naming an operation without a deterministic implementation is printed
 during the run (`warn_only`); if one appears, that operation is the remaining source of
 drift.
