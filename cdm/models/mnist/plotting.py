@@ -100,7 +100,7 @@ def plot_all_seeds_grid(payload, plots_dir, ncols=5, dpi=100):
     preds = payload.get("predicted_labels")
     n = len(results)
     nrows = math.ceil(n / ncols)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 2.2, nrows * 2.3),
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 3.6, nrows * 3.9),
                              squeeze=False)
     for k, ax in enumerate(axes.flat):
         ax.axis("off")
@@ -110,8 +110,8 @@ def plot_all_seeds_grid(payload, plots_dir, ncols=5, dpi=100):
         title = f"Seed {seed_log[k]} | Loss {loss_log[k]:.4f}"
         if preds is not None:
             title += f" | {preds[k] if preds[k] is not None else 'None'}"
-        ax.set_title(title, fontsize=8, pad=2)
-    fig.tight_layout(pad=0.3, h_pad=0.6, w_pad=0.3)
+        ax.set_title(title, fontsize=15, pad=4)
+    fig.tight_layout(pad=0.3, h_pad=2.0, w_pad=0.8)
     path = os.path.join(plots_dir, f"{payload['experiment_name']}_all_seeds.png")
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
@@ -239,8 +239,9 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
         return fig
 
     def _make_polar(show_titles, show_legend):
-        fig, polar_axes = plt.subplots(1, dist_k, figsize=(dist_k * 4, 4),
-                                       subplot_kw={'projection': 'polar'})
+        fig, polar_axes = plt.subplots(1, dist_k, figsize=(dist_k * 4.6, 4),
+                                       subplot_kw={'projection': 'polar'},
+                                       gridspec_kw=dict(wspace=0.75))
         polar_axes = np.array(polar_axes).reshape(dist_k)
         for rank, (idx, ang) in enumerate(zip(dist_ix, temp_angs)):
             ang_rad   = np.deg2rad(ang.detach().cpu().numpy())
@@ -257,7 +258,7 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
                     color='orange', linewidth=2.5, zorder=4, label='Target')
             ax.set_theta_zero_location('N'); ax.set_theta_direction(-1)
             ax.set_yticklabels([]); ax.set_yticks([])
-            ax.tick_params(axis='x', labelsize=12)
+            ax.tick_params(axis='x', labelsize=18, pad=12)
             ax.set_ylim(0, polar_ylim)
             if show_titles:
                 ax.set_title(f'Rank {rank+1} | Loss {loss_log[idx]:.4f} | Seed {seed_log[idx]}',
@@ -267,7 +268,6 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
         if show_titles:
             fig.suptitle(f'[{experiment_name}] Top {dist_k} Distributions — Polar',
                          fontsize=13, fontweight='bold')
-        fig.tight_layout()
         return fig
 
     base_cart  = os.path.join(plots_dir, f'{experiment_name}_dist_cart.png')
