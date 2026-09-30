@@ -32,3 +32,6 @@ experiments/*/*/outputs/*
 # MNIST checkpoints are downloaded (or, for the classifier, trained) on first use
 experiments/mnist/checkpoints/*.pt
 experiments/mnist/checkpoints/*.pth
+
+# caches run.sh keeps next to the repo (model weights, matplotlib, wandb)
+.cache/

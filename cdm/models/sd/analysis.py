@@ -11,7 +11,7 @@ Usage (CLI):
     python analysis.py --run_dir output/mlgd_f_run_44388132
 
 Usage (Python):
-    from analysis import load_run, make_all_plots
+    from cdm.models.sd.analysis import load_run, make_all_plots
     run = load_run("output/mlgd_f_run_44388132")
     make_all_plots(run, plots_dir="output/mlgd_f_run_44388132/plots")
 """

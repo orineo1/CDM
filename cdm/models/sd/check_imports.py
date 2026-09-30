@@ -6,7 +6,8 @@ It verifies the thing the port could plausibly have broken: that rewiring upstre
 bare sibling imports (`from metrics import ...`) onto the package (`from cdm.models.sd.metrics
 import ...`) still resolves. Every module is parsed with `ast`; for each
 `from cdm.models.sd.X import a, b` we confirm `cdm/models/sd/X.py` exists and defines `a` and `b` at
-top level. Also byte-compiles every file.
+top level, and that no bare sibling import (`from image_utils import ...`) is left.
+Also byte-compiles every file.
 
     python -m cdm.models.sd.check_imports
 """
@@ -55,6 +56,16 @@ def main():
                 for a in node.names:
                     if a.name not in exported[target]:
                         errors.append(f"{stem}.py -> cdm.models.sd.{target} does not define '{a.name}'")
+
+        # upstream's bare sibling imports (`from metrics import ...`) only work with the
+        # package directory on sys.path, which it is not when run as `python -m`
+        for node in ast.walk(tree):
+            mods = ([node.module] if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module
+                    else [a.name for a in node.names] if isinstance(node, ast.Import) else [])
+            for m in mods:
+                if m.split(".")[0] in trees:
+                    errors.append(f"{stem}.py -> bare sibling import '{m}' "
+                                  f"(use cdm.models.sd.{m})")
 
     for p in files:
         try:

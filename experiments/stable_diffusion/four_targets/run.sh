@@ -26,7 +26,7 @@
 #   sbatch ... --array=0-3 --output=logs/sd-%A_%a.out --wrap "bash experiments/stable_diffusion/four_targets/run.sh full all"
 # Under an array, `all` runs only scenario SLURM_ARRAY_TASK_ID (0 balanced, 1 skewed,
 # 2 gender_interpolation, 3 age_interpolation); otherwise the four run one after another.
-# Nodes without internet: WANDB_MODE=offline, then `wandb sync wandb/offline-run-*`.
+# Nodes without internet: WANDB_MODE=offline, then `wandb sync experiments/stable_diffusion/four_targets/outputs/wandb/offline-run-*`.
 #
 # Logging: every run goes to Weights & Biases (per-step MMD, gradient norm, zeta,
 # correction norm, the per-step visualisation, input and final scribbles, final MMD;
@@ -41,6 +41,8 @@
 #   WANDB_PROJECT=<name>     default sdxl-smoke for smoke, sdxl-mlgdf for full
 #   WANDB_ENTITY=<team>      default: the logged-in user
 #   WANDB_NAME=<run name>    default <tier>_<scenario>[_<slurm job id>]
+#   CACHE_DIR=/path          where model weights and all caches go (default <repo>/.cache;
+#                            HF_HOME, MPLCONFIGDIR, WANDB_DIR, ... override one by one)
 #   DRY_RUN=1                print the command instead of running it
 set -euo pipefail
 export PYTHONUNBUFFERED=1   # print lines reach the log as they happen, also under sbatch
@@ -51,6 +53,20 @@ OUT="$HERE/outputs"
 SCENARIOS=(balanced skewed gender_interpolation age_interpolation)
 TIER="${1:-check}"
 cd "$REPO"
+
+# Keep every cache next to the repo (e.g. lab storage), not in $HOME: model weights,
+# matplotlib, wandb, torch, pip. Anything already set in the environment is kept.
+CACHE_DIR="${CACHE_DIR:-$REPO/.cache}"
+export HF_HOME="${HF_HOME:-$CACHE_DIR/huggingface}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$CACHE_DIR}"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-$CACHE_DIR/matplotlib}"
+export TORCH_HOME="${TORCH_HOME:-$CACHE_DIR/torch}"
+export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$CACHE_DIR/pip}"
+export WANDB_DIR="${WANDB_DIR:-$OUT}"                  # wandb/ run files (and offline runs)
+export WANDB_CACHE_DIR="${WANDB_CACHE_DIR:-$CACHE_DIR/wandb}"
+export WANDB_DATA_DIR="${WANDB_DATA_DIR:-$CACHE_DIR/wandb-data}"
+export WANDB_ARTIFACT_DIR="${WANDB_ARTIFACT_DIR:-$CACHE_DIR/wandb-artifacts}"
+mkdir -p "$CACHE_DIR" "$MPLCONFIGDIR" "$OUT"
 
 usage() { echo "usage: bash run.sh [check | help | smoke|full <balanced|skewed|gender_interpolation|age_interpolation|all> [run_mlgd_f flags...]]" >&2; exit 64; }
 

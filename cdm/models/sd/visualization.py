@@ -16,7 +16,7 @@ import torch
 import wandb
 from sklearn.decomposition import PCA
 
-from image_utils import latent_to_pil
+from cdm.models.sd.image_utils import latent_to_pil
 
 
 def plot_row(images, title, count=5, save_path=None):

@@ -50,7 +50,13 @@ sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=12:00:
 Under `--array`, `all` runs scenario `SLURM_ARRAY_TASK_ID` (0 balanced, 1 skewed,
 2 gender_interpolation, 3 age_interpolation). `run.sh` stops at once if no GPU is visible
 and warns if there is no W&B login. On nodes without internet use `WANDB_MODE=offline`,
-then `wandb sync wandb/offline-run-*` from a login node.
+then `wandb sync experiments/stable_diffusion/four_targets/outputs/wandb/offline-run-*` from
+a login node.
+
+Nothing is written to `$HOME`: `run.sh` puts the model weights (~tens of GB) and the
+matplotlib, torch and wandb caches in `<repo>/.cache/` (gitignored; `CACHE_DIR=/path` moves
+them, and `HF_HOME` etc. set in the environment are kept), and the wandb run files in
+`outputs/wandb/`.
 
 The `smoke` configuration reproduces no published number; its output is not a result.
 
