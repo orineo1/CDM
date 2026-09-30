@@ -241,7 +241,7 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
     def _make_polar(show_titles, show_legend):
         fig, polar_axes = plt.subplots(1, dist_k, figsize=(dist_k * 4.6, 4),
                                        subplot_kw={'projection': 'polar'},
-                                       gridspec_kw=dict(wspace=0.55))
+                                       gridspec_kw=dict(wspace=0.75))
         polar_axes = np.array(polar_axes).reshape(dist_k)
         for rank, (idx, ang) in enumerate(zip(dist_ix, temp_angs)):
             ang_rad   = np.deg2rad(ang.detach().cpu().numpy())
@@ -258,7 +258,7 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
                     color='orange', linewidth=2.5, zorder=4, label='Target')
             ax.set_theta_zero_location('N'); ax.set_theta_direction(-1)
             ax.set_yticklabels([]); ax.set_yticks([])
-            ax.tick_params(axis='x', labelsize=18, pad=6)
+            ax.tick_params(axis='x', labelsize=18, pad=18)
             ax.set_ylim(0, polar_ylim)
             if show_titles:
                 ax.set_title(f'Rank {rank+1} | Loss {loss_log[idx]:.4f} | Seed {seed_log[idx]}',
