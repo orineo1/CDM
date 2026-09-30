@@ -2,17 +2,25 @@
 # Entry point. Run as:  python -m cdm.models.sd.eval_baselines --help
 
 """
-eval_baselines.py — Build candidate scribbles for all methods, save to disk.
-Runs on SLURM cluster (no N=2000 eval — that happens in Colab).
+eval_baselines.py -- build the baseline scribbles of one scenario and save them.
 
-Each experiment folder under experiments/<ExperimentName>/ must contain:
-    scribble.png   — source oval/HED scribble used during the MLGD-F run
-    mlgdd.png      — final MLGD-F output scribble (from best_jid run)
+    sdedit_best   the best of N unguided SDEdit candidates of the source scribble, each
+                  scored by MMD on n_eval_search (250) portraits against a search target
+                  built from the source scribble; N is set so the search takes as long as
+                  the MLGD-F run did (its optimization_time_sec in metrics.json)
+    avg_prompt    the HED scribble of ONE portrait generated from the frac-weighted average
+                  of the groups' CLIP text embeddings (prompt interpolation)
+    avg, sdedit   the older pixel-average scribble and one guided SDEdit, with --methods
 
-Usage:
-    python -m cdm.models.sd.eval_baselines \
-        --experiment SkewedTarget \
-        --lgd_cm_minutes 241
+Reads the run's scribble.png / final_scribble_mlgd_f.png (or the paper's
+scribble_source.png / scribble_mlgdd.png) from --run_dir and writes to <run_dir>/baselines:
+scribble_<method>.png, preview_<name>.png (n_preview portraits of every scribble, source and
+MLGD-F included, under the neutral prompt), target_<group>.png, scribbles_all.png,
+sdedit_search.png, baselines_meta.json. Logs the same to wandb.
+`run.sh eval` then finds the scribbles there.
+
+    bash experiments/stable_diffusion/four_targets/run.sh baselines balanced
+    python -m cdm.models.sd.eval_baselines --run_dir <run> --scenario BalancedTarget
 """
 
 import os, sys, copy, argparse, json, time
@@ -269,6 +277,56 @@ def build_avg_scribble(cfg, source_scribble, sprinter, hed, device):
     return Image.fromarray(avg_np)
 
 
+# ── AVG-PROMPT SCRIBBLE (CLIP text-embedding interpolation) ─────────────────────
+
+def build_avg_scribble_prompt_interp(cfg, source_scribble, sprinter, hed, device):
+    """
+    Interpolates in CLIP TEXT-PROMPT EMBEDDING space: encode each group's prompt once,
+    take the frac-weighted average of (prompt_embeds, pooled_prompt_embeds) and generate a
+    SINGLE portrait from that one averaged embedding -- unlike build_avg_scribble, which
+    generates one portrait PER group and blends their HED scribbles in pixel space.
+    Returns the HED scribble of that portrait.
+    """
+    SEED     = cfg['seed']
+    cn_scale = cfg['controlnet_scale']
+    mode     = cfg['mode']
+
+    if mode == 'age':
+        ages = list(range(cfg['age_min'], cfg['age_max'], cfg['age_step']))
+        prompts = [
+            f'a superrealistic portrait photograph of a {age}-year-old man, studio lighting, sharp focus, photographic'
+            for age in ages]
+        fracs = [1.0 / len(ages)] * len(ages)
+    else:
+        prompts = [g['prompt'] for g in cfg['groups']]
+        fracs   = [g['frac']   for g in cfg['groups']]
+
+    avg_embeds, avg_pooled = None, None
+    for prompt, frac in zip(prompts, fracs):
+        with torch.no_grad():
+            prompt_embeds, _, pooled_embeds, _ = sprinter.encode_prompt(
+                prompt=prompt, device=device,
+                num_images_per_prompt=1, do_classifier_free_guidance=False,
+            )
+        avg_embeds = frac * prompt_embeds if avg_embeds is None else avg_embeds + frac * prompt_embeds
+        avg_pooled = frac * pooled_embeds if avg_pooled is None else avg_pooled + frac * pooled_embeds
+
+    gen = torch.Generator(device=sprinter.device).manual_seed(SEED)
+    sprinter.vae.to(dtype=torch.float16)
+    with torch.no_grad():
+        portrait = sprinter(
+            prompt_embeds=avg_embeds, pooled_prompt_embeds=avg_pooled,
+            image=[source_scribble],
+            num_inference_steps=2, guidance_scale=0.0,
+            controlnet_conditioning_scale=cn_scale,
+            output_type='pil', generator=gen,
+        ).images[0]
+    sprinter.vae.to(dtype=torch.float32)
+
+    scribble_np = np.array(hed(portrait, scribble=True)).astype(np.uint8)
+    return Image.fromarray(scribble_np), portrait
+
+
 # ── SAVE HELPERS ──────────────────────────────────────────────────────────────
 
 def save_scribble_grid(scribbles_dict, out_dir):
@@ -322,228 +380,226 @@ def save_sdedit_search_plot(candidate_mmds, best_idx, out_dir):
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
+def _first(d, *names):
+    for n in names:
+        if (d / n).exists():
+            return d / n
+    return None
+
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--experiment',     required=True, choices=list(EXPERIMENT_CONFIGS.keys()))
-    parser.add_argument('--lgd_cm_minutes', type=float, required=True,
-                        help='MLGD-F runtime in minutes — sets N_SDEDIT_CANDIDATES')
+    parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    parser.add_argument('--run_dir',        type=str, default=None,
+                        help='the MLGD-F run directory (outputs/full_<Scenario>); default: the '
+                             "paper layout <repo_path>/experiments/<scenario>")
+    parser.add_argument('--scenario',       type=str, default=None, choices=list(EXPERIMENT_CONFIGS),
+                        help='default: from the run directory name (full_<Scenario>)')
+    parser.add_argument('--experiment',     type=str, default=None, choices=list(EXPERIMENT_CONFIGS),
+                        help='old name of --scenario')
+    parser.add_argument('--methods',        type=str, nargs='+', default=['sdedit_best', 'avg_prompt'],
+                        choices=['sdedit_best', 'avg_prompt', 'avg', 'sdedit'])
+    parser.add_argument('--output_dir',     type=str, default=None, help='default: <run_dir>/baselines')
+    parser.add_argument('--lgd_cm_minutes', type=float, default=None,
+                        help='the SDEdit search budget in minutes; default: the run\'s '
+                             'optimization_time_sec from metrics.json')
+    parser.add_argument('--max_candidates', type=int, default=None,
+                        help='cap on the SDEdit candidates (for quick checks)')
+    parser.add_argument('--seed',           type=int, default=None, help="default: the scenario's config seed")
+    parser.add_argument('--controlnet_scale', type=float, default=None, help="default: the scenario's config")
+    parser.add_argument('--n_preview',      type=int, default=5)
+    parser.add_argument('--no_deterministic', action='store_true')
+    for m in ('architect', 'sprinter', 'controlnet', 'hed', 'clip'):
+        parser.add_argument(f'--{m}_revision', type=str, default=None)
     parser.add_argument('--repo_path',      type=str, default='.',
-                        help='Path to repo root (default: current directory)')
+                        help='repo root for the paper layout (default: current directory)')
     parser.add_argument('--gdrive_root',    type=str, default='',
                         help='rclone remote path for syncing outputs (leave empty to skip)')
-    parser.add_argument('--wandb_project',  type=str, default='eval-baselines')
+    parser.add_argument('--wandb_project',  type=str, default='sdxl-baselines')
     parser.add_argument('--wandb_entity',   type=str, default='',
                         help='wandb entity/team (leave empty to use logged-in user)')
     args = parser.parse_args()
 
-    repo_path = Path(args.repo_path).resolve()
+    from cdm.models.sd.models import make_deterministic, load_models, resolved_revision
+    from cdm.models.sd.clip_utils import load_clip_model, CLIP_MODEL_ID
+    from cdm.models.sd.hed import load_hed, HED_ANNOTATOR_ID
+    from cdm.models.sd.visualization import plot_row
 
-    cfg     = EXPERIMENT_CONFIGS[args.experiment]
-    device  = 'cuda' if torch.cuda.is_available() else 'cpu'
-    SEED    = cfg['seed']
-    jid     = cfg['best_jid']
+    scenario = args.scenario or args.experiment
+    if args.run_dir:
+        run_dir = Path(args.run_dir).resolve()
+        if scenario is None:
+            base = run_dir.name.split('_', 1)[-1]
+            scenario = base if base in EXPERIMENT_CONFIGS else None
+    else:
+        if scenario is None:
+            sys.exit('give --run_dir (a run directory) or --scenario')
+        run_dir = Path(args.repo_path).resolve() / 'experiments' / scenario
+    if scenario is None:
+        sys.exit(f'cannot tell the scenario from {run_dir.name}; pass --scenario '
+                 f'({", ".join(EXPERIMENT_CONFIGS)})')
 
-    # experiments/<ExperimentName>/ must already contain scribble.png and mlgdd.png
-    run_dir = repo_path / 'experiments' / args.experiment
-    out_dir = run_dir / 'baselines'
+    cfg = dict(EXPERIMENT_CONFIGS[scenario])
+    if args.seed is not None:
+        cfg['seed'] = args.seed
+    if args.controlnet_scale is not None:
+        cfg['controlnet_scale'] = args.controlnet_scale
+    SEED   = cfg['seed']
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    out_dir = Path(args.output_dir) if args.output_dir else run_dir / 'baselines'
     out_dir.mkdir(parents=True, exist_ok=True)
+    if args.no_deterministic:
+        torch.manual_seed(SEED); np.random.seed(SEED)
+    else:
+        make_deterministic(SEED)
 
-    print(f'\n=== {args.experiment} | jid={jid} | measuring candidate time... ===\n')
+    source_path = _first(run_dir, 'scribble.png', 'scribble_source.png')
+    mlgd_path   = _first(run_dir, 'final_scribble_mlgd_f.png', 'scribble_mlgdd.png')
+    if source_path is None:
+        sys.exit(f'no source scribble (scribble.png / scribble_source.png) in {run_dir}')
+    source_scribble = Image.open(source_path).convert('RGB')
+    mlgd_scribble   = Image.open(mlgd_path).convert('RGB') if mlgd_path else None
+
+    lgd_minutes = args.lgd_cm_minutes
+    if 'sdedit_best' in args.methods and lgd_minutes is None:
+        mpath = run_dir / 'metrics.json'
+        if mpath.exists():
+            lgd_minutes = json.load(open(mpath)).get('optimization_time_sec', 0) / 60
+        if not lgd_minutes:
+            sys.exit(f'no optimization_time_sec in {mpath}; pass --lgd_cm_minutes')
+    print(f'\n=== {scenario} | {run_dir} -> {out_dir} | methods: {", ".join(args.methods)} | seed {SEED} ===')
+    if lgd_minutes:
+        print(f'SDEdit search budget: {lgd_minutes:.1f} min (the MLGD-F run)')
 
     # ── W&B init ──
     import wandb
-    wandb.init(
+    run = wandb.init(
         project=args.wandb_project,
         entity=args.wandb_entity or None,   # None = use whoever is logged in
-        name=f'{args.experiment}',
-        config=dict(
-            experiment=args.experiment,
-            lgd_cm_minutes=args.lgd_cm_minutes,
-            **{k: v for k, v in cfg.items() if k != 'groups'},
-        ),
+        config=dict(scenario=scenario, run_dir=str(run_dir), methods=args.methods,
+                    lgd_cm_minutes=lgd_minutes, max_candidates=args.max_candidates,
+                    deterministic=not args.no_deterministic,
+                    **{k: v for k, v in cfg.items() if k != 'groups'}),
     )
 
     # ── Load models ──
-    from cdm.models.sd.models     import load_models
-    from cdm.models.sd.clip_utils import load_clip_model
-    from controlnet_aux import HEDdetector
-
-    architect, sprinter        = load_models(device)
-    clip_model, clip_processor = load_clip_model(device)
-    hed                        = HEDdetector.from_pretrained('lllyasviel/Annotators')
+    architect, sprinter = load_models(device, architect_revision=args.architect_revision,
+                                      sprinter_revision=args.sprinter_revision,
+                                      controlnet_revision=args.controlnet_revision)
+    clip_model, clip_processor = load_clip_model(device, revision=args.clip_revision)
+    hed = load_hed(args.hed_revision)
+    model_revisions = {
+        'architect': resolved_revision('stabilityai/stable-diffusion-xl-base-1.0', args.architect_revision),
+        'sprinter': resolved_revision('stabilityai/sdxl-turbo', args.sprinter_revision),
+        HED_ANNOTATOR_ID: resolved_revision(HED_ANNOTATOR_ID, args.hed_revision),
+        CLIP_MODEL_ID: resolved_revision(CLIP_MODEL_ID, args.clip_revision),
+    }
     print('Models loaded.')
 
-    # ── Load scribbles ──
-    # scribble.png  — source oval/HED scribble used during the MLGD-F run
-    # mlgdd.png     — final MLGD-F output scribble for this experiment
-    source_scribble = Image.open(run_dir / 'scribble_source.png')
-    lgd_scribble    = Image.open(run_dir / 'scribble_mlgdd.png')
-    print('Scribbles loaded.')
+    scribbles = {}          # method -> PIL, what gets saved
+    meta = dict(scenario=scenario, run_dir=str(run_dir), methods=args.methods, seed=SEED,
+                source=str(source_path), mlgd_f=str(mlgd_path) if mlgd_path else None,
+                model_revisions=model_revisions)
 
-    # ── Build target (small, for search only) ──
-    print('\nBuilding search target...')
-    target_clip, group_imgs = build_target_embeddings(
-        cfg, source_scribble, sprinter, clip_model, clip_processor, device)
-    print(f'Target CLIP: {target_clip.shape}')
-    save_target_previews(group_imgs, out_dir)
+    # ── avg_prompt: prompt-embedding interpolation ──
+    if 'avg_prompt' in args.methods:
+        print('\nBuilding avg_prompt scribble (CLIP text-embedding interpolation)...')
+        scribbles['avg_prompt'], portrait = build_avg_scribble_prompt_interp(
+            cfg, source_scribble, sprinter, hed, device)
+        portrait.save(out_dir / 'avg_prompt_portrait.png')
 
-    # ── Log target samples to W&B ──
-    print('\nLogging target samples to W&B...')
-    target_log = {}
-    for label, imgs in group_imgs.items():
-        safe = label.replace(' ', '_').replace('/', '_')
-        for j, img in enumerate(imgs[:3]):
-            target_log[f'target/{safe}_{j}'] = wandb.Image(img)
-    wandb.log(target_log)
+    # ── avg (pixel average of per-group HED scribbles), sdedit (one guided SDEdit) ──
+    if 'avg' in args.methods:
+        print('\nBuilding avg scribble...')
+        scribbles['avg'] = build_avg_scribble(cfg, source_scribble, sprinter, hed, device)
+    if 'sdedit' in args.methods:
+        print('\nBuilding guided SDEdit scribble...')
+        scribbles['sdedit'] = run_sdedit(
+            source_scribble, seed=SEED, architect=architect, device=device,
+            cfg_scale=cfg['sdedit_cfg'], n_steps_total=cfg['n_steps'],
+            sdedit_start=cfg['sdedit_start'], prompt=cfg['sdedit_prompt'])
 
-    # ── Avg scribble ──
-    print('\nBuilding avg scribble...')
-    avg_scribble = build_avg_scribble(cfg, source_scribble, sprinter, hed, device)
+    # ── sdedit_best: time-matched search, MMD on n_eval_search portraits ──
+    if 'sdedit_best' in args.methods:
+        from cdm.models.sd.metrics import compute_mmd, mmd_report
+        print('\nBuilding search target...')
+        target_clip, group_imgs = build_target_embeddings(
+            cfg, source_scribble, sprinter, clip_model, clip_processor, device)
+        print(f'Target CLIP: {target_clip.shape}')
+        if len(group_imgs) > 8:   # age: one gallery per age -- keep five along the range
+            keys = list(group_imgs)
+            group_imgs = {k: group_imgs[k] for k in keys[::max(1, len(keys) // 4)]}
+        save_target_previews(group_imgs, out_dir, n_preview=args.n_preview)
 
-    # ── Guided SDEdit scribble ──
-    print('\nBuilding guided SDEdit scribble...')
-    sdedit_scribble = run_sdedit(
-        source_scribble, seed=SEED,
-        architect=architect, device=device,
-        cfg_scale=cfg['sdedit_cfg'], n_steps_total=cfg['n_steps'],
-        sdedit_start=cfg['sdedit_start'], prompt=cfg['sdedit_prompt'],
-    )
+        def candidate(i):
+            cand = run_sdedit(source_scribble, seed=SEED + i, architect=architect, device=device,
+                              cfg_scale=0.0, n_steps_total=cfg['n_steps'],
+                              sdedit_start=cfg['sdedit_start'], prompt='')
+            imgs = gen_images(sprinter, cand, cfg['neutral_prompt'],
+                              cfg['n_eval_search'], cfg['controlnet_scale'], seed=SEED)
+            return cand, mmd_report(compute_mmd(clip_embed(imgs, clip_model, clip_processor, device),
+                                                target_clip)).item()
 
-    # ── Measure first candidate time, then compute budget ──
-    print('\nMeasuring first SDEdit candidate...')
-    from cdm.models.sd.metrics import compute_mmd, mmd_report
-    t0 = time.time()
-    first_cand = run_sdedit(
-        source_scribble, seed=SEED,
-        architect=architect, device=device,
-        cfg_scale=0.0, n_steps_total=cfg['n_steps'],
-        sdedit_start=cfg['sdedit_start'], prompt='',
-    )
-    first_imgs = gen_images(sprinter, first_cand, cfg['neutral_prompt'],
-                            cfg['n_eval_search'], cfg['controlnet_scale'], seed=SEED)
-    first_embs = clip_embed(first_imgs, clip_model, clip_processor, device)
-    first_mmd  = mmd_report(compute_mmd(first_embs, target_clip)).item()
-    sec_per_candidate = time.time() - t0
+        print('\nMeasuring the first SDEdit candidate...')
+        t0 = time.time()
+        first_cand, first_mmd = candidate(0)
+        sec_per_candidate = time.time() - t0
+        n_candidates = max(1, int(lgd_minutes * 60 / sec_per_candidate))
+        if args.max_candidates:
+            n_candidates = min(n_candidates, args.max_candidates)
+        print(f'  {sec_per_candidate:.1f}s per candidate -> budget {lgd_minutes:.1f} min -> {n_candidates} candidates')
+        wandb.log({'sec_per_candidate': sec_per_candidate, 'n_candidates': n_candidates})
 
-    n_candidates = max(1, int(args.lgd_cm_minutes * 60 / sec_per_candidate))
-    print(f'  First candidate: {sec_per_candidate:.1f}s → budget={args.lgd_cm_minutes}min → {n_candidates} candidates')
+        candidate_mmds, best = [first_mmd], first_cand
+        tqdm.write(f'  [1/{n_candidates}] seed={SEED}  MMD={first_mmd:.5f}')
+        wandb.log({'candidate_mmd': first_mmd, 'candidate_idx': 1})
+        for i in tqdm(range(1, n_candidates), desc='SDEdit candidates'):
+            cand, mmd = candidate(i)
+            if mmd < min(candidate_mmds):
+                best = cand
+            candidate_mmds.append(mmd)
+            tqdm.write(f'  [{i+1}/{n_candidates}] seed={SEED+i}  MMD={mmd:.5f}')
+            wandb.log({'candidate_mmd': mmd, 'candidate_idx': i + 1})
+        best_idx = int(np.argmin(candidate_mmds))
+        scribbles['sdedit_best'] = best
+        print(f'\nBest: seed={SEED + best_idx}  MMD={candidate_mmds[best_idx]:.5f}')
+        save_sdedit_search_plot(candidate_mmds, best_idx, out_dir)
+        meta.update(lgd_cm_minutes=lgd_minutes, n_candidates=n_candidates,
+                    sec_per_candidate=round(sec_per_candidate, 2), best_candidate_idx=best_idx,
+                    best_candidate_seed=SEED + best_idx, best_candidate_mmd=candidate_mmds[best_idx],
+                    n_eval_search=cfg['n_eval_search'], all_candidate_mmds=candidate_mmds)
+        wandb.log({'best_candidate_idx': best_idx, 'best_candidate_mmd': candidate_mmds[best_idx],
+                   'search_curve': wandb.plot.line_series(
+                       xs=list(range(len(candidate_mmds))), ys=[candidate_mmds], keys=['MMD'],
+                       title='SDEdit candidate search', xname='candidate')})
 
-    wandb.log({'sec_per_candidate': sec_per_candidate, 'n_candidates': n_candidates})
-
-    # ── Sanity check: scribbles + neutral + conditional images ──
-    print('\nLogging sanity check to W&B...')
-    sanity_scribbles = {
-        'source':      source_scribble,
-        'lgd_cm':      lgd_scribble,
-        'avg':         avg_scribble,
-        'sdedit':      sdedit_scribble,
-        'sdedit_cand0': first_cand,
-    }
-    sanity_log = {}
-    for name, scribble in sanity_scribbles.items():
-        sanity_log[f'sanity/scribble_{name}'] = wandb.Image(scribble)
-        neutral_imgs = gen_images(sprinter, scribble, cfg['neutral_prompt'],
-                                  4, cfg['controlnet_scale'], seed=SEED)
-        for j, img in enumerate(neutral_imgs):
-            sanity_log[f'sanity/neutral_{name}_{j}'] = wandb.Image(img)
-        if cfg['mode'] != 'age':
-            for g in cfg['groups']:
-                safe_g = g['label'].replace(' ', '_')
-                cond_imgs = gen_images(sprinter, scribble, g['prompt'],
-                                       2, cfg['controlnet_scale'], seed=SEED)
-                for j, img in enumerate(cond_imgs):
-                    sanity_log[f'sanity/cond_{name}_{safe_g}_{j}'] = wandb.Image(img)
-        else:
-            for age in [cfg['age_min'], (cfg['age_min'] + cfg['age_max']) // 2, cfg['age_max']]:
-                prompt_age = (f'a superrealistic portrait photograph of a {age}-year-old man, '
-                              'studio lighting, sharp focus, photographic')
-                age_imgs = gen_images(sprinter, scribble, prompt_age,
-                                      2, cfg['controlnet_scale'], seed=SEED)
-                for j, img in enumerate(age_imgs):
-                    sanity_log[f'sanity/cond_{name}_age{age}_{j}'] = wandb.Image(img)
-    wandb.log(sanity_log)
-    print('  Sanity check logged.')
-
-    # ── SDEdit best search ──
-    print('\nSearching SDEdit best...')
-    candidate_mmds      = [first_mmd]
-    candidate_scribbles = [first_cand]
-    tqdm.write(f'  [1/{n_candidates}] seed={SEED}  MMD={first_mmd:.5f}')
-    wandb.log({'candidate_mmd': first_mmd, 'candidate_idx': 1})
-
-    for i in tqdm(range(1, n_candidates), desc='SDEdit candidates'):
-        cand = run_sdedit(
-            source_scribble, seed=SEED + i,
-            architect=architect, device=device,
-            cfg_scale=0.0, n_steps_total=cfg['n_steps'],
-            sdedit_start=cfg['sdedit_start'], prompt='',
-        )
-        imgs = gen_images(sprinter, cand, cfg['neutral_prompt'],
-                          cfg['n_eval_search'], cfg['controlnet_scale'], seed=SEED)
-        embs = clip_embed(imgs, clip_model, clip_processor, device)
-        mmd  = mmd_report(compute_mmd(embs, target_clip)).item()
-        candidate_mmds.append(mmd)
-        candidate_scribbles.append(cand)
-        tqdm.write(f'  [{i+1}/{n_candidates}] seed={SEED+i}  MMD={mmd:.5f}')
-        wandb.log({'candidate_mmd': mmd, 'candidate_idx': i + 1})
-
-    best_idx    = int(np.argmin(candidate_mmds))
-    sdedit_best = candidate_scribbles[best_idx]
-    print(f'\nBest: seed={SEED + best_idx}  MMD={candidate_mmds[best_idx]:.5f}')
-
-    # ── Save everything ──
+    # ── Save the scribbles, and a preview of every scribble ──
     print('\nSaving outputs...')
-    scribbles_dict = {
-        'source':      source_scribble,
-        'avg':         avg_scribble,
-        'sdedit':      sdedit_scribble,
-        'sdedit_best': sdedit_best,
-        'lgd_cm':      lgd_scribble,
-    }
-    save_scribble_grid(scribbles_dict, out_dir)
-    save_sdedit_search_plot(candidate_mmds, best_idx, out_dir)
+    save_scribble_grid({'source': source_scribble, **scribbles,
+                        **({'mlgd_f': mlgd_scribble} if mlgd_scribble else {})}, out_dir)
+    preview_log = {}
+    for name, scr in {'source': source_scribble, **scribbles,
+                      **({'mlgd_f': mlgd_scribble} if mlgd_scribble else {})}.items():
+        imgs = gen_images(sprinter, scr, cfg['neutral_prompt'], args.n_preview,
+                          cfg['controlnet_scale'], seed=SEED)
+        plot_row(imgs, f'{scenario}: {name}', count=args.n_preview,
+                 save_path=str(out_dir / f'preview_{name}.png'))
+        preview_log[f'scribble/{name}'] = wandb.Image(scr)
+        preview_log[f'preview/{name}'] = wandb.Image(str(out_dir / f'preview_{name}.png'))
+        print(f'  Saved preview_{name}.png')
+    wandb.log(preview_log)
 
-    # ── Log final results to W&B ──
-    wandb.log({
-        'best_candidate_idx': best_idx,
-        'best_candidate_mmd': candidate_mmds[best_idx],
-        'scribble/source':      wandb.Image(source_scribble),
-        'scribble/avg':         wandb.Image(avg_scribble),
-        'scribble/sdedit':      wandb.Image(sdedit_scribble),
-        'scribble/sdedit_best': wandb.Image(sdedit_best),
-        'scribble/lgd_cm':      wandb.Image(lgd_scribble),
-        'search_curve': wandb.plot.line_series(
-            xs    = list(range(len(candidate_mmds))),
-            ys    = [candidate_mmds],
-            keys  = ['MMD'],
-            title = 'SDEdit candidate search',
-            xname = 'candidate',
-        ),
-    })
-
-    meta = dict(
-        experiment          = args.experiment,
-        best_jid            = jid,
-        lgd_cm_minutes      = args.lgd_cm_minutes,
-        n_candidates        = n_candidates,
-        sec_per_candidate   = round(sec_per_candidate, 2),
-        best_candidate_idx  = best_idx,
-        best_candidate_seed = SEED + best_idx,
-        best_candidate_mmd  = candidate_mmds[best_idx],
-        all_candidate_mmds  = candidate_mmds,
-    )
+    meta['wandb'] = {'project': run.project, 'name': run.name, 'id': run.id, 'url': run.url}
     with open(out_dir / 'baselines_meta.json', 'w') as f:
         json.dump(meta, f, indent=2)
     print('  Saved baselines_meta.json')
 
-    # ── Sync to remote (optional) ──
     if args.gdrive_root:
-        gdrive_dest = f"{args.gdrive_root}/{args.experiment}/baselines"
+        gdrive_dest = f"{args.gdrive_root}/{scenario}/baselines"
         print(f'\nSyncing to {gdrive_dest}...')
         os.system(f'rclone copy "{out_dir}" "{gdrive_dest}" --tpslimit 10 --transfers 4')
 
     wandb.finish()
-    print('\n✅ Done.')
+    print(f'\n✅ Done: {", ".join(scribbles)} in {out_dir}')
 
 
 if __name__ == '__main__':

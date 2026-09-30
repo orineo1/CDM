@@ -8,8 +8,8 @@ eval_all_experiments.py -- the paper's final evaluation (Table 3 / Table 15), N 
 For one scenario:
     1. Build the target distribution, N_EVAL images generated from the SOURCE scribble with
        the group prompts and fractions (age mode: N_EVAL // n_ages per age), CLIP-encoded.
-    2. For every method's scribble found (source, avg, avg_latent, sdedit, sdedit_best,
-       mlgd_f, unguided): generate N_EVAL portraits with the neutral prompt, CLIP-encode, and
+    2. For every method's scribble found (source, avg, avg_prompt, avg_latent, sdedit,
+       sdedit_best, mlgd_f, unguided): generate N_EVAL portraits with the neutral prompt, CLIP-encode, and
        compute MMD and SWD against the target, plus p(male) with a binomial 95% CI in the
        gender scenarios. Delta% = improvement over the source scribble.
 
@@ -64,13 +64,14 @@ N_PREVIEW      = 5
 SCRIBBLE_FILES = {
     "source":      ["scribble.png", "scribble_source.png"],
     "avg":         ["scribble_avg.png", "baselines/scribble_avg.png"],
+    "avg_prompt":  ["scribble_avg_prompt.png", "baselines/scribble_avg_prompt.png"],
     "avg_latent":  ["scribble_avg_latent.png", "baselines/scribble_avg_latent.png"],
     "sdedit":      ["scribble_sdedit.png", "baselines/scribble_sdedit.png"],
     "sdedit_best": ["scribble_sdedit_best.png", "baselines/scribble_sdedit_best.png"],
     "mlgd_f":      ["final_scribble_mlgd_f.png", "scribble_mlgdd.png"],
     "unguided":    ["final_scribble_regular.png"],
 }
-METHOD_COLORS = {"source": "#888888", "avg": "#4C72B0", "avg_latent": "#ff7f0e", "sdedit": "#4C72B0",
+METHOD_COLORS = {"source": "#888888", "avg": "#4C72B0", "avg_prompt": "#17becf", "avg_latent": "#ff7f0e", "sdedit": "#4C72B0",
                  "sdedit_best": "#4C72B0", "mlgd_f": "#2ca02c", "unguided": "#9467bd"}
 
 

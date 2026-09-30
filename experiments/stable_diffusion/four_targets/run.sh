@@ -9,6 +9,13 @@
 #                                                  published number.
 #   bash run.sh full  <scenario> [flags...]        GPU (paper: L40S 48 GB). The published
 #                                                  configuration, from config/<scenario>.env.
+#   bash run.sh baselines <scenario> [flags...]    GPU, about as long as the MLGD-F run. The
+#                                                  baseline scribbles of outputs/full_<Scenario>:
+#                                                  sdedit_best (time-matched SDEdit search, MMD on
+#                                                  250 portraits per candidate) and avg_prompt
+#                                                  (prompt-embedding interpolation), plus a
+#                                                  5-portrait preview of every scribble, into
+#                                                  outputs/full_<Scenario>/baselines/.
 #   bash run.sh eval  <scenario> [flags...]        GPU, ~1 h. The paper's final evaluation
 #                                                  (Table 3 / 15): N = 2,000 images per method
 #                                                  vs a 2,000-image target, MMD / SWD / p(male).
@@ -90,7 +97,7 @@ mkdir -p "$CACHE_DIR" "$MPLCONFIGDIR" "$OUT"
 # before the interpreter starts, which is what cuBLAS requires)
 export CUBLAS_WORKSPACE_CONFIG="${CUBLAS_WORKSPACE_CONFIG:-:4096:8}"
 
-usage() { echo "usage: bash run.sh [check | help | smoke|full|eval <balanced|skewed|gender_interpolation|age_interpolation|all> [flags...]]" >&2; exit 64; }
+usage() { echo "usage: bash run.sh [check | help | smoke|full|baselines|eval <balanced|skewed|gender_interpolation|age_interpolation|all> [flags...]]" >&2; exit 64; }
 
 revision_args() {   # the pinned weights of config/models.env, as --*_revision flags
   local rev v
@@ -98,6 +105,44 @@ revision_args() {   # the pinned weights of config/models.env, as --*_revision f
     v="${rev}_REVISION"
     [ -n "${!v:-}" ] && echo "--$(tr 'A-Z' 'a-z' <<< "$rev")_revision" "${!v}"
   done
+}
+
+baselines_one() {   # baselines_one <scenario> [extra flags...]: sdedit_best + avg_prompt
+  local name="$1"; shift
+  local cfg="$HERE/config/${name}.env"
+  [ -f "$cfg" ] || { echo "no such scenario: $name (config/$name.env)" >&2; usage; }
+  (
+    set -a
+    source "$HERE/config/models.env"
+    source "$cfg"
+    set +a
+    local rundir="$OUT/full_${SCENARIO}" a
+    for a in "$@"; do [ "${prev:-}" = --run_dir ] && rundir="$a"; prev="$a"; done
+    local outdir="$rundir/baselines"
+    prev=""; for a in "$@"; do [ "${prev:-}" = --output_dir ] && outdir="$a"; prev="$a"; done
+    local args=( --run_dir "$OUT/full_${SCENARIO}" --scenario "$SCENARIO"
+                 --controlnet_scale "$CONTROLNET_SCALE"
+                 $(revision_args) --wandb_project "${WANDB_PROJECT:-sdxl-baselines}" )
+    [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
+    args+=( "$@" )
+    export WANDB_NAME="${WANDB_NAME:-baselines_${name}${SLURM_JOB_ID:+_${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}}${SLURM_ARRAY_TASK_ID:+_$SLURM_ARRAY_TASK_ID}}"
+    export WANDB_TAGS="${WANDB_TAGS:-baselines,$name}"
+    local cmd=( "$PY" -m cdm.models.sd.eval_baselines "${args[@]}" )
+    echo "=== baselines | $name | wandb ${WANDB_PROJECT:-sdxl-baselines}/$WANDB_NAME ==="
+    printf '%q ' "${cmd[@]}"; echo
+    [ -n "${DRY_RUN:-}" ] && exit 0
+    [ -d "$rundir" ] || { echo "no run directory $rundir: run 'run.sh full $name' first, or pass --run_dir" >&2; exit 66; }
+    mkdir -p "$outdir"
+    {
+      echo "date:       $(date -Iseconds)"
+      echo "git commit: $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)$(git -C "$REPO" diff --quiet 2>/dev/null || echo ' (dirty)')"
+      echo "host:       $(hostname)  slurm job: ${SLURM_JOB_ID:-none}"
+      "$PY" -c "import torch; print('gpu:       ', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none', '| torch', torch.__version__)"
+      echo "config:     config/$name.env  overrides: ${*:-none}"
+      printf 'command:    '; printf '%q ' "${cmd[@]}"; echo
+    } > "$outdir/run_info.txt"
+    "${cmd[@]}"
+  )
 }
 
 eval_one() {   # eval_one <scenario> [extra flags...]: the N=2000 final evaluation
@@ -212,6 +257,23 @@ case "$TIER" in
 
   help)
     "$PY" -m cdm.models.sd.run_mlgd_f --help
+    ;;
+
+  baselines)
+    SCEN="${2:-}"; [ -n "$SCEN" ] || usage
+    shift 2
+    if [ -z "${DRY_RUN:-}" ]; then
+      "$PY" -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 'no CUDA GPU visible (sbatch: add --gres=gpu:1)')"
+    fi
+    if [ "$SCEN" = all ] && [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
+      SCEN="${SCENARIOS[$SLURM_ARRAY_TASK_ID]:?array index must be 0-3}"
+    fi
+    if [ "$SCEN" = all ]; then
+      for s in "${SCENARIOS[@]}"; do baselines_one "$s" "$@"; done
+    else
+      baselines_one "$SCEN" "$@"
+    fi
+    [ -n "${DRY_RUN:-}" ] || echo "next: bash experiments/stable_diffusion/four_targets/run.sh eval $SCEN"
     ;;
 
   eval)

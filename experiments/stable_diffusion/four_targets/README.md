@@ -77,6 +77,34 @@ downloads. The SD dependencies are in `experiments/stable_diffusion/requirements
   `losses.functions.compute_mmd`, reproduces the upstream formula to 1e-6, and gradients
   flow through the generated samples while the target stays detached.
 
+## Baselines: `run.sh baselines`
+
+Builds the baseline scribbles of a finished run (`cdm/models/sd/eval_baselines.py`) into
+`outputs/full_<Scenario>/baselines/`, where `run.sh eval` finds them:
+
+- **`sdedit_best`**: the best of N unguided SDEdit candidates of the source scribble. Each
+  candidate is scored by MMD on 250 portraits against a search target built from the
+  source scribble; N is chosen so the search takes as long as the MLGD-F run did (read
+  from the run's `metrics.json`; `--lgd_cm_minutes` overrides, `--max_candidates` caps it
+  for a quick check).
+- **`avg_prompt`**: the HED scribble of one portrait generated from the frac-weighted
+  average of the groups' CLIP text embeddings (prompt interpolation).
+- `--methods avg sdedit` adds the older pixel-average scribble and one guided SDEdit.
+
+Every scribble, the source and MLGD-F ones included, gets `preview_<name>.png`: 5 portraits
+under the neutral prompt. Also saved: `scribble_<method>.png`, `scribbles_all.png`,
+`sdedit_search.png`, `target_<group>.png`, `baselines_meta.json` (budget, candidates, best
+seed and MMD, every candidate's MMD). Logged to W&B (`sdxl-baselines`). It takes about as
+long as the MLGD-F run.
+
+```
+bash run.sh baselines balanced
+bash run.sh baselines balanced --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget --max_candidates 3   # quick check
+```
+
+The whole scenario is then three steps: `run.sh full balanced`, `run.sh baselines balanced`,
+`run.sh eval balanced`.
+
 ## Final evaluation: `run.sh eval` (Table 3 / Table 15)
 
 The optimisation's own numbers (the per-step MMD, the final MMD on 250 images against the
