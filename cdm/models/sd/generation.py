@@ -36,14 +36,15 @@ def generate_and_store(pipe, prompt, sobel_cond_pil, num_samples, batch_size=2):
 
     for i in range(0, num_samples, batch_size):
         curr = min(batch_size, num_samples - i)
-        result = pipe(
-            prompt=[prompt] * curr,
-            image=[sobel_cond_pil] * curr,
-            num_inference_steps=2,
-            guidance_scale=0.0,
-            controlnet_conditioning_scale=1.0,
-            callback_on_step_end=latents_callback,
-        )
+        with torch.no_grad():   # load_models unwraps the pipeline's own no_grad
+            result = pipe(
+                prompt=[prompt] * curr,
+                image=[sobel_cond_pil] * curr,
+                num_inference_steps=2,
+                guidance_scale=0.0,
+                controlnet_conditioning_scale=1.0,
+                callback_on_step_end=latents_callback,
+            )
         all_images.extend(result.images)
         all_lats.append(pipe._current_latents.reshape(curr, -1))
         print(f"  Progress: {len(all_images)}/{num_samples}", end="\r")
@@ -69,15 +70,16 @@ def generate_and_store_cs(
 
     for i in range(0, num_samples, batch_size):
         curr = min(batch_size, num_samples - i)
-        result = pipe(
-            prompt=[prompt] * curr,
-            image=[cond_pil] * curr,
-            num_inference_steps=2,
-            guidance_scale=0.0,
-            controlnet_conditioning_scale=cn_scale,
-            callback_on_step_end=latents_callback,
-            generator=generator,
-        )
+        with torch.no_grad():   # load_models unwraps the pipeline's own no_grad
+            result = pipe(
+                prompt=[prompt] * curr,
+                image=[cond_pil] * curr,
+                num_inference_steps=2,
+                guidance_scale=0.0,
+                controlnet_conditioning_scale=cn_scale,
+                callback_on_step_end=latents_callback,
+                generator=generator,
+            )
         all_images.extend(result.images)
         all_lats.append(pipe._current_latents.reshape(curr, -1))
         print(f"  Progress: {len(all_images)}/{num_samples}", end="\r")
