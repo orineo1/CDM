@@ -113,10 +113,17 @@ def _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best, 
             scale = r_t ** 2 if cfg.perturb_square else r_t
             x0_sample = pred_x0 + scale * torch.randn_like(pred_x0)
 
-        pred_samples = _draw_conditional(model_cond, x0_sample, cfg)
-        target_samples = cfg.target_generator(cfg.n_cond, device)
-
-        loss_val = loss_function(pred_samples, target_samples)
+        if getattr(cfg, "guide_grad", "pathwise") == "zo":
+            # Zeroth-order gradient of the sample loss at x0_sample (common random numbers), pulled
+            # back to x_t through the Tweedie Jacobian by a linear surrogate whose value is the loss
+            # and whose gradient with respect to x0_sample is the ZO estimate.
+            seed = int(torch.randint(0, 2**31 - 1, (1,)).item())
+            l0, g0 = _zo_grad(model_cond, loss_function, cfg, cfg, x0_sample.detach(), cfg.n_cond, seed)
+            loss_val = l0.to(x0_sample.dtype) + (g0.detach() * (x0_sample - x0_sample.detach())).sum()
+        else:
+            pred_samples = _draw_conditional(model_cond, x0_sample, cfg)
+            target_samples = cfg.target_generator(cfg.n_cond, device)
+            loss_val = loss_function(pred_samples, target_samples)
         neg_losses.append(-loss_val)
 
         if loss_val.item() < best["loss"]:
