@@ -31,9 +31,11 @@ reference** for this experiment.
 
 ## Outputs
 
-`mlgdf_runs.md` and the `<Scenario>/` folders, when present, are runs of this code copied
-from `outputs/` by `experiments/stable_diffusion/export_results.py`; each carries its
-commit, command and W&B link in `run_info.txt` / `metrics.json`.
+`mlgdf_runs.md`, `eval_table.md` and the `full_<Scenario>_seed<S>_<jobid>/` folders, when
+present, are runs of this code copied from `outputs/` by
+`experiments/stable_diffusion/export_results.py`; each carries its commit, command and W&B
+link in `run_info.txt` / `metrics.json`, and its `baselines/` and `eval/` (the N = 2,000
+evaluation, the protocol of Tables 3 and 15).
 
 `outputs/` is gitignored and holds only what a local run writes; nothing in it is a
 published number.

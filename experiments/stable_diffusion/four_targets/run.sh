@@ -149,9 +149,17 @@ baselines_one() {   # baselines_one <scenario> [extra flags...]: sdedit_best + a
     set +a
     local rundir; rundir="$(resolve_run_dir "$SCENARIO" "$@")" || exit $?
     local outdir; outdir="$(flag_value --output_dir "$rundir/baselines" "$@")"
+    # the run's own settings (config/<scenario>.env), so the baselines match the run
     local args=( --run_dir "$rundir" --scenario "$SCENARIO" --output_dir "$outdir"
-                 --controlnet_scale "$CONTROLNET_SCALE"
-                 $(revision_args) --wandb_project "${WANDB_PROJECT:-sdxl-baselines}" )
+                 --mode "$MODE" --seed "$SEED" --n_steps "$N_STEPS" --start_step "$START_STEP"
+                 --controlnet_scale "$CONTROLNET_SCALE" )
+    if [ "$MODE" = age ]; then
+      args+=( --age_min "$AGE_MIN" --age_max "$AGE_MAX" --age_step "$AGE_STEP" --age_gender "$AGE_GENDER" )
+    else
+      local tp; IFS='|' read -r -a tp <<< "$TARGET_PROMPTS"
+      args+=( --target_prompts "${tp[@]}" )
+    fi
+    args+=( $(revision_args) --wandb_project "${WANDB_PROJECT:-sdxl-baselines}" )
     [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
     args+=( "$@" )
     export WANDB_NAME="${WANDB_NAME:-baselines_$(basename "$rundir")}"

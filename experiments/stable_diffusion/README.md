@@ -78,18 +78,26 @@ them, e.g. `run.sh full skewed --base_zeta 5 --seed 2`. `DRY_RUN=1 bash .../run.
 prints the command without running it. Watch a job with `squeue -u $USER` and
 `tail -f logs/sd-<jobid>.out`; the W&B link is printed near the top of the log.
 
-**5. Evaluate as the paper does (Table 3 / 15).** About an hour per scenario:
+**5. Baselines, then the paper's evaluation (Table 3 / 15).** On the finished run: the
+baseline scribbles (about as long as the run) and the N = 2,000 evaluation (about an hour):
 
 ```bash
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=24:00:00 \
+       --output=logs/sd-base-%j.out \
+       --wrap "bash experiments/stable_diffusion/four_targets/run.sh baselines balanced"
 sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=03:00:00 \
        --output=logs/sd-eval-%j.out \
        --wrap "bash experiments/stable_diffusion/four_targets/run.sh eval balanced"
 ```
 
+Both take the newest finished run of the scenario (`--run_dir` picks another) and write
+into it. `four_targets/README.md`, "Running the whole pipeline", chains the three as
+dependent jobs.
+
 **6. Keep the results.** When the runs and evaluations are done:
 
 ```bash
-python experiments/stable_diffusion/export_results.py                # outputs/full_*, eval_*, interpolation -> results/
+python experiments/stable_diffusion/export_results.py                # outputs/full_* (with baselines/, eval/), interpolation -> results/
 ```
 
 ## Requirements
@@ -97,25 +105,24 @@ python experiments/stable_diffusion/export_results.py                # outputs/f
 This experiment needs a CUDA GPU — the paper's runs used an L40S (48 GB) for the
 optimisation and an A100 (80 GB) for the 2,000-image evaluation — plus network access to
 download SDXL Base, SDXL Turbo, ControlNet-Scribble and CLIP ViT-L/14, and the SD
-dependencies in `cdm/models/sd/requirements.txt` (`transformers`, `diffusers`, `peft`,
-`controlnet_aux`, `wandb`). A CPU-only `check` configuration that needs none of that is
-described in the experiment's README.
-
-In `four_targets/results/`, `table3_sd_results.md` and `table15_sd_swd.md` are transcribed
-from the paper; `mlgdf_runs.md` and the `<Scenario>/` folders are runs of this code,
-written by `export_results.py` (see below).
+dependencies in `experiments/stable_diffusion/requirements.txt` (`transformers`, `diffusers`,
+`peft`, `controlnet_aux`, `wandb`). A CPU-only `check` configuration that needs none of that
+is described in the experiment's README.
 
 ## Saving results
 
-As for MNIST: `run.sh full` writes everything to `four_targets/outputs/` (not in git),
-then
+As for MNIST: every run writes to its own directory under `four_targets/outputs/` (not in
+git), and
 
 ```bash
-python experiments/stable_diffusion/export_results.py   # outputs/full_* -> four_targets/results/
+python experiments/stable_diffusion/export_results.py   # outputs/full_* -> four_targets/results/<run>/
 ```
 
-copies the finished runs into the committed `four_targets/results/` (table, per-step CSV,
-images, run info). The per-step visualisations are in wandb only.
+copies the finished runs into the committed `four_targets/results/`: per run its
+`metrics.json`, `steps.csv`, `run_info.txt`, the curves, the scribbles and previews, and
+its `baselines/` and `eval/`; plus `mlgdf_runs.md` (one row per run) and `eval_table.md`
+(every run's N = 2,000 table). `table3_sd_results.md` and `table15_sd_swd.md` there are
+transcribed from the paper. The per-step visualisations are in wandb only.
 
 ## Not covered here
 
@@ -132,5 +139,5 @@ Ported: the 2,000-image evaluation (`eval_all_experiments.ipynb` ->
 `cdm/models/sd/eval_all_experiments.py`, `four_targets/run.sh eval`) and the interpolation
 notebooks (`eval_scribbl_interpolation*.ipynb` -> `interpolation/`, without their MMD).
 
-`cdm/models/sd/analysis.py` and `cdm/models/sd/visualization.py` carry the scribble-diff heatmap and the
-step plots, but the saliency computation itself is not among them.
+`cdm/models/sd/visualization.py` carries the scribble-diff heatmap and the step plots, but
+the saliency computation itself is not among them.

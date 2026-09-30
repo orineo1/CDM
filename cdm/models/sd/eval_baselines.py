@@ -37,80 +37,44 @@ from tqdm import tqdm
 # Upstream inserted ../src on sys.path here so its bare sibling imports would
 # resolve. Not needed: this is a package now and the imports are absolute.
 
-# ── EXPERIMENT CONFIGS ────────────────────────────────────────────────────────
+# ── SDEdit settings per scenario ──────────────────────────────────────────────
+# Only what the SDEdit baselines need and config/<scenario>.env does not carry. The
+# target prompts / fractions, seed, steps and ControlNet scale come from the command line
+# (run.sh passes the run's config), so the baselines always use the run's own settings.
 
-EXPERIMENT_CONFIGS = {
-
-    'SkewedTarget': dict(
-        best_jid         = 44430631,
-        seed             = 5,
-        n_eval_search    = 250,
-        sdedit_start     = 125,
-        n_steps          = 250,
-        sdedit_cfg       = 7.5,
-        sdedit_prompt    = 'a face scribble sketch, mostly feminine features sometimes with masculine features',
-        neutral_prompt   = 'a superrealistic professional photograph of',
-        controlnet_scale = 0.5,
-        mode             = 'binary',
-        groups = [
-            dict(label='Man',   prompt='a superrealistic portrait photograph of a man, studio lighting',   frac=0.25),
-            dict(label='Woman', prompt='a superrealistic portrait photograph of a woman, studio lighting', frac=0.75),
-        ],
-    ),
-
-    'BalancedTarget': dict(
-        best_jid         = 44424933,
-        seed             = 5,
-        n_eval_search    = 250,
-        sdedit_start     = 125,
-        n_steps          = 250,
-        sdedit_cfg       = 7.5,
-        sdedit_prompt    = 'a face scribble sketch of man or woman',
-        neutral_prompt   = 'a superrealistic professional photograph of',
-        controlnet_scale = 0.5,
-        mode             = 'binary',
-        groups = [
-            dict(label='Man',   prompt='a superrealistic portrait photograph of a man, studio lighting',   frac=0.5),
-            dict(label='Woman', prompt='a superrealistic portrait photograph of a woman, studio lighting', frac=0.5),
-        ],
-    ),
-
-    'GenderInterpolation': dict(
-        best_jid         = 44432053,
-        seed             = 5,
-        n_eval_search    = 250,
-        sdedit_start     = 125,
-        n_steps          = 250,
-        sdedit_cfg       = 7.5,
-        sdedit_prompt    = 'a face scribble sketch, with a range of feminine to masculine features',
-        neutral_prompt   = 'a superrealistic professional photograph of',
-        controlnet_scale = 0.5,
-        mode             = 'multiclass',
-        groups = [
-            dict(label='Woman',                  prompt='superrealistic portrait photograph of a woman, extremely feminine features, studio lighting',                                                               frac=0.25),
-            dict(label='Woman w/ masc features', prompt='a superrealistic portrait photograph of a woman with masculine features, heavy brow ridge, studio lighting',                                               frac=0.25),
-            dict(label='Man w/ fem features',    prompt='a superrealistic portrait photograph of a man with extremely feminine feminine features, soft delicate face, high cheekbones, studio lighting',            frac=0.25),
-            dict(label='Man',                    prompt='a superrealistic portrait photograph of a man, extremely masculine features, studio lighting',                                                             frac=0.25),
-        ],
-    ),
-
-    'AgeInterpolation': dict(
-        best_jid         = 44492374,
-        seed             = 42,
-        n_eval_search    = 250,
-        sdedit_start     = 125,
-        n_steps          = 250,
-        sdedit_cfg       = 7.5,
-        sdedit_prompt    = 'a face scribble sketch of a man between 40 and 79 years old',
-        neutral_prompt   = 'a superrealistic professional photograph of',
-        controlnet_scale = 0.5,
-        mode             = 'age',
-        age_min          = 40,
-        age_max          = 79,
-        age_step         = 1,
-        n_per_age        = 3,
-    ),
+NEUTRAL_PROMPT = 'a superrealistic professional photograph of'
+SDEDIT = {
+    'SkewedTarget':        dict(sdedit_prompt='a face scribble sketch, mostly feminine features sometimes with masculine features'),
+    'BalancedTarget':      dict(sdedit_prompt='a face scribble sketch of man or woman'),
+    'GenderInterpolation': dict(sdedit_prompt='a face scribble sketch, with a range of feminine to masculine features'),
+    'AgeInterpolation':    dict(sdedit_prompt='a face scribble sketch of a man between 40 and 79 years old'),
 }
+SDEDIT_CFG    = 7.5    # guidance scale of the single guided SDEdit (--methods sdedit)
+N_EVAL_SEARCH = 250    # portraits per candidate in the sdedit_best search
+
+
+def build_cfg(args):
+    """The dict the builders below read, from the command line."""
+    cfg = dict(seed=args.seed, n_steps=args.n_steps, sdedit_start=args.start_step,
+               controlnet_scale=args.controlnet_scale, neutral_prompt=args.eval_prompt,
+               n_eval_search=args.n_eval_search, sdedit_cfg=SDEDIT_CFG,
+               sdedit_prompt=SDEDIT[args.scenario]['sdedit_prompt'])
+    if args.mode == 'age':
+        cfg.update(mode='age', age_min=args.age_min, age_max=args.age_max + 1,   # builders use range(min, max)
+                   age_step=args.age_step, n_per_age=args.n_per_age, age_gender=args.age_gender)
+    else:
+        groups = []
+        for spec in args.target_prompts or [f'Man:{MAN_PROMPT}:50', f'Woman:{WOMAN_PROMPT}:50']:
+            name, prompt, n = spec.split(':', 2)
+            groups.append(dict(label=name.strip(), prompt=prompt.strip(), n=float(n)))
+        total = sum(g['n'] for g in groups)
+        cfg.update(mode='binary' if len(groups) == 2 else 'multiclass',
+                   groups=[dict(label=g['label'], prompt=g['prompt'], frac=g['n'] / total) for g in groups])
+    return cfg
+
+
+MAN_PROMPT   = 'a superrealistic portrait photograph of a man, studio lighting'
+WOMAN_PROMPT = 'a superrealistic portrait photograph of a woman, studio lighting'
 
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -230,7 +194,7 @@ def build_target_embeddings(cfg, source_scribble, sprinter, clip_model, clip_pro
         clip_model.to(device)
         with torch.no_grad():
             for age in tqdm(ages, desc='Building age target'):
-                prompt = (f'a superrealistic portrait photograph of a {age}-year-old man, '
+                prompt = (f"a superrealistic portrait photograph of a {age}-year-old {cfg.get('age_gender', 'man')}, "
                           'studio lighting, sharp focus, photographic')
                 imgs = gen_images(sprinter, source_scribble, prompt, n_per_age, cn_scale, seed=SEED + age * 7)
                 embs = encode_images_clip(pil_to_tensor(imgs, device), clip_model, clip_processor)
@@ -252,7 +216,7 @@ def build_avg_scribble(cfg, source_scribble, sprinter, hed, device):
     if mode == 'age':
         ages = list(range(cfg['age_min'], cfg['age_max'], cfg['age_step']))
         prompts = [
-            f'a superrealistic portrait photograph of a {age}-year-old man, studio lighting, sharp focus, photographic'
+            f"a superrealistic portrait photograph of a {age}-year-old {cfg.get('age_gender', 'man')}, studio lighting, sharp focus, photographic"
             for age in ages]
         fracs = [1.0 / len(ages)] * len(ages)
     else:
@@ -294,7 +258,7 @@ def build_avg_scribble_prompt_interp(cfg, source_scribble, sprinter, hed, device
     if mode == 'age':
         ages = list(range(cfg['age_min'], cfg['age_max'], cfg['age_step']))
         prompts = [
-            f'a superrealistic portrait photograph of a {age}-year-old man, studio lighting, sharp focus, photographic'
+            f"a superrealistic portrait photograph of a {age}-year-old {cfg.get('age_gender', 'man')}, studio lighting, sharp focus, photographic"
             for age in ages]
         fracs = [1.0 / len(ages)] * len(ages)
     else:
@@ -389,13 +353,11 @@ def _first(d, *names):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    parser.add_argument('--run_dir',        type=str, default=None,
-                        help='the MLGD-F run directory (outputs/full_<Scenario>_seed<S>_<id>); default: the '
-                             "paper layout <repo_path>/experiments/<scenario>")
-    parser.add_argument('--scenario',       type=str, default=None, choices=list(EXPERIMENT_CONFIGS),
+    parser.add_argument('--run_dir',        type=str, required=True,
+                        help='the MLGD-F run directory (outputs/full_<Scenario>_seed<S>_<id>), or a '
+                             "directory with the paper's scribble_source.png / scribble_mlgdd.png")
+    parser.add_argument('--scenario',       type=str, default=None, choices=list(SDEDIT),
                         help='default: from the run directory name (full_<Scenario>[_seed<S>_<id>])')
-    parser.add_argument('--experiment',     type=str, default=None, choices=list(EXPERIMENT_CONFIGS),
-                        help='old name of --scenario')
     parser.add_argument('--methods',        type=str, nargs='+', default=['sdedit_best', 'avg_prompt'],
                         choices=['sdedit_best', 'avg_prompt', 'avg', 'sdedit'])
     parser.add_argument('--output_dir',     type=str, default=None, help='default: <run_dir>/baselines')
@@ -404,16 +366,27 @@ def main():
                              'optimization_time_sec from metrics.json')
     parser.add_argument('--max_candidates', type=int, default=None,
                         help='cap on the SDEdit candidates (for quick checks)')
-    parser.add_argument('--seed',           type=int, default=None, help="default: the scenario's config seed")
-    parser.add_argument('--controlnet_scale', type=float, default=None, help="default: the scenario's config")
+    parser.add_argument('--n_eval_search',  type=int, default=N_EVAL_SEARCH,
+                        help='portraits per SDEdit candidate for its MMD score')
     parser.add_argument('--n_preview',      type=int, default=5)
     parser.add_argument('--no_deterministic', action='store_true')
+    # the run's own settings (run.sh passes config/<scenario>.env; a run_mlgd_f flag set on
+    # the run should be repeated here)
+    parser.add_argument('--seed',             type=int,   default=1)
+    parser.add_argument('--n_steps',          type=int,   default=250)
+    parser.add_argument('--start_step',       type=int,   default=125)
+    parser.add_argument('--controlnet_scale', type=float, default=0.5)
+    parser.add_argument('--eval_prompt',      type=str,   default=NEUTRAL_PROMPT)
+    parser.add_argument('--mode',             type=str,   default='gender', choices=['gender', 'age'])
+    parser.add_argument('--target_prompts',   type=str,   nargs='+', default=None, metavar='NAME:PROMPT:N')
+    parser.add_argument('--age_min',          type=int,   default=40)
+    parser.add_argument('--age_max',          type=int,   default=79, help='inclusive')
+    parser.add_argument('--age_step',         type=int,   default=1)
+    parser.add_argument('--n_per_age',        type=int,   default=3,
+                        help='images per age in the sdedit_best search target')
+    parser.add_argument('--age_gender',       type=str,   default='man')
     for m in ('architect', 'sprinter', 'controlnet', 'hed', 'clip'):
         parser.add_argument(f'--{m}_revision', type=str, default=None)
-    parser.add_argument('--repo_path',      type=str, default='.',
-                        help='repo root for the paper layout (default: current directory)')
-    parser.add_argument('--gdrive_root',    type=str, default='',
-                        help='rclone remote path for syncing outputs (leave empty to skip)')
     parser.add_argument('--wandb_project',  type=str, default='sdxl-baselines')
     parser.add_argument('--wandb_entity',   type=str, default='',
                         help='wandb entity/team (leave empty to use logged-in user)')
@@ -424,26 +397,16 @@ def main():
     from cdm.models.sd.hed import load_hed, HED_ANNOTATOR_ID
     from cdm.models.sd.visualization import plot_row
 
-    scenario = args.scenario or args.experiment
-    if args.run_dir:
-        run_dir = Path(args.run_dir).resolve()
-        if scenario is None:
-            base = run_dir.name.split('_', 1)[-1].split('_seed', 1)[0]
-            scenario = base if base in EXPERIMENT_CONFIGS else None
-    else:
-        if scenario is None:
-            sys.exit('give --run_dir (a run directory) or --scenario')
-        run_dir = Path(args.repo_path).resolve() / 'experiments' / scenario
+    run_dir = Path(args.run_dir).resolve()
+    scenario = args.scenario
     if scenario is None:
-        sys.exit(f'cannot tell the scenario from {run_dir.name}; pass --scenario '
-                 f'({", ".join(EXPERIMENT_CONFIGS)})')
-
-    cfg = dict(EXPERIMENT_CONFIGS[scenario])
-    if args.seed is not None:
-        cfg['seed'] = args.seed
-    if args.controlnet_scale is not None:
-        cfg['controlnet_scale'] = args.controlnet_scale
-    SEED   = cfg['seed']
+        base = run_dir.name.split('_', 1)[-1].split('_seed', 1)[0]
+        scenario = base if base in SDEDIT else None
+    if scenario is None:
+        sys.exit(f'cannot tell the scenario from {run_dir.name}; pass --scenario ({", ".join(SDEDIT)})')
+    args.scenario = scenario
+    cfg  = build_cfg(args)
+    SEED = cfg['seed']
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     out_dir = Path(args.output_dir) if args.output_dir else run_dir / 'baselines'
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -543,7 +506,7 @@ def main():
         t0 = time.time()
         first_cand, first_mmd = candidate(0)
         sec_per_candidate = time.time() - t0
-        n_candidates = max(1, int(lgd_minutes * 60 / sec_per_candidate))
+        n_candidates = max(1, int(lgd_minutes * 60 / sec_per_candidate))   # time-matched to the MLGD-F run
         if args.max_candidates:
             n_candidates = min(n_candidates, args.max_candidates)
         print(f'  {sec_per_candidate:.1f}s per candidate -> budget {lgd_minutes:.1f} min -> {n_candidates} candidates')
@@ -592,11 +555,6 @@ def main():
     with open(out_dir / 'baselines_meta.json', 'w') as f:
         json.dump(meta, f, indent=2)
     print('  Saved baselines_meta.json')
-
-    if args.gdrive_root:
-        gdrive_dest = f"{args.gdrive_root}/{scenario}/baselines"
-        print(f'\nSyncing to {gdrive_dest}...')
-        os.system(f'rclone copy "{out_dir}" "{gdrive_dest}" --tpslimit 10 --transfers 4')
 
     wandb.finish()
     print(f'\n✅ Done: {", ".join(scribbles)} in {out_dir}')

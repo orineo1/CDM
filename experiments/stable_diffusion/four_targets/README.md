@@ -88,7 +88,9 @@ or by default the newest finished `full` run of the scenario:
   candidate is scored by MMD on 250 portraits against a search target built from the
   source scribble; N is chosen so the search takes as long as the MLGD-F run did (read
   from the run's `metrics.json`; `--lgd_cm_minutes` overrides, `--max_candidates` caps it
-  for a quick check).
+  for a quick check). The run's own seed, steps, `t_start`, ControlNet scale and target
+  prompts are used (`run.sh` passes `config/<scenario>.env`; repeat any `run_mlgd_f` flag
+  the run had, e.g. `--seed 3`).
 - **`avg_prompt`**: the HED scribble of one portrait generated from the frac-weighted
   average of the groups' CLIP text embeddings (prompt interpolation).
 - `--methods avg sdedit` adds the older pixel-average scribble and one guided SDEdit.
@@ -220,24 +222,13 @@ The weights are frozen: `config/models.env` pins every model to a hub commit, an
 `--controlnet_revision`, `--hed_revision`, `--clip_revision`. To move to newer weights,
 change the sha there (or remove the line to follow the hub's `main`).
 
-**Checking it.** Run the same configuration twice in one job (so both land on the same
-GPU) and compare; `compare_runs.py` exits 0 only when every step, the final MMD and the
-images are identical:
-
-```
-R=experiments/stable_diffusion/four_targets
-sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=03:00:00 --output=logs/det-%j.out \
-  --wrap "bash $R/run.sh smoke balanced --output_dir $R/outputs/det_a && \
-          bash $R/run.sh smoke balanced --output_dir $R/outputs/det_b && \
-          python experiments/stable_diffusion/compare_runs.py $R/outputs/det_a $R/outputs/det_b"
-```
-
-The log ends with `RESULT: IDENTICAL` or a per-column report of where the runs diverge.
-Checked 2026-09-30 on an NVIDIA L40S, torch 2.11 (cu128): two `smoke balanced` runs were
-identical in every per-step value, the final MMD and all images.
-Any `UserWarning` naming an operation without a deterministic implementation is printed
-during the run (`warn_only`); if one appears, that operation is the remaining source of
-drift.
+**Checked** on 2026-09-30, NVIDIA L40S, torch 2.11 (cu128): two `smoke balanced` runs in one
+job gave identical per-step values (`steps.csv`), the same final MMD and pixel-identical
+scribbles. To re-check, run the same configuration twice with two `--output_dir`s in one
+job and `diff` the two `steps.csv` (ignoring `elapsed_s`) and `cmp` the two
+`final_scribble_mlgd_f.png`. Any `UserWarning` naming an operation without a deterministic
+implementation is printed during the run (`warn_only`); if one appears, that operation is
+the remaining source of drift.
 
 ## Reference numbers
 
