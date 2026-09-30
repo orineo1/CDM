@@ -17,8 +17,10 @@ All of the above are CPU-only, seconds, tiny untrained models, no downloads.
 A green run says the code imports, runs and is deterministic on tiny untrained
 models. It does **not** say the paper's numbers are reproduced: nothing here
 loads a trained checkpoint or compares against a published value. The
-published numbers live under `experiments/*/results/`, and reproducing them
-means running an experiment's full tier (`experiments/*/run.sh full`).
+published numbers live under `experiments/*/results/` (MNIST, Stable Diffusion) and
+`experiments/synthetic/reference/`; reproducing them means running an experiment's
+full configuration (`experiments/*/run.sh full`, or the commands in
+`experiments/synthetic/README.md`).
 
 ## Adding tests here
 

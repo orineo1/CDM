@@ -293,7 +293,7 @@ def compute_swd(
 # ---------------------------------------------------------------------------
 # Pointwise (non-distributional) baseline loss.
 #
-# Added for experiments/synthetic/infeasible_target (paper Table 9,
+# Added for the no-star experiment (experiments/synthetic/README.md, paper
 # tab:nonstar_results), whose two "pointwise" arms need a squared-error objective
 # rather than a distributional one. Upstream this is
 # conditional-matching-paper simulations/src/Optimization.py::_step_loss, branch

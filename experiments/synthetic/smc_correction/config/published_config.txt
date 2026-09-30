@@ -1,8 +1,0 @@
-# Figure 3, published configuration (App. B.8).
-betas        = 0 2 8 16
-n_particles  = 2000
-n_repeats    = 10   (independent populations, pooled)
-max_shift    = 0.25 (corrected arm bounds the guided shift to sigma_t / 4)
-ess_frac     = 1.0  (resample at every step)
-bins         = 80
-setting      = hard
