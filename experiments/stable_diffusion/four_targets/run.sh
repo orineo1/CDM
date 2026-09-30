@@ -58,7 +58,7 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 PY="${PYTHON:-python}"
 # no venv active (e.g. sbatch from a plain login shell): try VENV, then the repo's .venv
 if ! command -v "$PY" >/dev/null 2>&1; then
-  for cand in "${VENV:-}/bin/python" "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/.venv/bin/python"; do
+  for cand in ${VENV:+"$VENV/bin/python"} "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/.venv/bin/python"; do
     [ -x "$cand" ] && { PY="$cand"; break; }
   done
   command -v "$PY" >/dev/null 2>&1 || { echo "run.sh: no python on PATH -- activate the venv before sbatch" \
