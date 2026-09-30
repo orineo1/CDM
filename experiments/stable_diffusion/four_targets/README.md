@@ -35,7 +35,8 @@ config, per-step MMD, gradient norm, ζ and correction norm, the per-step visual
 (x_t, pred x₀, conditional portraits, CLIP PCA against the target), the input and final
 scribbles and the final MMD. Runs are named `<tier>_<scenario>` (`WANDB_NAME` overrides).
 The per-step visualisations go to W&B only. Everything else is also saved to
-`outputs/<tier>_<Scenario>/` (see *Saved results* below).
+the run's own directory, `outputs/<tier>_<Scenario>_seed<S>_<jobid>/` (see *Saved results*
+below).
 
 On a SLURM cluster, submit `run.sh` itself with `sbatch --wrap`, from the repo root, with
 the venv active (sbatch passes it and exported variables such as `HF_HOME` to the job):
@@ -80,7 +81,8 @@ downloads. The SD dependencies are in `experiments/stable_diffusion/requirements
 ## Baselines: `run.sh baselines`
 
 Builds the baseline scribbles of a finished run (`cdm/models/sd/eval_baselines.py`) into
-`outputs/full_<Scenario>/baselines/`, where `run.sh eval` finds them:
+`<run dir>/baselines/`, where `run.sh eval` finds them. The run directory is `--run_dir`,
+or by default the newest finished `full` run of the scenario:
 
 - **`sdedit_best`**: the best of N unguided SDEdit candidates of the source scribble. Each
   candidate is scored by MMD on 250 portraits against a search target built from the
@@ -99,11 +101,32 @@ long as the MLGD-F run.
 
 ```
 bash run.sh baselines balanced
-bash run.sh baselines balanced --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget --max_candidates 3   # quick check
+bash run.sh baselines balanced --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget_seed1_<id> --max_candidates 3   # quick check
 ```
 
 The whole scenario is then three steps: `run.sh full balanced`, `run.sh baselines balanced`,
 `run.sh eval balanced`.
+
+## Running the whole pipeline on SLURM
+
+The three steps as three jobs, each starting only after the previous one **finished
+successfully** (`afterok`; `--kill-on-invalid-dep=yes` cancels the rest if one fails).
+From the repo root, venv active, `WANDB_API_KEY` and `HF_HOME` exported:
+
+```
+G=$PWD; R=$G/experiments/stable_diffusion/four_targets; SEED=1
+common="--partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --chdir=$G --kill-on-invalid-dep=yes"
+jf=$(sbatch --parsable $common --time=24:00:00 --output=$G/logs/sd-full-%j.out \
+     --wrap "bash $R/run.sh full balanced --seed $SEED")
+RUN=$R/outputs/full_BalancedTarget_seed${SEED}_${jf%%;*}
+jb=$(sbatch --parsable $common --time=24:00:00 --output=$G/logs/sd-base-%j.out --dependency=afterok:${jf%%;*} \
+     --wrap "bash $R/run.sh baselines balanced --run_dir $RUN")
+je=$(sbatch --parsable $common --time=03:00:00 --output=$G/logs/sd-eval-%j.out --dependency=afterok:${jb%%;*} \
+     --wrap "bash $R/run.sh eval balanced --run_dir $RUN")
+echo "full $jf -> baselines $jb -> eval $je   run dir: $RUN"
+```
+
+`squeue -u $USER` shows the later two as `PENDING (Dependency)` until their turn.
 
 ## Final evaluation: `run.sh eval` (Table 3 / Table 15)
 
@@ -114,7 +137,7 @@ tables use the protocol of `cdm/models/sd/eval_all_experiments.py`, a port of th
 
 1. a **2,000-image target** generated from the **source** scribble with the scenario's
    prompts and fractions (age: 40 ages × 50, seed 42), CLIP-encoded;
-2. for every scribble found in `outputs/full_<Scenario>/`: **2,000 portraits** under the
+2. for every scribble found in the run directory (and its `baselines/`): **2,000 portraits** under the
    neutral prompt, then **MMD** and **SWD** against the target and, in the gender scenarios,
    **p(male)** by CLIP zero-shot with a binomial 95% CI; Δ% is the improvement over the
    source scribble.
@@ -127,7 +150,7 @@ Right after a run the scribbles are `source` and `mlgd_f` (and `unguided` with
 
 ```
 bash run.sh eval balanced                                           # outputs/full_BalancedTarget -> outputs/eval_BalancedTarget
-bash run.sh eval balanced --n_eval 200 --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget --output_dir experiments/stable_diffusion/four_targets/outputs/eval_smoke   # quick check
+bash run.sh eval balanced --n_eval 200 --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget_seed1_<id> --output_dir experiments/stable_diffusion/four_targets/outputs/eval_smoke   # quick check
 bash run.sh eval all                                                # the four scenarios
 ```
 
@@ -140,7 +163,9 @@ Deterministic and pinned like the run (`--seed 42` is the notebook's).
 
 ## Saved results
 
-A run writes to `outputs/<tier>_<Scenario>/` (not in git):
+Every run gets its own directory, `outputs/<tier>_<Scenario>_seed<S>_<jobid>/` (not in git;
+the seed is the config's or `--seed`, the id the SLURM job id or a timestamp), and
+`run.sh baselines` / `run.sh eval` add `baselines/` and `eval/` inside it:
 
 | file | contents |
 |---|---|
@@ -159,7 +184,8 @@ python experiments/stable_diffusion/export_results.py                  # outputs
 python experiments/stable_diffusion/export_results.py --tier smoke --dest /tmp/x   # try it on smoke runs
 ```
 
-This also copies `outputs/eval_<Scenario>/` into `results/<Scenario>/eval/` (JSON, table,
+It exports every finished run to `results/<run>/`, including that run's `baselines/` and
+`eval/`. For the older layout it also copies `outputs/eval_<Scenario>/` into `results/<Scenario>/eval/` (JSON, table,
 previews, plots, run info) and writes `results/eval_table.md` with every scenario's
 evaluation. It writes `results/mlgdf_runs.md` (one row per scenario: final MMD next to the paper's,
 unguided MMD, steps, settings, time, commit, W&B link) and `results/<Scenario>/` with

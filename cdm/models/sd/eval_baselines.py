@@ -390,10 +390,10 @@ def _first(d, *names):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('--run_dir',        type=str, default=None,
-                        help='the MLGD-F run directory (outputs/full_<Scenario>); default: the '
+                        help='the MLGD-F run directory (outputs/full_<Scenario>_seed<S>_<id>); default: the '
                              "paper layout <repo_path>/experiments/<scenario>")
     parser.add_argument('--scenario',       type=str, default=None, choices=list(EXPERIMENT_CONFIGS),
-                        help='default: from the run directory name (full_<Scenario>)')
+                        help='default: from the run directory name (full_<Scenario>[_seed<S>_<id>])')
     parser.add_argument('--experiment',     type=str, default=None, choices=list(EXPERIMENT_CONFIGS),
                         help='old name of --scenario')
     parser.add_argument('--methods',        type=str, nargs='+', default=['sdedit_best', 'avg_prompt'],
@@ -428,7 +428,7 @@ def main():
     if args.run_dir:
         run_dir = Path(args.run_dir).resolve()
         if scenario is None:
-            base = run_dir.name.split('_', 1)[-1]
+            base = run_dir.name.split('_', 1)[-1].split('_seed', 1)[0]
             scenario = base if base in EXPERIMENT_CONFIGS else None
     else:
         if scenario is None:

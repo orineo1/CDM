@@ -53,7 +53,7 @@ export WANDB_API_KEY=$(cat /path/to/.wandb_key)                 # sbatch passes 
 **3. Where things go.** `run.sh` writes nothing to `$HOME`: model weights (tens of GB)
 and every cache go to `<repo>/.cache/` (`CACHE_DIR=/path` or `HF_HOME=/path` move
 them), W&B run files to `four_targets/outputs/wandb/`, results to
-`four_targets/outputs/<tier>_<Scenario>/`.
+`four_targets/outputs/<tier>_<Scenario>_seed<S>_<jobid>/`, one directory per run.
 
 **4. Check, then a smoke run, then the paper configuration.** Submit `run.sh` itself
 with `sbatch --wrap`; partition, GPU and time go on the `sbatch` line. The full

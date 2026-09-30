@@ -10,18 +10,23 @@
 #   bash run.sh full  <scenario> [flags...]        GPU (paper: L40S 48 GB). The published
 #                                                  configuration, from config/<scenario>.env.
 #   bash run.sh baselines <scenario> [flags...]    GPU, about as long as the MLGD-F run. The
-#                                                  baseline scribbles of outputs/full_<Scenario>:
+#                                                  baseline scribbles of a finished run:
 #                                                  sdedit_best (time-matched SDEdit search, MMD on
 #                                                  250 portraits per candidate) and avg_prompt
 #                                                  (prompt-embedding interpolation), plus a
 #                                                  5-portrait preview of every scribble, into
-#                                                  outputs/full_<Scenario>/baselines/.
+#                                                  <run dir>/baselines/.
 #   bash run.sh eval  <scenario> [flags...]        GPU, ~1 h. The paper's final evaluation
 #                                                  (Table 3 / 15): N = 2,000 images per method
-#                                                  vs a 2,000-image target, MMD / SWD / p(male).
-#                                                  Reads the scribbles of outputs/full_<Scenario>
-#                                                  (--run_dir overrides) and writes
-#                                                  outputs/eval_<Scenario>. No photos are saved.
+#                                                  vs a 2,000-image target, MMD / SWD / p(male),
+#                                                  of every scribble of a run, into
+#                                                  <run dir>/eval/. No photos are saved.
+#
+# Every run gets its own directory, outputs/<tier>_<Scenario>_seed<S>_<id>/, where <id> is
+# the SLURM job id (a timestamp outside SLURM; RUN_TAG=... sets it). baselines and eval
+# take the run directory with --run_dir, default: the newest finished full run of the
+# scenario. To chain full -> baselines -> eval, submit them with sbatch --dependency=afterok
+# (README, "Running the whole pipeline").
 #   bash run.sh help                               every flag run_mlgd_f accepts.
 #
 # <scenario>: balanced | skewed | gender_interpolation | age_interpolation | all
@@ -30,7 +35,7 @@
 # after the scenario overrides them -- it is passed last and the last value wins:
 #   bash run.sh full balanced --base_zeta 5 --seed 2
 #   bash run.sh full skewed   --num_variations 50 --backsel_k 25 --run_unguided
-#   bash run.sh eval balanced --n_eval 200 --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget
+#   bash run.sh eval balanced --n_eval 200 --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget_seed1_<id>
 #
 # On SLURM, submit this file with --wrap from the repo root (sbatch passes the active
 # venv and exported variables such as HF_HOME to the job):
@@ -45,7 +50,7 @@
 # Logging: every run goes to Weights & Biases (per-step MMD, gradient norm, zeta,
 # correction norm, the per-step visualisation, input and final scribbles, final MMD;
 # console output under the run's Logs tab). Everything except the per-step visualisation
-# is also saved to outputs/<tier>_<Scenario>/: steps.csv (written step by step),
+# is also saved to the run directory: steps.csv (written step by step),
 # metrics.json, run_info.txt (commit, GPU, exact command) and the images.
 # python experiments/stable_diffusion/export_results.py then copies finished full runs
 # into the committed results/, as for MNIST.
@@ -54,7 +59,8 @@
 #   PYTHON=/path/to/python   interpreter (default: python on PATH)
 #   WANDB_PROJECT=<name>     default sdxl-smoke for smoke, sdxl-mlgdf for full
 #   WANDB_ENTITY=<team>      default: the logged-in user
-#   WANDB_NAME=<run name>    default <tier>_<scenario>[_<slurm job id>]
+#   WANDB_NAME=<run name>    default: the run directory's name (baselines_/eval_ prefixed)
+#   RUN_TAG=<id>             the <id> of a new run directory (default: SLURM job id / time)
 #   CACHE_DIR=/path          where model weights and all caches go (default <repo>/.cache;
 #                            HF_HOME, MPLCONFIGDIR, WANDB_DIR, ... override one by one)
 #   DRY_RUN=1                print the command instead of running it
@@ -107,6 +113,31 @@ revision_args() {   # the pinned weights of config/models.env, as --*_revision f
   done
 }
 
+flag_value() {   # flag_value <flag> <default> [args...]: the last value given to <flag>
+  local flag="$1" val="$2" prev="" a; shift 2
+  for a in "$@"; do [ "$prev" = "$flag" ] && val="$a"; prev="$a"; done
+  printf '%s' "$val"
+}
+
+latest_run() {   # latest_run <Scenario>: the newest finished full run directory, or nothing
+  local d
+  for d in $(ls -dt "$OUT/full_${1}_seed"* "$OUT/full_${1}" 2>/dev/null); do
+    [ -f "$d/metrics.json" ] && { printf '%s' "$d"; return; }
+  done
+}
+
+resolve_run_dir() {   # resolve_run_dir <Scenario> [args...]: --run_dir, else the latest run
+  local d
+  d="$(flag_value --run_dir "" "${@:2}")"
+  [ -n "$d" ] || d="$(latest_run "$1")"
+  if [ -z "$d" ]; then
+    [ -n "${DRY_RUN:-}" ] && { printf '%s' "$OUT/full_${1}_seed<S>_<id>"; return; }
+    echo "no finished full run of $1 in $OUT: run 'run.sh full' first, or pass --run_dir" >&2; exit 66
+  fi
+  if [ -z "${DRY_RUN:-}" ] && [ ! -d "$d" ]; then echo "no such run directory: $d" >&2; exit 66; fi
+  [ -d "$d" ] && (cd "$d" && pwd) || printf '%s' "$d"
+}
+
 baselines_one() {   # baselines_one <scenario> [extra flags...]: sdedit_best + avg_prompt
   local name="$1"; shift
   local cfg="$HERE/config/${name}.env"
@@ -116,22 +147,20 @@ baselines_one() {   # baselines_one <scenario> [extra flags...]: sdedit_best + a
     source "$HERE/config/models.env"
     source "$cfg"
     set +a
-    local rundir="$OUT/full_${SCENARIO}" a
-    for a in "$@"; do [ "${prev:-}" = --run_dir ] && rundir="$a"; prev="$a"; done
-    local outdir="$rundir/baselines"
-    prev=""; for a in "$@"; do [ "${prev:-}" = --output_dir ] && outdir="$a"; prev="$a"; done
-    local args=( --run_dir "$OUT/full_${SCENARIO}" --scenario "$SCENARIO"
+    local rundir; rundir="$(resolve_run_dir "$SCENARIO" "$@")" || exit $?
+    local outdir; outdir="$(flag_value --output_dir "$rundir/baselines" "$@")"
+    local args=( --run_dir "$rundir" --scenario "$SCENARIO" --output_dir "$outdir"
                  --controlnet_scale "$CONTROLNET_SCALE"
                  $(revision_args) --wandb_project "${WANDB_PROJECT:-sdxl-baselines}" )
     [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
     args+=( "$@" )
-    export WANDB_NAME="${WANDB_NAME:-baselines_${name}${SLURM_JOB_ID:+_${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}}${SLURM_ARRAY_TASK_ID:+_$SLURM_ARRAY_TASK_ID}}"
+    export WANDB_NAME="${WANDB_NAME:-baselines_$(basename "$rundir")}"
+    export WANDB_RUN_GROUP="${WANDB_RUN_GROUP:-$(basename "$rundir")}"
     export WANDB_TAGS="${WANDB_TAGS:-baselines,$name}"
     local cmd=( "$PY" -m cdm.models.sd.eval_baselines "${args[@]}" )
     echo "=== baselines | $name | wandb ${WANDB_PROJECT:-sdxl-baselines}/$WANDB_NAME ==="
     printf '%q ' "${cmd[@]}"; echo
     [ -n "${DRY_RUN:-}" ] && exit 0
-    [ -d "$rundir" ] || { echo "no run directory $rundir: run 'run.sh full $name' first, or pass --run_dir" >&2; exit 66; }
     mkdir -p "$outdir"
     {
       echo "date:       $(date -Iseconds)"
@@ -154,10 +183,10 @@ eval_one() {   # eval_one <scenario> [extra flags...]: the N=2000 final evaluati
     source "$HERE/config/models.env"
     source "$cfg"
     set +a
-    local outdir="$OUT/eval_${SCENARIO}" a
-    for a in "$@"; do [ "${prev:-}" = --output_dir ] && outdir="$a"; prev="$a"; done
+    local rundir; rundir="$(resolve_run_dir "$SCENARIO" "$@")" || exit $?
+    local outdir; outdir="$(flag_value --output_dir "$rundir/eval" "$@")"
     local args=( --mode "$MODE" --controlnet_scale "$CONTROLNET_SCALE"
-                 --run_dir "$OUT/full_${SCENARIO}" --n_eval 2000 --seed 42 )
+                 --run_dir "$rundir" --n_eval 2000 --seed 42 )
     if [ "$MODE" = age ]; then
       args+=( --age_min "$AGE_MIN" --age_max "$AGE_MAX" --age_step "$AGE_STEP" --age_gender "$AGE_GENDER" )
     else
@@ -167,7 +196,8 @@ eval_one() {   # eval_one <scenario> [extra flags...]: the N=2000 final evaluati
     args+=( $(revision_args) --output_dir "$outdir" --wandb_project "${WANDB_PROJECT:-sdxl-eval}" )
     [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
     args+=( "$@" )
-    export WANDB_NAME="${WANDB_NAME:-eval_${name}${SLURM_JOB_ID:+_${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}}${SLURM_ARRAY_TASK_ID:+_$SLURM_ARRAY_TASK_ID}}"
+    export WANDB_NAME="${WANDB_NAME:-eval_$(basename "$rundir")}"
+    export WANDB_RUN_GROUP="${WANDB_RUN_GROUP:-$(basename "$rundir")}"
     export WANDB_TAGS="${WANDB_TAGS:-eval,$name}"
     local cmd=( "$PY" -m cdm.models.sd.eval_all_experiments "${args[@]}" )
     echo "=== eval | $name | wandb ${WANDB_PROJECT:-sdxl-eval}/$WANDB_NAME ==="
@@ -199,9 +229,12 @@ run_one() {   # run_one <tier> <scenario> [extra flags...]
     source "$cfg"
     set +a
 
-    local outdir="$OUT/${tier}_${SCENARIO}" project
-    local a
-    for a in "$@"; do [ "${prev:-}" = --output_dir ] && outdir="$a"; prev="$a"; done
+    # one directory per run: <tier>_<Scenario>_seed<S>_<SLURM job id, or a timestamp>
+    local seed; seed="$(flag_value --seed "$SEED" "$@")"
+    local tag="${RUN_TAG:-${SLURM_ARRAY_JOB_ID:+${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}}}"
+    tag="${tag:-${SLURM_JOB_ID:-$(date +%Y%m%d-%H%M%S)}}"
+    local outdir project
+    outdir="$(flag_value --output_dir "$OUT/${tier}_${SCENARIO}_seed${seed}_${tag}" "$@")"
 
     local args=( --mode "$MODE" --base_zeta "$BASE_ZETA" --guidance_scale "$GUIDANCE_SCALE"
                  --controlnet_scale "$CONTROLNET_SCALE" --backsel_rule "$BACKSEL_RULE"
@@ -226,11 +259,12 @@ run_one() {   # run_one <tier> <scenario> [extra flags...]
     [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
     args+=( "$@" )   # CLI overrides, last so they win
 
-    export WANDB_NAME="${WANDB_NAME:-${tier}_${name}${SLURM_JOB_ID:+_${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}}${SLURM_ARRAY_TASK_ID:+_$SLURM_ARRAY_TASK_ID}}"
+    export WANDB_NAME="${WANDB_NAME:-$(basename "$outdir")}"
+    export WANDB_RUN_GROUP="${WANDB_RUN_GROUP:-$(basename "$outdir")}"
     export WANDB_TAGS="${WANDB_TAGS:-$tier,$name}"
     local cmd=( "$PY" -m cdm.models.sd.run_mlgd_f "${args[@]}" )
 
-    echo "=== $tier | $name | wandb $project/$WANDB_NAME ==="
+    echo "=== $tier | $name | $outdir | wandb $project/$WANDB_NAME ==="
     printf '%q ' "${cmd[@]}"; echo
     [ -n "${DRY_RUN:-}" ] && exit 0
 

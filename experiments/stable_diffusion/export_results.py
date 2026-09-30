@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 """Copy finished Stable Diffusion runs into the committed results/ folder.
 
-Reads the run directories that `four_targets/run.sh full` writes
-(four_targets/outputs/full_<Scenario>/) and writes files that are safe and small to
+Reads the run directories that `four_targets/run.sh full` writes, one per run
+(four_targets/outputs/full_<Scenario>_seed<S>_<jobid>/, with the baselines/ and eval/ that
+`run.sh baselines` / `run.sh eval` add inside), and writes files that are safe and small to
 commit, so the results can be read without re-running:
 
-    four_targets/results/mlgdf_runs.md          one row per scenario: final MMD, paper MMD,
-                                                time, settings, commit, wandb link
-    four_targets/results/<Scenario>/
+    four_targets/results/mlgdf_runs.md          one row per run: scenario, seed, job, the
+                                                N = 2,000 MMD of MLGD-F and of the baselines,
+                                                paper MMD, time, settings, commit, wandb link
+    four_targets/results/eval_table.md          every run's N = 2,000 table (Table 3 / 15)
+    four_targets/results/<run>/                 <run> = full_<Scenario>_seed<S>_<jobid>
         metrics.json                            the run's full record: args, every step,
                                                 final MMD, time, wandb run id / url
         steps.csv                               one row per guided step: MMD, gradient
@@ -19,11 +22,12 @@ commit, so the results can be read without re-running:
         (with --run_unguided also final_scribble_regular.png, scribble_heatmap.png,
          final_photos_regular.png)
 
-    four_targets/results/eval_table.md          Table 3 / 15 of this code: every scenario's
-                                                N = 2,000 evaluation (from outputs/eval_*)
-    four_targets/results/<Scenario>/eval/
-        eval_results.json, eval_table.md, run_info.txt, the 5-image previews of every
-        method and target group, the MMD / SWD bars and the p(male) CI plot
+        baselines/                              scribble_<method>.png, preview_<name>.png
+                                                (5 portraits per scribble), sdedit_search.png,
+                                                baselines_meta.json, run_info.txt
+        eval/                                   eval_results.json, eval_table.md, run_info.txt,
+                                                the 5-image previews, the MMD / SWD bars and the
+                                                p(male) CI plot
     interpolation/results/<Scenario>/
         sorted_grid.png, pca_scatter.png, ranked_all.png, picks.json (from the notebook's
         outputs/<Scenario>)
@@ -50,6 +54,8 @@ import matplotlib.pyplot as plt
 HERE = os.path.dirname(os.path.abspath(__file__))
 EXP = os.path.join(HERE, "four_targets")
 INTERP = os.path.join(HERE, "interpolation")
+BASELINE_FILES = ["baselines_meta.json", "run_info.txt", "sdedit_search.png", "scribbles_all.png",
+                  "avg_prompt_portrait.png"]
 EVAL_FILES = ["eval_results.json", "eval_table.md", "run_info.txt", "mmd_bar.png", "swd_bar.png", "p_male_ci.png"]
 INTERP_FILES = ["sorted_grid.png", "pca_scatter.png", "ranked_all.png", "picks.json"]
 ORDER = ["BalancedTarget", "SkewedTarget", "GenderInterpolation", "AgeInterpolation"]
@@ -120,7 +126,46 @@ def export_run(run_dir, dest):
         galleries = [galleries[0], galleries[-1]]
     for g in galleries:
         shutil.copy2(g, dest)
+    copy_sub(os.path.join(run_dir, "baselines"), os.path.join(dest, "baselines"),
+             BASELINE_FILES, ("scribble_*.png", "preview_*.png", "target_*.png"))
+    copy_sub(os.path.join(run_dir, "eval"), os.path.join(dest, "eval"),
+             EVAL_FILES, ("*preview_*.png",))
     return metrics, steps
+
+
+def copy_sub(src, dest, names, patterns):
+    """Copy the listed files and glob patterns of src (if it exists) into dest."""
+    if not os.path.isdir(src):
+        return
+    os.makedirs(dest, exist_ok=True)
+    files = [os.path.join(src, n) for n in names] + [f for pat in patterns for f in glob.glob(os.path.join(src, pat))]
+    for f in files:
+        if os.path.isfile(f):
+            shutil.copy2(f, dest)
+
+
+def split_run_name(name, tier):
+    """full_<Scenario>_seed<S>_<id> -> (Scenario, id); the older full_<Scenario> -> (Scenario, None)."""
+    rest = name[len(tier) + 1:]
+    if "_seed" in rest:
+        scen, tail = rest.split("_seed", 1)
+        return scen, tail.partition("_")[2] or None
+    return rest, None
+
+
+def read_eval(run_dir):
+    """({method: N=2000 MMD}, n_eval, table markdown) from <run>/eval/, or ({}, None, None)."""
+    path = os.path.join(run_dir, "eval", "eval_results.json")
+    if not os.path.exists(path):
+        return {}, None, None
+    with open(path) as fh:
+        rec = json.load(fh)
+    table = None
+    tpath = os.path.join(run_dir, "eval", "eval_table.md")
+    if os.path.exists(tpath):
+        with open(tpath) as fh:
+            table = fh.read().strip()
+    return {m: r.get("mmd") for m, r in rec.get("results", {}).items()}, rec.get("n_eval"), table
 
 
 def fmt(x, nd=3):
@@ -186,19 +231,24 @@ def main():
     runs = {}
     for d in sorted(glob.glob(os.path.join(args.run_dir, f"{args.tier}_*"))):
         if os.path.exists(os.path.join(d, "metrics.json")):
-            runs[os.path.basename(d)[len(args.tier) + 1:]] = d
+            runs[os.path.basename(d)] = d
         elif os.path.isdir(d):
             print(f"skip {d}: no metrics.json (run not finished?)")
     if not runs:
         print(f"no finished runs ({args.tier}_*/metrics.json) in {args.run_dir}; "
               f"run four_targets/run.sh {args.tier} <scenario> first")
         return
-    names = [n for n in ORDER if n in runs] + sorted(set(runs) - set(ORDER))
+    rank = {sc: i for i, sc in enumerate(ORDER)}
+    names = sorted(runs, key=lambda n: (rank.get(split_run_name(n, args.tier)[0], 99), n))
 
-    rows = []
+    rows, eval_tables = [], []
     for name in names:
         dest = os.path.join(args.dest, name)
+        scen, job = split_run_name(name, args.tier)
         metrics, steps = export_run(runs[name], dest)
+        ev, n_eval, table = read_eval(runs[name])
+        if table:   # "# <eval dir>: N = 2000" -> "## <run>: N = 2000"
+            eval_tables.append(f"## {name}: " + table.split(": ", 1)[-1] if table.startswith("# ") else table)
         a, wb = metrics.get("args", {}), metrics.get("wandb") or {}
         commit = "unknown"
         info = os.path.join(runs[name], "run_info.txt")
@@ -207,9 +257,12 @@ def main():
                 if line.startswith("git commit:"):
                     commit = line.split(":", 1)[1].strip()
         rows.append({
-            "scenario": name,
+            "run": name, "scenario": scen, "job": job or "--",
+            "eval_mlgd_f": ev.get("mlgd_f"), "eval_source": ev.get("source"),
+            "eval_sdedit_best": ev.get("sdedit_best"), "eval_avg_prompt": ev.get("avg_prompt"),
+            "n_eval": n_eval,
             "mmd": metrics.get("final_mlgd_f_mmd"),
-            "paper": PAPER_MMD.get(name),
+            "paper": PAPER_MMD.get(scen),
             "unguided": metrics.get("final_regular_mmd"),
             "n": metrics.get("final_mmd_n", 250),
             "steps": len(steps),
@@ -224,17 +277,27 @@ def main():
     lines = [
         f"# MLGD-F runs ({args.tier}), exported from `outputs/{args.tier}_*`",
         "",
-        "Written by `experiments/stable_diffusion/export_results.py`. MMD is the final",
-        "(MMD²)^(1/2) of the run on n evaluation images; the paper's MMD (Table 3) uses",
-        "N = 2,000, so the two are comparable in scale but not identical protocols.",
+        "Written by `experiments/stable_diffusion/export_results.py`, one row per run. The N = 2,000",
+        "columns are the paper's protocol (`run.sh eval`, Table 3; `--` until it has run); \"run MMD\"",
+        "is the run's own end-of-run MMD on n images against its target pool, comparable in scale",
+        "but not the same protocol.",
         "",
-        "| Scenario | MMD (n) ↓ | paper MMD | unguided MMD | guided steps | variations / k | ζ | seed | time (min) | commit | wandb |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "| Run | Scenario | seed | job | MLGD-F (N=2000) ↓ | source | sdedit_best | avg_prompt | paper MLGD-F | run MMD (n) | guided steps | variations / k | ζ | time (min) | commit | wandb |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
-        lines.append(f"| {r['scenario']} | {fmt(r['mmd'])} ({r['n']}) | {fmt(r['paper'])} | "
-                     f"{fmt(r['unguided'])} | {r['steps']} | {r['vars']} / {r['k']} | {r['zeta']} | "
-                     f"{r['seed']} | {r['min']:.1f} | {r['commit']} | {r['wandb']} |")
+        lines.append(f"| {r['run']} | {r['scenario']} | {r['seed']} | {r['job']} | {fmt(r['eval_mlgd_f'])} | "
+                     f"{fmt(r['eval_source'])} | {fmt(r['eval_sdedit_best'])} | {fmt(r['eval_avg_prompt'])} | "
+                     f"{fmt(r['paper'])} | {fmt(r['mmd'])} ({r['n']}) | {r['steps']} | {r['vars']} / {r['k']} | "
+                     f"{r['zeta']} | {r['min']:.1f} | {r['commit']} | {r['wandb']} |")
+    if eval_tables:
+        with open(os.path.join(args.dest, "eval_table.md"), "w") as fh:
+            fh.write("# Final evaluation (N = 2,000), every run\n\n"
+                     "Written by `experiments/stable_diffusion/export_results.py` from each run's `eval/`; the\n"
+                     "protocol of the paper's Table 3 / Table 15 (`cdm/models/sd/eval_all_experiments.py`).\n"
+                     "Delta% is the improvement over the source scribble.\n\n")
+            fh.write("\n\n".join(eval_tables) + "\n")
+        print(f"wrote {os.path.join(args.dest, 'eval_table.md')}")
     os.makedirs(args.dest, exist_ok=True)
     summary = os.path.join(args.dest, "mlgdf_runs.md")
     with open(summary, "w") as fh:
