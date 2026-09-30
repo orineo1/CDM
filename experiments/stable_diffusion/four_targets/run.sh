@@ -18,6 +18,16 @@
 #   bash run.sh full balanced --base_zeta 5 --seed 2
 #   bash run.sh full skewed   --num_variations 50 --backsel_k 25 --run_unguided
 #
+# On SLURM, submit this file with --wrap from the repo root (sbatch passes the active
+# venv and exported variables such as HF_HOME to the job):
+#   mkdir -p logs
+#   sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=12:00:00 \
+#          --output=logs/sd-%j.out --wrap "bash experiments/stable_diffusion/four_targets/run.sh full balanced"
+#   sbatch ... --array=0-3 --output=logs/sd-%A_%a.out --wrap "bash experiments/stable_diffusion/four_targets/run.sh full all"
+# Under an array, `all` runs only scenario SLURM_ARRAY_TASK_ID (0 balanced, 1 skewed,
+# 2 gender_interpolation, 3 age_interpolation); otherwise the four run one after another.
+# Nodes without internet: WANDB_MODE=offline, then `wandb sync wandb/offline-run-*`.
+#
 # Logging: every run goes to Weights & Biases (per-step MMD, gradient norm, zeta,
 # correction norm, the per-step visualisation, input and final scribbles, final MMD;
 # console output under the run's Logs tab). Everything except the per-step visualisation
@@ -79,7 +89,7 @@ run_one() {   # run_one <tier> <scenario> [extra flags...]
     [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
     args+=( "$@" )   # CLI overrides, last so they win
 
-    export WANDB_NAME="${WANDB_NAME:-${tier}_${name}${SLURM_JOB_ID:+_$SLURM_JOB_ID}}"
+    export WANDB_NAME="${WANDB_NAME:-${tier}_${name}${SLURM_JOB_ID:+_${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}}${SLURM_ARRAY_TASK_ID:+_$SLURM_ARRAY_TASK_ID}}"
     export WANDB_TAGS="${WANDB_TAGS:-$tier,$name}"
     local cmd=( "$PY" -m cdm.models.sd.run_mlgd_f "${args[@]}" )
 
@@ -113,6 +123,15 @@ case "$TIER" in
   smoke|full)
     SCEN="${2:-}"; [ -n "$SCEN" ] || usage
     shift 2
+    if [ -z "${DRY_RUN:-}" ]; then   # fail now, not after loading the models
+      "$PY" -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 'no CUDA GPU visible (sbatch: add --gres=gpu:1)')"
+      if [ -z "${WANDB_API_KEY:-}" ] && [ "${WANDB_MODE:-}" != offline ] && ! grep -q api.wandb.ai ~/.netrc 2>/dev/null; then
+        echo "warning: no wandb login found; run 'wandb login' once, or export WANDB_API_KEY / WANDB_MODE=offline" >&2
+      fi
+    fi
+    if [ "$SCEN" = all ] && [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
+      SCEN="${SCENARIOS[$SLURM_ARRAY_TASK_ID]:?array index must be 0-3}"
+    fi
     if [ "$SCEN" = all ]; then
       for s in "${SCENARIOS[@]}"; do run_one "$TIER" "$s" "$@"; done
     else

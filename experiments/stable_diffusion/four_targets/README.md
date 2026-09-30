@@ -36,18 +36,21 @@ scribbles and the final MMD. Runs are named `<tier>_<scenario>` (`WANDB_NAME` ov
 The per-step visualisations go to W&B only. Everything else is also saved to
 `outputs/<tier>_<Scenario>/` (see *Saved results* below).
 
-On a SLURM cluster, `slurm_sd.sh` takes the same arguments; partition, GPU and time go on
-the `sbatch` line. Run from the repo root:
+On a SLURM cluster, submit `run.sh` itself with `sbatch --wrap`, from the repo root, with
+the venv active (sbatch passes it and exported variables such as `HF_HOME` to the job):
 
 ```
 mkdir -p logs
-sbatch --partition=<p> experiments/stable_diffusion/four_targets/slurm_sd.sh smoke balanced
-sbatch --partition=<p> --array=0-3 experiments/stable_diffusion/four_targets/slurm_sd.sh full all
-sbatch --partition=<p> experiments/stable_diffusion/four_targets/slurm_sd.sh full skewed --base_zeta 5
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=02:00:00 --output=logs/sd-%j.out \
+       --wrap "bash experiments/stable_diffusion/four_targets/run.sh smoke balanced"
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=12:00:00 --output=logs/sd-%A_%a.out \
+       --array=0-3 --wrap "bash experiments/stable_diffusion/four_targets/run.sh full all"
 ```
 
-`VENV=/path/to/venv` picks the environment, `HF_HOME` the model cache, and
-`WANDB_MODE=offline` (then `wandb sync wandb/offline-run-*`) covers nodes without internet.
+Under `--array`, `all` runs scenario `SLURM_ARRAY_TASK_ID` (0 balanced, 1 skewed,
+2 gender_interpolation, 3 age_interpolation). `run.sh` stops at once if no GPU is visible
+and warns if there is no W&B login. On nodes without internet use `WANDB_MODE=offline`,
+then `wandb sync wandb/offline-run-*` from a login node.
 
 The `smoke` configuration reproduces no published number; its output is not a result.
 
