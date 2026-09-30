@@ -27,7 +27,8 @@ def main():
     p.add_argument("--zo-eps", type=float, default=0.05)
     p.add_argument("--zo-dirs", type=int, default=0)
     p.add_argument("--select-top", type=int, default=0)
-    p.add_argument("--select-n", type=int, default=10000)
+    p.add_argument("--select-n", type=int, default=2000)
+    p.add_argument("--select-repeats", type=int, default=5)
     p.add_argument("--sampler", default=None, help="override the conditional sampler path stored in the result")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = p.parse_args()
@@ -77,7 +78,7 @@ def main():
             cfg_sel = dataclasses.replace(fx.make_cfg(args, prior, stype, gen, att["attempt"]), final_n_cond=a.select_n)
             cand = sorted(runs, key=lambda q: q["final_loss"])[:a.select_top]
             for q in cand:
-                q["select_loss"] = float(_final_loss(sampler, loss_fn, cfg_sel, torch.tensor(q["x_hat"], device=dev).view(1, -1)))
+                q["select_loss"] = float(sum(_final_loss(sampler, loss_fn, cfg_sel, torch.tensor(q["x_hat"], device=dev).view(1, -1)) for _ in range(a.select_repeats)) / a.select_repeats)
             best = min(cand, key=lambda q: q["select_loss"])
         attempts.append({"attempt": att["attempt"], **{k: v for k, v in best.items()}, "restarts": runs, "time_s": time.time() - t0})
         print(f"[{att['attempt']+1}/{len(r['attempts'])}] loss={best['final_loss']:.5f} ({time.time()-t0:.0f}s)", flush=True)
@@ -89,7 +90,7 @@ def main():
             summ[k] = {"mean": float(np.mean(vals)), "std": float(np.std(vals)), "n": len(vals)}
     out = {**{k: r[k] for k in ("method", "algo", "guidance", "budget", "x_star") if k in r},
            "args": {**r["args"], "refine_grad": a.refine_grad, "zo_eps": a.zo_eps, "zo_dirs": a.zo_dirs,
-                    "select_top": a.select_top, "select_n": a.select_n, "refine_steps": args.refine_steps,
+                    "select_top": a.select_top, "select_n": a.select_n, "select_repeats": a.select_repeats, "refine_steps": args.refine_steps,
                     "refine_lr": args.refine_lr, "source": a.result, "sampler": args.sampler},
            "summary": summ, "attempts": attempts}
     json.dump(out, open(a.out, "w"), indent=1)

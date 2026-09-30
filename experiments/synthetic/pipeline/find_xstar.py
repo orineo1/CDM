@@ -172,7 +172,8 @@ def parse_args():
     g.add_argument("--zo-dirs", type=int, default=0, help="--refine-grad zo: 0 = all coordinates, M = M random directions")
     g.add_argument("--select-top", type=int, default=0,
                    help="re-estimate the final loss of the best K trajectories with --select-n samples before choosing (0: off)")
-    g.add_argument("--select-n", type=int, default=10000, help="--select-top: conditional samples for the re-estimate")
+    g.add_argument("--select-n", type=int, default=2000, help="--select-top: conditional samples per re-estimate")
+    g.add_argument("--select-repeats", type=int, default=5, help="--select-top: independent re-estimates averaged")
     g = p.add_argument_group("inner estimator")
     g.add_argument("--n-cond", type=int, default=250)
     g.add_argument("--n-target", type=int, default=None)
@@ -358,7 +359,7 @@ def main():
         cfg_sel = dataclasses.replace(cfg, final_n_cond=args.select_n)
         for q in cand:
             x = torch.tensor(q["x_hat"], device=dev).view(1, -1)
-            q["select_loss"] = float(_final_loss(sampler, loss_fn, cfg_sel, x))
+            q["select_loss"] = float(sum(_final_loss(sampler, loss_fn, cfg_sel, x) for _ in range(args.select_repeats)) / args.select_repeats)
         return min(cand, key=lambda q: q["select_loss"])
 
     def screened_attempt(a):
