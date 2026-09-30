@@ -69,9 +69,11 @@ PREREQUISITES
 
   cd ~/GlobalConditional
   source CDM_venv/bin/activate
-  python experiments/synthetic/pipeline/run_experiment.py --device cpu --epochs 1 --n-attempts 1
+  PYTHONPATH=$PWD python experiments/synthetic/pipeline/fig1_toy_example.py --quick --setting hard \
+      --device cpu --ckpt-dir checkpoints/smoke --out results/smoke_fig1_hard.png
 
-  This should complete in under a minute and confirm everything works.
+  This should complete in a few minutes and confirm everything works
+  (experiments/synthetic/README.md has the full smoke test).
 
 --------------------------------------------------------------------------------
 7. Submit a GPU job via SLURM
@@ -94,7 +96,7 @@ PREREQUISITES
   source /sci/labs/orzuk/orzuk/venvs/CDM_venv/bin/activate
   cd ~/GlobalConditional
 
-  python experiments/synthetic/pipeline/run_experiment.py --device cuda --epochs 20 --n-attempts 25
+  PYTHONPATH=$PWD python experiments/synthetic/pipeline/fig1_toy_example.py --setting hard --device cuda
   ---- cut here ----
 
   Submit:
@@ -130,7 +132,7 @@ PREREQUISITES
   source /sci/labs/orzuk/orzuk/venvs/CDM_venv/bin/activate
   cd ~/GlobalConditional
 
-  python experiments/synthetic/pipeline/run_experiment.py --device cuda --epochs 20 --n-attempts 25
+  PYTHONPATH=$PWD python experiments/synthetic/pipeline/fig1_toy_example.py --setting hard --device cuda
   ---- cut here ----
 
   Submit with: qsub job.sh
@@ -152,26 +154,11 @@ PREREQUISITES
     conda activate GlobalConditional
 
 --------------------------------------------------------------------------------
-10. Example runs with different configurations
+10. The paper's runs
 --------------------------------------------------------------------------------
 
-  Default (2D MoG, LGD-CM, quick):
-    python experiments/synthetic/pipeline/run_experiment.py
-
-  Full run:
-    python experiments/synthetic/pipeline/run_experiment.py --epochs 20 --n-attempts 25
-
-  Using plain LGD (diffusion conditional):
-    python experiments/synthetic/pipeline/run_experiment.py --method LGD --architecture diffusion --epochs 20
-
-  Using a params file:
-    python experiments/synthetic/pipeline/run_experiment.py --params-file experiments/synthetic/configs/mog/mog_2d_full.txt
-
-  Random 10D MoG:
-    python experiments/synthetic/pipeline/run_experiment.py --random-mog --dim 10 --n-components 4 --condition-on 1
-
-  Reproducible run:
-    python experiments/synthetic/pipeline/run_experiment.py --seed 42
+  The job scripts in this directory (slurm_table1.sh, slurm_fig1.sh, ...) and the
+  commands in experiments/synthetic/README.md reproduce every synthetic result.
 
 --------------------------------------------------------------------------------
 Cluster-specific values you need to fill in

@@ -64,21 +64,10 @@ JSON holds all of them and the best.
 
 ## Producing a prior, a sampler and a target: the synthetic pipeline
 
-One command draws a joint `P(X,Y)`, trains the prior on `X` and the conditional
-sampler on `Y|X`, runs the guided optimisation and evaluates the recovered
-`x_hat` against the known optimum (a few minutes on CPU, most of it training):
-
-```bash
-python experiments/synthetic/pipeline/run_experiment.py --random-mog --dim 4 --n-components 3 --condition-on 3 \
-    --n-samples 10000 --epochs 2000 --method LGD_CM --n-attempts 5 --work-dir runs/mog4d
-```
-
-`--condition-on` is `dim(X)`; the remaining coordinates are `Y`. `--method` is
-`LGD_CM` (MLGD-F, consistency-model sampler) or `LGD` (MLGD, diffusion sampler;
-add `--architecture diffusion`). Outputs go to `--work-dir`:
-`data.pt`, `models/`, `results.pt`.
-
-The same run as three separate steps:
+Three commands draw a joint `P(X,Y)`, train the prior on `X` and the conditional
+sampler on `Y|X`, and run the search, which evaluates the recovered `x_hat` against the
+known optimum (a few minutes on CPU, most of it training). `--condition-on` is
+`dim(X)`; the remaining coordinates are `Y`.
 
 ```bash
 # 1. data + target: draws from P(X,Y), and G(Y) = P(Y | X = x*)
@@ -91,9 +80,9 @@ python experiments/synthetic/pipeline/generate_data.py --params-file experiments
 python experiments/synthetic/pipeline/train_models.py --data runs/mog4d/data.pt --model both --architecture cm \
     --epochs 2000 --batch-size 1024 --output-dir runs/mog4d/models
 
-# 3. guided optimisation + evaluation
-python experiments/synthetic/pipeline/run_optimization.py --data runs/mog4d/data.pt --model-dir runs/mog4d/models \
-    --method LGD_CM --n-attempts 25 --optim-samples 250 --output runs/mog4d/results.pt
+# 3. guided search + evaluation (the command of the previous section)
+python experiments/synthetic/pipeline/find_xstar.py --prior runs/mog4d/models/model_unconditional.pt \
+    --sampler runs/mog4d/models/model_conditional.pt --target runs/mog4d/data.pt --n-attempts 5 --out runs/mog4d/xstar.json
 ```
 
 ## Paper figures
@@ -103,7 +92,6 @@ python experiments/synthetic/pipeline/run_optimization.py --data runs/mog4d/data
 | Fig. 1, toy example: joint, induced conditional vs. target, CDMS beta-sweep | `python experiments/synthetic/pipeline/fig1_toy_example.py` |
 | Model check: score network vs. exact noised-mixture score, unguided samples vs. P(X), conditional sampler vs. exact P(Y\|X=x) at x*, the cluster centres and over x | `python experiments/synthetic/pipeline/check_models.py --setting hard` or `--prior ... --sampler ... --data ...` |
 | Table 1, all scenarios: data, networks, model check, the four search algorithms, and the table (`--settings 5x5 10x1 ...` for a subset; `experiments/synthetic/slurm/slurm_table1.sh` runs one scenario per SLURM array task) | `python experiments/synthetic/pipeline/make_table1.py` |
-| App. G subsampling control on the 10D setting | `python experiments/synthetic/pipeline/control_subsample.py --sim-dir /path/to/conditional-matching-paper/simulations --n-restarts 25` |
 
 `fig1_toy_example.py` trains its three small networks on first use (cached under
 `checkpoints/toy/<setting>/`), writes the simulation to `results/fig1_<setting>_sim.json`
@@ -121,8 +109,8 @@ against the target, and the beta-sweep against the analytic `Q_beta`
 `--uncond/--cond/--cm {auto,train,load}` control each network. On a GPU the
 `hard` setting with four methods and ten restarts takes about 8 minutes;
 `experiments/synthetic/slurm/slurm_fig1.sh` is the cluster job.
-`control_subsample.py` needs the paper repository's 10D checkpoints, downloaded
-from HuggingFace on first use.
+`experiments/synthetic/README.md` maps every synthetic table, figure and appendix
+number of the paper to the exact command that reproduces it.
 
 `experiments/` holds one directory per paper table and figure — the Gaussian
 simulations, the MNIST rotated-digits task and the Stable Diffusion experiment —
@@ -154,16 +142,18 @@ cdm/                          THE METHOD (Section 2 of the paper), installable: 
                               mnist/ and sd/ (the MNIST and Stable Diffusion instantiations)
   utils/                      Gaussian mixtures, the exact L2 / TV between GMMs, network blocks, evaluation
 experiments/                  THE EXPERIMENTS (Section 3), one directory per paper table or figure
-  synthetic/                  3.1  Gaussian mixtures: pipeline/ (the scripts), configs/mog/, slurm/, one dir per experiment
+  synthetic/                  3.1  Gaussian mixtures: pipeline/ (the scripts), slurm/, configs/mog/, reference/; README.md = paper result -> command
   mnist/                      3.2  rotated digits: train/, table_mlgdf/, figures/, checkpoints/
   stable_diffusion/           3.3  sketch-to-portrait: four_targets/, its own requirements.txt
 tests/                        smoke, determinism, population, targeted guards (see tests/README.md)
 ```
 
-Each experiment directory has the same shape: `README.md` (what it produces, which
-paper table or figure, the command), `run.sh` (a reduced `smoke` configuration and
-the paper's `full` one), `config/`, `results/` (the published numbers) and
-`outputs/` (gitignored, written by a local run).
+The MNIST and Stable Diffusion experiment directories have the same shape: `README.md`
+(what it produces, which paper table or figure, the command), `run.sh` (a reduced
+`smoke` configuration and the paper's `full` one), `config/`, `results/` (the
+published numbers) and `outputs/` (gitignored, written by a local run). The synthetic
+experiments share one pipeline, so `experiments/synthetic/README.md` lists every result
+with its command instead.
 
 ## Tests
 
