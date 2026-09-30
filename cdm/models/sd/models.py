@@ -10,7 +10,9 @@ diffusion pipelines. Optionally loads a LoRA or fully fine-tuned U-Net onto the
 Architect. Supports HuggingFace Hub paths via the `hf://` prefix.
 """
 
+import logging
 import os
+import warnings
 import zipfile
 
 import torch
@@ -21,8 +23,31 @@ from diffusers import (
     StableDiffusionXLPipeline,
     UNet2DConditionModel,
 )
+from diffusers.utils import logging as diffusers_logging
 from huggingface_hub import hf_hub_download
 from peft import PeftModel
+
+
+# The pipeline casts the VAE between float16 and float32 several times per step, and
+# every cast makes diffusers warn "There are modules in AutoencoderKL that should be
+# kept in float32: []". The list is empty -- there is nothing to keep in float32 -- so
+# the warning is noise (hundreds of lines per run); drop exactly that message, and
+# only when the list is empty. The same casts trigger the `upcast_vae` deprecation
+# notice, dropped for the same reason. Every other warning is left alone.
+class _DropEmptyFp32Warning(logging.Filter):
+    def filter(self, record):
+        return "that should be kept in float32: []" not in record.getMessage()
+
+
+def _quiet_vae_cast_warnings():
+    diffusers_logging.get_logger("diffusers")        # make sure diffusers set up its handler
+    root = logging.getLogger("diffusers")
+    for h in root.handlers:                          # records from every diffusers module pass here
+        h.addFilter(_DropEmptyFp32Warning())
+    warnings.filterwarnings("ignore", message=r".*upcast_vae.*", category=FutureWarning)
+
+
+_quiet_vae_cast_warnings()
 
 
 def _resolve_lora_path(lora_path: str) -> str:
