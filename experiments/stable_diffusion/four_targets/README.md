@@ -6,7 +6,7 @@ with the Average-prompt and SDEdit-Best baselines.
 
 | | |
 |---|---|
-| Entry points | `python -m cdm.models.sd.run_mlgd_f`, `python -m cdm.models.sd.eval_baselines` |
+| Entry points | `python -m cdm.models.sd.run_mlgd_f` (the optimisation), `python -m cdm.models.sd.eval_all_experiments` (the N = 2,000 evaluation), `python -m cdm.models.sd.eval_baselines` (the baseline scribbles) |
 | Config | `config/<scenario>.env` — T=250, t_start=125, ζ=10.0, uniform selection at n_sel/n_cond = 0.5, ControlNet scale 0.5; `config/models.env` — the pinned model revisions |
 | Full configuration | the paper's settings; GPU: L40S 48 GB for the optimisation, A100 80 GB for the 2,000-image evaluation |
 | Reduced configuration (`smoke`) | 6 guided steps (12-step schedule from step 6), 6 variations; GPU required, loads the same pipelines |
@@ -20,6 +20,7 @@ bash run.sh smoke  balanced                # GPU; reduced configuration, for a q
 bash run.sh full   balanced                # GPU; the full, published configuration
 bash run.sh full   all                     # the four scenarios one after another
 bash run.sh full   skewed --base_zeta 5 --seed 2   # override any default from the CLI
+bash run.sh eval   balanced                # GPU, ~1 h: the paper's N = 2,000 evaluation of the run's scribbles
 bash run.sh help                           # every flag run_mlgd_f accepts
 ```
 
@@ -34,7 +35,8 @@ config, per-step MMD, gradient norm, ζ and correction norm, the per-step visual
 (x_t, pred x₀, conditional portraits, CLIP PCA against the target), the input and final
 scribbles and the final MMD. Runs are named `<tier>_<scenario>` (`WANDB_NAME` overrides).
 The per-step visualisations go to W&B only. Everything else is also saved to
-`outputs/<tier>_<Scenario>/` (see *Saved results* below).
+the run's own directory, `outputs/<tier>_<Scenario>_seed<S>_<jobid>/` (see *Saved results*
+below).
 
 On a SLURM cluster, submit `run.sh` itself with `sbatch --wrap`, from the repo root, with
 the venv active (sbatch passes it and exported variables such as `HF_HOME` to the job):
@@ -76,9 +78,96 @@ downloads. The SD dependencies are in `experiments/stable_diffusion/requirements
   `losses.functions.compute_mmd`, reproduces the upstream formula to 1e-6, and gradients
   flow through the generated samples while the target stays detached.
 
+## Baselines: `run.sh baselines`
+
+Builds the baseline scribbles of a finished run (`cdm/models/sd/eval_baselines.py`) into
+`<run dir>/baselines/`, where `run.sh eval` finds them. The run directory is `--run_dir`,
+or by default the newest finished `full` run of the scenario:
+
+- **`sdedit_best`**: the best of N unguided SDEdit candidates of the source scribble. Each
+  candidate is scored by MMD on 250 portraits against a search target built from the
+  source scribble; N is chosen so the search takes as long as the MLGD-F run did (read
+  from the run's `metrics.json`; `--lgd_cm_minutes` overrides, `--max_candidates` caps it
+  for a quick check). The run's own seed, steps, `t_start`, ControlNet scale and target
+  prompts are used (`run.sh` passes `config/<scenario>.env`; repeat any `run_mlgd_f` flag
+  the run had, e.g. `--seed 3`).
+- **`avg_prompt`**: the HED scribble of one portrait generated from the frac-weighted
+  average of the groups' CLIP text embeddings (prompt interpolation).
+- `--methods avg sdedit` adds the older pixel-average scribble and one guided SDEdit.
+
+Every scribble, the source and MLGD-F ones included, gets `preview_<name>.png`: 5 portraits
+under the neutral prompt. Also saved: `scribble_<method>.png`, `scribbles_all.png`,
+`sdedit_search.png`, `target_<group>.png`, `baselines_meta.json` (budget, candidates, best
+seed and MMD, every candidate's MMD). Logged to W&B (`sdxl-baselines`). It takes about as
+long as the MLGD-F run.
+
+```
+bash run.sh baselines balanced
+bash run.sh baselines balanced --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget_seed1_<id> --max_candidates 3   # quick check
+```
+
+The whole scenario is then three steps: `run.sh full balanced`, `run.sh baselines balanced`,
+`run.sh eval balanced`.
+
+## Running the whole pipeline on SLURM
+
+The three steps as three jobs, each starting only after the previous one **finished
+successfully** (`afterok`; `--kill-on-invalid-dep=yes` cancels the rest if one fails).
+From the repo root, venv active, `WANDB_API_KEY` and `HF_HOME` exported:
+
+```
+G=$PWD; R=$G/experiments/stable_diffusion/four_targets; SEED=1
+common="--partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --chdir=$G --kill-on-invalid-dep=yes"
+jf=$(sbatch --parsable $common --time=24:00:00 --output=$G/logs/sd-full-%j.out \
+     --wrap "bash $R/run.sh full balanced --seed $SEED")
+RUN=$R/outputs/full_BalancedTarget_seed${SEED}_${jf%%;*}
+jb=$(sbatch --parsable $common --time=24:00:00 --output=$G/logs/sd-base-%j.out --dependency=afterok:${jf%%;*} \
+     --wrap "bash $R/run.sh baselines balanced --run_dir $RUN")
+je=$(sbatch --parsable $common --time=03:00:00 --output=$G/logs/sd-eval-%j.out --dependency=afterok:${jb%%;*} \
+     --wrap "bash $R/run.sh eval balanced --run_dir $RUN")
+echo "full $jf -> baselines $jb -> eval $je   run dir: $RUN"
+```
+
+`squeue -u $USER` shows the later two as `PENDING (Dependency)` until their turn.
+
+## Final evaluation: `run.sh eval` (Table 3 / Table 15)
+
+The optimisation's own numbers (the per-step MMD, the final MMD on 250 images against the
+100-image target pool) are the optimisation's signal, not the paper's measurement. The
+tables use the protocol of `cdm/models/sd/eval_all_experiments.py`, a port of the paper's
+`eval_all_experiments.ipynb`:
+
+1. a **2,000-image target** generated from the **source** scribble with the scenario's
+   prompts and fractions (age: 40 ages × 50, seed 42), CLIP-encoded;
+2. for every scribble found in the run directory (and its `baselines/`): **2,000 portraits** under the
+   neutral prompt, then **MMD** and **SWD** against the target and, in the gender scenarios,
+   **p(male)** by CLIP zero-shot with a binomial 95% CI; Δ% is the improvement over the
+   source scribble.
+
+Right after a run the scribbles are `source` and `mlgd_f` (and `unguided` with
+`--run_unguided`); `avg`, `avg_latent`, `sdedit`, `sdedit_best` are picked up from
+`baselines/` once `eval_baselines.py` has produced them, or passed with
+`--scribbles name=path`. The paper's own six scribbles (`SD_cond_SD_controlnet/experiments/
+<Scenario>/` in the paper repository) can be evaluated with `--run_dir <that directory>`.
+
+```
+bash run.sh eval balanced                                           # outputs/full_BalancedTarget -> outputs/eval_BalancedTarget
+bash run.sh eval balanced --n_eval 200 --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget_seed1_<id> --output_dir experiments/stable_diffusion/four_targets/outputs/eval_smoke   # quick check
+bash run.sh eval all                                                # the four scenarios
+```
+
+It writes `eval_results.json`, `eval_table.md` (the Table 3 / 15 rows), `embeddings.npz`
+(target and per-method CLIP embeddings, to recompute the metrics without a GPU),
+`preview_<method>.png` and `target_preview_<group>.png` (5 images each), the MMD / SWD bars
+and the p(male) CI plot, `run_info.txt` and `pip_freeze.txt`. **The 2,000 photos per method
+are not saved.** Logged to W&B (`sdxl-eval`): the table, previews, plots and every number.
+Deterministic and pinned like the run (`--seed 42` is the notebook's).
+
 ## Saved results
 
-A run writes to `outputs/<tier>_<Scenario>/` (not in git):
+Every run gets its own directory, `outputs/<tier>_<Scenario>_seed<S>_<jobid>/` (not in git;
+the seed is the config's or `--seed`, the id the SLURM job id or a timestamp), and
+`run.sh baselines` / `run.sh eval` add `baselines/` and `eval/` inside it:
 
 | file | contents |
 |---|---|
@@ -97,7 +186,10 @@ python experiments/stable_diffusion/export_results.py                  # outputs
 python experiments/stable_diffusion/export_results.py --tier smoke --dest /tmp/x   # try it on smoke runs
 ```
 
-This writes `results/mlgdf_runs.md` (one row per scenario: final MMD next to the paper's,
+It exports every finished run to `results/<run>/`, including that run's `baselines/` and
+`eval/`. For the older layout it also copies `outputs/eval_<Scenario>/` into `results/<Scenario>/eval/` (JSON, table,
+previews, plots, run info) and writes `results/eval_table.md` with every scenario's
+evaluation. It writes `results/mlgdf_runs.md` (one row per scenario: final MMD next to the paper's,
 unguided MMD, steps, settings, time, commit, W&B link) and `results/<Scenario>/` with
 `metrics.json`, `steps.csv`, `run_info.txt`, `curves.png` (the per-step curves),
 the scribbles (`scribble_source.png` is the name `eval_baselines` expects), the source
@@ -130,24 +222,13 @@ The weights are frozen: `config/models.env` pins every model to a hub commit, an
 `--controlnet_revision`, `--hed_revision`, `--clip_revision`. To move to newer weights,
 change the sha there (or remove the line to follow the hub's `main`).
 
-**Checking it.** Run the same configuration twice in one job (so both land on the same
-GPU) and compare; `compare_runs.py` exits 0 only when every step, the final MMD and the
-images are identical:
-
-```
-R=experiments/stable_diffusion/four_targets
-sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=03:00:00 --output=logs/det-%j.out \
-  --wrap "bash $R/run.sh smoke balanced --output_dir $R/outputs/det_a && \
-          bash $R/run.sh smoke balanced --output_dir $R/outputs/det_b && \
-          python experiments/stable_diffusion/compare_runs.py $R/outputs/det_a $R/outputs/det_b"
-```
-
-The log ends with `RESULT: IDENTICAL` or a per-column report of where the runs diverge.
-Checked 2026-09-30 on an NVIDIA L40S, torch 2.11 (cu128): two `smoke balanced` runs were
-identical in every per-step value, the final MMD and all images.
-Any `UserWarning` naming an operation without a deterministic implementation is printed
-during the run (`warn_only`); if one appears, that operation is the remaining source of
-drift.
+**Checked** on 2026-09-30, NVIDIA L40S, torch 2.11 (cu128): two `smoke balanced` runs in one
+job gave identical per-step values (`steps.csv`), the same final MMD and pixel-identical
+scribbles. To re-check, run the same configuration twice with two `--output_dir`s in one
+job and `diff` the two `steps.csv` (ignoring `elapsed_s`) and `cmp` the two
+`final_scribble_mlgd_f.png`. Any `UserWarning` naming an operation without a deterministic
+implementation is printed during the run (`warn_only`); if one appears, that operation is
+the remaining source of drift.
 
 ## Reference numbers
 

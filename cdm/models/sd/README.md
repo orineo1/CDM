@@ -18,8 +18,15 @@ Source: `orineo1/conditional-matching-paper`, branch
 | `hed.py` | HED scribble extraction (`lllyasviel/Annotators`) and weighted scribble averaging |
 | `metrics.py` | SWD + the full decode→generate→CLIP→MMD evaluation helper; re-exports the MMD seam |
 | `mmd.py` | thin alias onto the shared MMD, plus the bandwidth helper and witness scores |
-| `analysis.py`, `visualization.py` | scribble-diff heatmaps and step plots |
-| `run_mlgd_f.py`, `eval_baselines.py` | the two entry points |
+| `visualization.py` | the per-step plot, preview rows, the scribble-diff heatmap |
+| `interpolation.py` | the interpolation figures' pieces: target on a scribble, gender / age axis, sorted grid, PCA scatter |
+| `run_mlgd_f.py` | entry point: the MLGD-F optimisation (`run.sh smoke|full`) |
+| `eval_baselines.py` | entry point: the baseline scribbles, `sdedit_best` and `avg_prompt` (`run.sh baselines`) |
+| `eval_all_experiments.py` | entry point: the paper's N = 2,000 evaluation, MMD / SWD / p(male) (`run.sh eval`) |
+| `check_imports.py`, `check_mmd_equivalence.py` | the CPU checks (`run.sh check`, `tests/test_sd.py`) |
+
+`models.py` also holds `make_deterministic` (seeds + deterministic kernels) and the pinned
+model revisions' resolution; `hed.py` the pinned HED download.
 
 SDXL does **not** use `cdm.models.DiffusionModel`. It uses Stable Diffusion's own
 pipelines, which is correct and expected for this experiment.
@@ -50,4 +57,5 @@ samples while the target stays detached.
 
 ## Dependencies
 
-`cdm/models/sd/requirements.txt`. A GPU is required to run anything that loads the pipelines.
+`experiments/stable_diffusion/requirements.txt`. A GPU is required to run anything that loads
+the pipelines.

@@ -14,12 +14,23 @@ from PIL import Image
 HED_ANNOTATOR_ID = "lllyasviel/Annotators"
 
 
+HED_FILENAME = "ControlNetHED.pth"   # what HEDdetector.from_pretrained loads by default
+
+
 def load_hed(revision=None):
     """Load the HED detector. Requires `controlnet_aux` and a model download.
-    `revision` pins the hub commit (None = main)."""
+
+    `revision` pins the hub commit (None = main). HEDdetector.from_pretrained has no
+    revision argument, but it accepts a local directory: download the weights file at that
+    commit into the HF cache and hand it the file's snapshot directory.
+    """
     from controlnet_aux import HEDdetector
-    kwargs = {"revision": revision} if revision else {}
-    return HEDdetector.from_pretrained(HED_ANNOTATOR_ID, **kwargs)
+    if not revision:
+        return HEDdetector.from_pretrained(HED_ANNOTATOR_ID)
+    import os
+    from huggingface_hub import hf_hub_download
+    path = hf_hub_download(HED_ANNOTATOR_ID, HED_FILENAME, revision=revision)
+    return HEDdetector.from_pretrained(os.path.dirname(path), filename=HED_FILENAME)
 
 
 def extract_scribble(hed, image):

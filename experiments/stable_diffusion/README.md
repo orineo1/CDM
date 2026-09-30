@@ -8,7 +8,8 @@ gitignored).
 
 | directory | paper artifact | entry point |
 |---|---|---|
-| `four_targets` | Table 3, Table 15 | `cdm.models.sd.run_mlgd_f`, `cdm.models.sd.eval_baselines` |
+| `four_targets` | Table 3, Table 15 | `cdm.models.sd.run_mlgd_f` (optimisation), `cdm.models.sd.eval_all_experiments` (the N = 2,000 evaluation), `cdm.models.sd.eval_baselines` |
+| `interpolation` | the gender / age interpolation figures: portraits sorted along the target axis, PCA scatter | `interpolation.ipynb` over `cdm.models.sd.interpolation` |
 | `jacobian_error` | theory appendix, Jacobian-fidelity figure and table | `eps_g_experiment.ipynb` (self-contained) |
 
 **The code lives in the `cdm.models.sd` package**, taken from
@@ -52,7 +53,7 @@ export WANDB_API_KEY=$(cat /path/to/.wandb_key)                 # sbatch passes 
 **3. Where things go.** `run.sh` writes nothing to `$HOME`: model weights (tens of GB)
 and every cache go to `<repo>/.cache/` (`CACHE_DIR=/path` or `HF_HOME=/path` move
 them), W&B run files to `four_targets/outputs/wandb/`, results to
-`four_targets/outputs/<tier>_<Scenario>/`.
+`four_targets/outputs/<tier>_<Scenario>_seed<S>_<jobid>/`, one directory per run.
 
 **4. Check, then a smoke run, then the paper configuration.** Submit `run.sh` itself
 with `sbatch --wrap`; partition, GPU and time go on the `sbatch` line. The full
@@ -77,10 +78,26 @@ them, e.g. `run.sh full skewed --base_zeta 5 --seed 2`. `DRY_RUN=1 bash .../run.
 prints the command without running it. Watch a job with `squeue -u $USER` and
 `tail -f logs/sd-<jobid>.out`; the W&B link is printed near the top of the log.
 
-**5. Keep the results.** When the full runs are done:
+**5. Baselines, then the paper's evaluation (Table 3 / 15).** On the finished run: the
+baseline scribbles (about as long as the run) and the N = 2,000 evaluation (about an hour):
 
 ```bash
-python experiments/stable_diffusion/export_results.py                # outputs/full_* -> four_targets/results/
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=24:00:00 \
+       --output=logs/sd-base-%j.out \
+       --wrap "bash experiments/stable_diffusion/four_targets/run.sh baselines balanced"
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=03:00:00 \
+       --output=logs/sd-eval-%j.out \
+       --wrap "bash experiments/stable_diffusion/four_targets/run.sh eval balanced"
+```
+
+Both take the newest finished run of the scenario (`--run_dir` picks another) and write
+into it. `four_targets/README.md`, "Running the whole pipeline", chains the three as
+dependent jobs.
+
+**6. Keep the results.** When the runs and evaluations are done:
+
+```bash
+python experiments/stable_diffusion/export_results.py                # outputs/full_* (with baselines/, eval/), interpolation -> results/
 ```
 
 ## Requirements
@@ -88,25 +105,24 @@ python experiments/stable_diffusion/export_results.py                # outputs/f
 This experiment needs a CUDA GPU — the paper's runs used an L40S (48 GB) for the
 optimisation and an A100 (80 GB) for the 2,000-image evaluation — plus network access to
 download SDXL Base, SDXL Turbo, ControlNet-Scribble and CLIP ViT-L/14, and the SD
-dependencies in `cdm/models/sd/requirements.txt` (`transformers`, `diffusers`, `peft`,
-`controlnet_aux`, `wandb`). A CPU-only `check` configuration that needs none of that is
-described in the experiment's README.
-
-In `four_targets/results/`, `table3_sd_results.md` and `table15_sd_swd.md` are transcribed
-from the paper; `mlgdf_runs.md` and the `<Scenario>/` folders are runs of this code,
-written by `export_results.py` (see below).
+dependencies in `experiments/stable_diffusion/requirements.txt` (`transformers`, `diffusers`,
+`peft`, `controlnet_aux`, `wandb`). A CPU-only `check` configuration that needs none of that
+is described in the experiment's README.
 
 ## Saving results
 
-As for MNIST: `run.sh full` writes everything to `four_targets/outputs/` (not in git),
-then
+As for MNIST: every run writes to its own directory under `four_targets/outputs/` (not in
+git), and
 
 ```bash
-python experiments/stable_diffusion/export_results.py   # outputs/full_* -> four_targets/results/
+python experiments/stable_diffusion/export_results.py   # outputs/full_* -> four_targets/results/<run>/
 ```
 
-copies the finished runs into the committed `four_targets/results/` (table, per-step CSV,
-images, run info). The per-step visualisations are in wandb only.
+copies the finished runs into the committed `four_targets/results/`: per run its
+`metrics.json`, `steps.csv`, `run_info.txt`, the curves, the scribbles and previews, and
+its `baselines/` and `eval/`; plus `mlgdf_runs.md` (one row per run) and `eval_table.md`
+(every run's N = 2,000 table). `table3_sd_results.md` and `table15_sd_swd.md` there are
+transcribed from the paper. The per-step visualisations are in wandb only.
 
 ## Not covered here
 
@@ -118,7 +134,10 @@ code for them is in notebooks under `SD_cond_SD_controlnet/notebooks/` at the sa
 | Fig. 10, saliency + correlation | `gender_saliency_eval.ipynb` |
 | Table 17 step timing; memory ablation | `measure_dps_step_memory.ipynb` |
 | Table 18, Fig. 20 Jacobian fidelity | `eps_g_experiment.ipynb` |
-| the 2,000-image evaluation protocol | `eval_all_experiments.ipynb` |
 
-`cdm/models/sd/analysis.py` and `cdm/models/sd/visualization.py` carry the scribble-diff heatmap and the
-step plots, but the saliency computation itself is not among them.
+Ported: the 2,000-image evaluation (`eval_all_experiments.ipynb` ->
+`cdm/models/sd/eval_all_experiments.py`, `four_targets/run.sh eval`) and the interpolation
+notebooks (`eval_scribbl_interpolation*.ipynb` -> `interpolation/`, without their MMD).
+
+`cdm/models/sd/visualization.py` carries the scribble-diff heatmap and the step plots, but
+the saliency computation itself is not among them.

@@ -47,7 +47,6 @@ from sklearn.decomposition import PCA
 # Upstream inserted ../src on sys.path here so its bare sibling imports would
 # resolve. Not needed: this is a package now and the imports are absolute.
 
-from cdm.models.sd.analysis import compare_scribbles_heatmap
 from cdm.models.sd.clip_utils import CLIP_MODEL_ID, encode_images_clip, load_clip_model
 from cdm.models.sd.generation import (
     compute_pred_x0_direct,
@@ -69,7 +68,7 @@ from cdm.models.sd.models import (
     resolved_revision,
     setup_gradient_checkpointing,
 )
-from cdm.models.sd.visualization import plot_row, visualize_step
+from cdm.models.sd.visualization import compare_scribbles_heatmap, plot_row, visualize_step
 
 LOSS_FNS = {"mmd": compute_mmd, "swd": compute_swd}
 
@@ -1148,12 +1147,6 @@ def main():
             photo.save(os.path.join(photo_dir, f"photo_{idx:03d}.png"))
     print("✅ Individual target portraits saved.", flush=True)
 
-    # ── CLIP softmax / SWD (disabled — run offline via analysis.py) ─────────
-    mlgd_f_stats  = {}
-    regular_stats = {}
-    swd_mlgd_f    = None
-    swd_regular   = None
-
     optimization_time_sec = time.time() - dps_start_time
 
     # ── Save metrics.json ───────────────────────────────────────────────────
@@ -1185,14 +1178,9 @@ def main():
             "versions":               library_versions(),
             "wandb": {"project": run.project, "entity": run.entity, "name": run.name,
                       "id": run.id, "url": run.url},
-            "final_mlgd_f_swd":       swd_mlgd_f,   # None — run analysis.py to compute
-            "final_regular_swd":      swd_regular,  # None — run analysis.py to compute
-            "swd_delta":              None,         # computed in analysis.py
             "optimization_time_sec":  optimization_time_sec,
-            "mlgd_f_gender":          mlgd_f_stats,
-            "regular_gender":         regular_stats,
             "npy": npy_manifest,
-            # clip embeddings computed by analysis.py (run offline)
+            # SWD and p(male) are the N=2000 evaluation's (run.sh eval -> <run>/eval/)
         }, f, indent=2)
     print(f"✅ metrics.json saved.  Optimization time: {optimization_time_sec/60:.1f} min",
           flush=True)
