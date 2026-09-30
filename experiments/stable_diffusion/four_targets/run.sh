@@ -20,8 +20,11 @@
 #
 # Logging: every run goes to Weights & Biases (per-step MMD, gradient norm, zeta,
 # correction norm, the per-step visualisation, input and final scribbles, final MMD;
-# console output under the run's Logs tab). Local copies go to outputs/<tier>_<Scenario>/,
-# with run_info.txt recording the commit, GPU and exact command.
+# console output under the run's Logs tab). Everything except the per-step visualisation
+# is also saved to outputs/<tier>_<Scenario>/: steps.csv (written step by step),
+# metrics.json, run_info.txt (commit, GPU, exact command) and the images.
+# python experiments/stable_diffusion/export_results.py then copies finished full runs
+# into the committed results/, as for MNIST.
 #
 # Environment (optional):
 #   PYTHON=/path/to/python   interpreter (default: python on PATH)
@@ -114,6 +117,10 @@ case "$TIER" in
       for s in "${SCENARIOS[@]}"; do run_one "$TIER" "$s" "$@"; done
     else
       run_one "$TIER" "$SCEN" "$@"
+    fi
+    if [ -z "${DRY_RUN:-}" ]; then
+      if [ "$TIER" = full ]; then echo "save into results/: python experiments/stable_diffusion/export_results.py"
+      else echo "export (not into results/): python experiments/stable_diffusion/export_results.py --tier $TIER --dest <dir>"; fi
     fi
     ;;
 

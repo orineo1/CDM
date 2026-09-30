@@ -2,8 +2,9 @@
 
 The Stable Diffusion experiment. One directory per experiment, each with `README.md`
 (what it produces, the command, runtime, GPU), `run.sh` (explicit configurations, every
-flag literal), `config/`, `results/` (reference numbers **imported** with provenance) and
-`outputs/` (local runs, gitignored). The two are never mixed.
+flag literal), `config/`, `results/` (the paper's reference numbers, **imported** with provenance, and the
+exported runs of this repository, kept in separate files) and `outputs/` (local runs,
+gitignored).
 
 | directory | paper artifact | entry point |
 |---|---|---|
@@ -32,7 +33,21 @@ dependencies in `cdm/models/sd/requirements.txt` (`transformers`, `diffusers`, `
 `controlnet_aux`, `wandb`). A CPU-only `check` configuration that needs none of that is
 described in the experiment's README.
 
-Every number in a `results/` directory is transcribed from the paper.
+In `four_targets/results/`, `table3_sd_results.md` and `table15_sd_swd.md` are transcribed
+from the paper; `mlgdf_runs.md` and the `<Scenario>/` folders are runs of this code,
+written by `export_results.py` (see below).
+
+## Saving results
+
+As for MNIST: `run.sh full` writes everything to `four_targets/outputs/` (not in git),
+then
+
+```bash
+python experiments/stable_diffusion/export_results.py   # outputs/full_* -> four_targets/results/
+```
+
+copies the finished runs into the committed `four_targets/results/` (table, per-step CSV,
+images, run info). The per-step visualisations are in wandb only.
 
 ## Not covered here
 

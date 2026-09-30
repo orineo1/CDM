@@ -26,6 +26,7 @@ Usage:
 
 import argparse
 import copy
+import csv
 import gc
 import json
 import os
@@ -61,6 +62,13 @@ from cdm.models.sd.models import DEFAULT_CONTROLNET_MODEL_ID, load_models, setup
 from cdm.models.sd.visualization import plot_row, visualize_step
 
 LOSS_FNS = {"mmd": compute_mmd, "swd": compute_swd}
+
+# Columns of <output_dir>/steps.csv: the per-step values also logged to wandb.
+# unguided_cond_mmd / cond_mmd_delta only with --run_unguided (every eval_interval
+# steps); adam_* only with --use_adam; empty otherwise.
+STEP_FIELDS = ["step", "timestep", "mmd_loss", "gradient_norm", "zeta_i", "loss_norm",
+               "correction_norm", "elapsed_s", "unguided_cond_mmd", "cond_mmd_delta",
+               "adam_step_norm", "adam_m_norm", "adam_v_mean"]
 
 
 # ---------------------------------------------------------------------------
@@ -531,8 +539,6 @@ def main():
     print(f"Device: {device}", flush=True)
 
     os.makedirs(args.output_dir, exist_ok=True)
-    steps_dir = os.path.join(args.output_dir, "steps")
-    os.makedirs(steps_dir, exist_ok=True)
 
     n_eval = 10  # number of Sprinter photos per MMD evaluation
 
@@ -693,6 +699,12 @@ def main():
 
     step_gradients = []
     step_vis_data  = []
+
+    # Per-step record on disk, one row per step, written as the run goes so a job
+    # killed mid-way still leaves its trajectory. Same values as the per-step wandb log.
+    steps_csv_path = os.path.join(args.output_dir, "steps.csv")
+    with open(steps_csv_path, "w", newline="") as f:
+        csv.DictWriter(f, fieldnames=STEP_FIELDS).writeheader()
     backsel_generator = torch.Generator().manual_seed(args.seed) if args.seed is not None else None
 
     # Persistent Adam moment buffers across the whole guidance trajectory (only
@@ -762,10 +774,10 @@ def main():
             sd_baseline["pred_x0_regular_cpu"]       = baseline_pred_x0.detach().cpu()
 
     visualize_step(sd_baseline, architect, sprinter, target_clip_np,
-                   num_cond=4, save_path=os.path.join(steps_dir, "step_baseline.png"),
+                   num_cond=4, save_path=None,  # per-step plots go to wandb only
                    pca_fixed=pca_fixed, group_names=group_names, group_sizes=group_sizes,
                    controlnet_scale=args.controlnet_scale)
-    print("✅ Baseline visualisation saved.", flush=True)
+    print("✅ Baseline visualisation logged to wandb.", flush=True)
 
     # ── 9. MLGD-F guidance loop ─────────────────────────────────────────────
     dps_start_time = time.time()
@@ -882,7 +894,10 @@ def main():
             "zeta_i":          zeta_val,
             "loss_norm":       loss_norm.item(),
             "correction_norm": correction_norm,
-            **({"adam_step_norm": adam_log["adam/step_norm"]} if adam_log else {}),
+            "elapsed_s":       time.time() - dps_start_time,
+            **({"adam_step_norm": adam_log["adam/step_norm"],
+                "adam_m_norm":    adam_log["adam/m_norm"],
+                "adam_v_mean":    adam_log["adam/v_mean"]} if adam_log else {}),
         })
 
         wandb_log = {
@@ -906,10 +921,14 @@ def main():
             wandb_log["intermediate/unguided_cond_mmd"] = unguided_mmd
             wandb_log["intermediate/mlgd_f_cond_mmd"]   = mmd_display.item()
             wandb_log["intermediate/cond_mmd_delta"]     = mmd_display.item() - unguided_mmd
+            step_gradients[-1]["unguided_cond_mmd"] = unguided_mmd
+            step_gradients[-1]["cond_mmd_delta"]    = mmd_display.item() - unguided_mmd
             print(f"  [eval] mlgd_f={mmd_display.item():.6f}  unguided={unguided_mmd:.6f}  "
                   f"delta={mmd_display.item()-unguided_mmd:.6f}", flush=True)
 
         wandb.log(wandb_log, commit=False)
+        with open(steps_csv_path, "a", newline="") as f:
+            csv.DictWriter(f, fieldnames=STEP_FIELDS, restval="").writerow(step_gradients[-1])
 
         with torch.no_grad():
             sd = {
@@ -927,7 +946,7 @@ def main():
             step_vis_data.append(sd)
 
         visualize_step(sd, architect, sprinter, target_clip_np,
-                       num_cond=5, save_path=os.path.join(steps_dir, f"step_{i:03d}.png"),
+                       num_cond=5, save_path=None,  # per-step plots go to wandb only
                        pca_fixed=pca_fixed, group_names=group_names, group_sizes=group_sizes,
                        controlnet_scale=args.controlnet_scale)
 
@@ -1094,6 +1113,11 @@ def main():
             "final_mlgd_f_mmd":       mlgd_f_mmd,
             "final_regular_mmd":      regular_mmd if args.run_unguided else None,
             "mmd_delta":              (regular_mmd - mlgd_f_mmd) if args.run_unguided else None,
+            "mmd_relative_improvement": ((regular_mmd - mlgd_f_mmd) / (regular_mmd + 1e-8)
+                                         if args.run_unguided else None),
+            "final_mmd_n":            FINAL_MMD_N,
+            "wandb": {"project": run.project, "entity": run.entity, "name": run.name,
+                      "id": run.id, "url": run.url},
             "final_mlgd_f_swd":       swd_mlgd_f,   # None — run analysis.py to compute
             "final_regular_swd":      swd_regular,  # None — run analysis.py to compute
             "swd_delta":              None,         # computed in analysis.py
