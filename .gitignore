@@ -35,3 +35,7 @@ experiments/mnist/checkpoints/*.pth
 
 # caches run.sh keeps next to the repo (model weights, matplotlib, wandb)
 .cache/
+
+# cluster job logs (slurm --output=logs/...)
+logs/
+slurm-*.out
