@@ -9,6 +9,12 @@
 #                                                  published number.
 #   bash run.sh full  <scenario> [flags...]        GPU (paper: L40S 48 GB). The published
 #                                                  configuration, from config/<scenario>.env.
+#   bash run.sh eval  <scenario> [flags...]        GPU, ~1 h. The paper's final evaluation
+#                                                  (Table 3 / 15): N = 2,000 images per method
+#                                                  vs a 2,000-image target, MMD / SWD / p(male).
+#                                                  Reads the scribbles of outputs/full_<Scenario>
+#                                                  (--run_dir overrides) and writes
+#                                                  outputs/eval_<Scenario>. No photos are saved.
 #   bash run.sh help                               every flag run_mlgd_f accepts.
 #
 # <scenario>: balanced | skewed | gender_interpolation | age_interpolation | all
@@ -17,6 +23,7 @@
 # after the scenario overrides them -- it is passed last and the last value wins:
 #   bash run.sh full balanced --base_zeta 5 --seed 2
 #   bash run.sh full skewed   --num_variations 50 --backsel_k 25 --run_unguided
+#   bash run.sh eval balanced --n_eval 200 --run_dir experiments/stable_diffusion/four_targets/outputs/smoke_BalancedTarget
 #
 # On SLURM, submit this file with --wrap from the repo root (sbatch passes the active
 # venv and exported variables such as HF_HOME to the job):
@@ -75,7 +82,58 @@ mkdir -p "$CACHE_DIR" "$MPLCONFIGDIR" "$OUT"
 # before the interpreter starts, which is what cuBLAS requires)
 export CUBLAS_WORKSPACE_CONFIG="${CUBLAS_WORKSPACE_CONFIG:-:4096:8}"
 
-usage() { echo "usage: bash run.sh [check | help | smoke|full <balanced|skewed|gender_interpolation|age_interpolation|all> [run_mlgd_f flags...]]" >&2; exit 64; }
+usage() { echo "usage: bash run.sh [check | help | smoke|full|eval <balanced|skewed|gender_interpolation|age_interpolation|all> [flags...]]" >&2; exit 64; }
+
+revision_args() {   # the pinned weights of config/models.env, as --*_revision flags
+  local rev v
+  for rev in ARCHITECT SPRINTER CONTROLNET HED CLIP; do
+    v="${rev}_REVISION"
+    [ -n "${!v:-}" ] && echo "--$(tr 'A-Z' 'a-z' <<< "$rev")_revision" "${!v}"
+  done
+}
+
+eval_one() {   # eval_one <scenario> [extra flags...]: the N=2000 final evaluation
+  local name="$1"; shift
+  local cfg="$HERE/config/${name}.env"
+  [ -f "$cfg" ] || { echo "no such scenario: $name (config/$name.env)" >&2; usage; }
+  (
+    set -a
+    source "$HERE/config/models.env"
+    source "$cfg"
+    set +a
+    local outdir="$OUT/eval_${SCENARIO}" a
+    for a in "$@"; do [ "${prev:-}" = --output_dir ] && outdir="$a"; prev="$a"; done
+    local args=( --mode "$MODE" --controlnet_scale "$CONTROLNET_SCALE"
+                 --run_dir "$OUT/full_${SCENARIO}" --n_eval 2000 --seed 42 )
+    if [ "$MODE" = age ]; then
+      args+=( --age_min "$AGE_MIN" --age_max "$AGE_MAX" --age_step "$AGE_STEP" --age_gender "$AGE_GENDER" )
+    else
+      local tp; IFS='|' read -r -a tp <<< "$TARGET_PROMPTS"
+      args+=( --target_prompts "${tp[@]}" )
+    fi
+    args+=( $(revision_args) --output_dir "$outdir" --wandb_project "${WANDB_PROJECT:-sdxl-eval}" )
+    [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
+    args+=( "$@" )
+    export WANDB_NAME="${WANDB_NAME:-eval_${name}${SLURM_JOB_ID:+_${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}}${SLURM_ARRAY_TASK_ID:+_$SLURM_ARRAY_TASK_ID}}"
+    export WANDB_TAGS="${WANDB_TAGS:-eval,$name}"
+    local cmd=( "$PY" -m cdm.models.sd.eval_all_experiments "${args[@]}" )
+    echo "=== eval | $name | wandb ${WANDB_PROJECT:-sdxl-eval}/$WANDB_NAME ==="
+    printf '%q ' "${cmd[@]}"; echo
+    [ -n "${DRY_RUN:-}" ] && exit 0
+    mkdir -p "$outdir"
+    {
+      echo "date:       $(date -Iseconds)"
+      echo "git commit: $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)$(git -C "$REPO" diff --quiet 2>/dev/null || echo ' (dirty)')"
+      echo "host:       $(hostname)  slurm job: ${SLURM_JOB_ID:-none}"
+      "$PY" -c "import torch; print('gpu:       ', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none', '| torch', torch.__version__)"
+      echo "config:     config/$name.env  overrides: ${*:-none}"
+      printf 'command:    '; printf '%q ' "${cmd[@]}"; echo
+      "$PY" -c "from cdm.models.sd.run_mlgd_f import library_versions as v; print('versions:   ', v())"
+    } > "$outdir/run_info.txt"
+    "$PY" -m pip freeze > "$outdir/pip_freeze.txt" 2>/dev/null || true
+    "${cmd[@]}"
+  )
+}
 
 run_one() {   # run_one <tier> <scenario> [extra flags...]
   local tier="$1" name="$2"; shift 2
@@ -111,11 +169,7 @@ run_one() {   # run_one <tier> <scenario> [extra flags...]
       local tp; IFS='|' read -r -a tp <<< "$TARGET_PROMPTS"
       args+=( --target_prompts "${tp[@]}" )
     fi
-    for rev in ARCHITECT SPRINTER CONTROLNET HED CLIP; do   # pinned weights (config/models.env)
-      local v="${rev}_REVISION"
-      [ -n "${!v:-}" ] && args+=( "--$(tr 'A-Z' 'a-z' <<< "$rev")_revision" "${!v}" )
-    done
-    args+=( --output_dir "$outdir" --wandb_project "$project" )
+    args+=( $(revision_args) --output_dir "$outdir" --wandb_project "$project" )   # pinned weights (config/models.env)
     [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
     args+=( "$@" )   # CLI overrides, last so they win
 
@@ -150,6 +204,23 @@ case "$TIER" in
 
   help)
     "$PY" -m cdm.models.sd.run_mlgd_f --help
+    ;;
+
+  eval)
+    SCEN="${2:-}"; [ -n "$SCEN" ] || usage
+    shift 2
+    if [ -z "${DRY_RUN:-}" ]; then
+      "$PY" -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 'no CUDA GPU visible (sbatch: add --gres=gpu:1)')"
+    fi
+    if [ "$SCEN" = all ] && [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
+      SCEN="${SCENARIOS[$SLURM_ARRAY_TASK_ID]:?array index must be 0-3}"
+    fi
+    if [ "$SCEN" = all ]; then
+      for s in "${SCENARIOS[@]}"; do eval_one "$s" "$@"; done
+    else
+      eval_one "$SCEN" "$@"
+    fi
+    [ -n "${DRY_RUN:-}" ] || echo "save into results/: python experiments/stable_diffusion/export_results.py"
     ;;
 
   smoke|full)

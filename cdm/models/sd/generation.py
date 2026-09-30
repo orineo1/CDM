@@ -54,9 +54,10 @@ def generate_and_store(pipe, prompt, sobel_cond_pil, num_samples, batch_size=2):
 
 
 def generate_and_store_cs(
-    pipe, prompt, cond_pil, num_samples, batch_size=2, cn_scale=0.5
+    pipe, prompt, cond_pil, num_samples, batch_size=2, cn_scale=0.5, generator=None
 ):
-    """generate_and_store with configurable controlnet_conditioning_scale."""
+    """generate_and_store with configurable controlnet_conditioning_scale.
+    `generator`: optional torch.Generator for the noise (None = the global RNG)."""
     original_vae_dtype = pipe.vae.dtype
     pipe.vae.to(dtype=torch.float16)
     all_images, all_lats = [], []
@@ -75,6 +76,7 @@ def generate_and_store_cs(
             guidance_scale=0.0,
             controlnet_conditioning_scale=cn_scale,
             callback_on_step_end=latents_callback,
+            generator=generator,
         )
         all_images.extend(result.images)
         all_lats.append(pipe._current_latents.reshape(curr, -1))

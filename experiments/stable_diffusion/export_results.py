@@ -19,6 +19,15 @@ commit, so the results can be read without re-running:
         (with --run_unguided also final_scribble_regular.png, scribble_heatmap.png,
          final_photos_regular.png)
 
+    four_targets/results/eval_table.md          Table 3 / 15 of this code: every scenario's
+                                                N = 2,000 evaluation (from outputs/eval_*)
+    four_targets/results/<Scenario>/eval/
+        eval_results.json, eval_table.md, run_info.txt, the 5-image previews of every
+        method and target group, the MMD / SWD bars and the p(male) CI plot
+    interpolation/results/<Scenario>/
+        sorted_grid.png, pca_scatter.png, ranked_all.png, picks.json (from the notebook's
+        outputs/<Scenario>)
+
 Everything here is also in the run's wandb log. The per-step visualisations are logged
 to wandb only and not saved to disk; the large arrays (npy/, the 250 evaluation
 photos) stay in outputs/.
@@ -40,6 +49,9 @@ import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 EXP = os.path.join(HERE, "four_targets")
+INTERP = os.path.join(HERE, "interpolation")
+EVAL_FILES = ["eval_results.json", "eval_table.md", "run_info.txt", "mmd_bar.png", "swd_bar.png", "p_male_ci.png"]
+INTERP_FILES = ["sorted_grid.png", "pca_scatter.png", "ranked_all.png", "picks.json"]
 ORDER = ["BalancedTarget", "SkewedTarget", "GenderInterpolation", "AgeInterpolation"]
 # MLGD-F MMD from paper Table 3 (N = 2,000 evaluation images; see results/table3_sd_results.md)
 PAPER_MMD = {"BalancedTarget": 0.386, "SkewedTarget": 0.373,
@@ -115,6 +127,47 @@ def fmt(x, nd=3):
     return "--" if x is None else f"{x:.{nd}f}"
 
 
+def export_evals(run_dir, dest):
+    """outputs/eval_<Scenario>/ -> results/<Scenario>/eval/ (no photos, only previews);
+    returns the per-scenario tables for the combined results/eval_table.md."""
+    tables = []
+    for d in sorted(glob.glob(os.path.join(run_dir, "eval_*"))):
+        if not os.path.exists(os.path.join(d, "eval_results.json")):
+            print(f"skip {d}: no eval_results.json (evaluation not finished?)")
+            continue
+        name = os.path.basename(d)[len("eval_"):]
+        out = os.path.join(dest, name, "eval")
+        os.makedirs(out, exist_ok=True)
+        for f in EVAL_FILES + [os.path.basename(p) for p in glob.glob(os.path.join(d, "*preview_*.png"))]:
+            if os.path.exists(os.path.join(d, f)):
+                shutil.copy2(os.path.join(d, f), out)
+        with open(os.path.join(d, "eval_table.md")) as fh:
+            tables.append((name, fh.read().strip()))
+        print(f"exported {d} -> {out}")
+    if tables:
+        with open(os.path.join(dest, "eval_table.md"), "w") as fh:
+            fh.write("# Final evaluation (N = 2,000), every scenario\n\n"
+                     "Written by `experiments/stable_diffusion/export_results.py` from `outputs/eval_*`; the\n"
+                     "protocol of the paper's Table 3 / Table 15 (`cdm/models/sd/eval_all_experiments.py`).\n"
+                     "Delta% is the improvement over the source scribble.\n\n")
+            fh.write("\n\n".join(t.replace("# ", "## ", 1) for _, t in tables) + "\n")
+        print(f"wrote {os.path.join(dest, 'eval_table.md')}")
+    return tables
+
+
+def export_interpolation(run_dir, dest):
+    """interpolation/outputs/<Scenario>/ -> interpolation/results/<Scenario>/."""
+    for d in sorted(glob.glob(os.path.join(run_dir, "*"))):
+        if not os.path.exists(os.path.join(d, "picks.json")):
+            continue
+        out = os.path.join(dest, os.path.basename(d))
+        os.makedirs(out, exist_ok=True)
+        for f in INTERP_FILES:
+            if os.path.exists(os.path.join(d, f)):
+                shutil.copy2(os.path.join(d, f), out)
+        print(f"exported {d} -> {out}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--tier", default="full", help="export outputs/<tier>_* (default full)")
@@ -122,7 +175,13 @@ def main():
                    help="where run.sh wrote the runs (default four_targets/outputs)")
     p.add_argument("--dest", default=os.path.join(EXP, "results"),
                    help="where to write (default four_targets/results, which is committed)")
+    p.add_argument("--interp-dir", default=os.path.join(INTERP, "outputs"),
+                   help="the interpolation notebook's outputs (default interpolation/outputs)")
+    p.add_argument("--interp-dest", default=os.path.join(INTERP, "results"))
     args = p.parse_args()
+
+    export_evals(args.run_dir, args.dest)
+    export_interpolation(args.interp_dir, args.interp_dest)
 
     runs = {}
     for d in sorted(glob.glob(os.path.join(args.run_dir, f"{args.tier}_*"))):
@@ -131,8 +190,9 @@ def main():
         elif os.path.isdir(d):
             print(f"skip {d}: no metrics.json (run not finished?)")
     if not runs:
-        raise SystemExit(f"no finished runs ({args.tier}_*/metrics.json) in {args.run_dir}; "
-                         f"run four_targets/run.sh {args.tier} <scenario> first")
+        print(f"no finished runs ({args.tier}_*/metrics.json) in {args.run_dir}; "
+              f"run four_targets/run.sh {args.tier} <scenario> first")
+        return
     names = [n for n in ORDER if n in runs] + sorted(set(runs) - set(ORDER))
 
     rows = []

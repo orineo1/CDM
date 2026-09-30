@@ -8,7 +8,8 @@ gitignored).
 
 | directory | paper artifact | entry point |
 |---|---|---|
-| `four_targets` | Table 3, Table 15 | `cdm.models.sd.run_mlgd_f`, `cdm.models.sd.eval_baselines` |
+| `four_targets` | Table 3, Table 15 | `cdm.models.sd.run_mlgd_f` (optimisation), `cdm.models.sd.eval_all_experiments` (the N = 2,000 evaluation), `cdm.models.sd.eval_baselines` |
+| `interpolation` | the gender / age interpolation figures: portraits sorted along the target axis, PCA scatter | `interpolation.ipynb` over `cdm.models.sd.interpolation` |
 | `jacobian_error` | theory appendix, Jacobian-fidelity figure and table | `eps_g_experiment.ipynb` (self-contained) |
 
 **The code lives in the `cdm.models.sd` package**, taken from
@@ -77,10 +78,18 @@ them, e.g. `run.sh full skewed --base_zeta 5 --seed 2`. `DRY_RUN=1 bash .../run.
 prints the command without running it. Watch a job with `squeue -u $USER` and
 `tail -f logs/sd-<jobid>.out`; the W&B link is printed near the top of the log.
 
-**5. Keep the results.** When the full runs are done:
+**5. Evaluate as the paper does (Table 3 / 15).** About an hour per scenario:
 
 ```bash
-python experiments/stable_diffusion/export_results.py                # outputs/full_* -> four_targets/results/
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=03:00:00 \
+       --output=logs/sd-eval-%j.out \
+       --wrap "bash experiments/stable_diffusion/four_targets/run.sh eval balanced"
+```
+
+**6. Keep the results.** When the runs and evaluations are done:
+
+```bash
+python experiments/stable_diffusion/export_results.py                # outputs/full_*, eval_*, interpolation -> results/
 ```
 
 ## Requirements
@@ -118,7 +127,10 @@ code for them is in notebooks under `SD_cond_SD_controlnet/notebooks/` at the sa
 | Fig. 10, saliency + correlation | `gender_saliency_eval.ipynb` |
 | Table 17 step timing; memory ablation | `measure_dps_step_memory.ipynb` |
 | Table 18, Fig. 20 Jacobian fidelity | `eps_g_experiment.ipynb` |
-| the 2,000-image evaluation protocol | `eval_all_experiments.ipynb` |
+
+Ported: the 2,000-image evaluation (`eval_all_experiments.ipynb` ->
+`cdm/models/sd/eval_all_experiments.py`, `four_targets/run.sh eval`) and the interpolation
+notebooks (`eval_scribbl_interpolation*.ipynb` -> `interpolation/`, without their MMD).
 
 `cdm/models/sd/analysis.py` and `cdm/models/sd/visualization.py` carry the scribble-diff heatmap and the
 step plots, but the saliency computation itself is not among them.
