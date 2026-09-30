@@ -24,6 +24,65 @@ The guided loop is Algorithm 1 implemented inside the `diffusers` pipeline
 CLIP-space guidance. It does not use `cdm.guidance.optimize_guided` or
 `cdm.models.DiffusionModel`; the shared part is the inner estimator.
 
+## Running it (cluster, W&B)
+
+Everything below is run from the repository root. `four_targets/README.md` has the
+flags, the config files and what each run saves.
+
+**1. Environment, once.** A venv with CUDA torch and the SD packages:
+
+```bash
+python3 -m venv /path/to/venvs/cdm && source /path/to/venvs/cdm/bin/activate
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install -r requirements.txt && pip install -e .
+pip install -r experiments/stable_diffusion/requirements.txt
+```
+
+**2. Weights & Biases, once.** Every run logs its config, the per-step MMD / gradient
+norm / ζ, the per-step visualisation, the input and final scribbles and the final MMD to
+W&B (project `sdxl-smoke` for smoke runs, `sdxl-mlgdf` for full runs). Log in with the
+key from https://wandb.ai/authorize; `wandb login` stores it in `~/.netrc`, or keep it
+out of `$HOME`:
+
+```bash
+wandb login                                                     # or:
+export WANDB_API_KEY=$(cat /path/to/.wandb_key)                 # sbatch passes exported variables to the job
+```
+
+**3. Where things go.** `run.sh` writes nothing to `$HOME`: model weights (tens of GB)
+and every cache go to `<repo>/.cache/` (`CACHE_DIR=/path` or `HF_HOME=/path` move
+them), W&B run files to `four_targets/outputs/wandb/`, results to
+`four_targets/outputs/<tier>_<Scenario>/`.
+
+**4. Check, then a smoke run, then the paper configuration.** Submit `run.sh` itself
+with `sbatch --wrap`; partition, GPU and time go on the `sbatch` line. The full
+configuration needs a large GPU (the paper used an L40S, 48 GB) and hours (about 4 h in
+the paper; an L4 is slower).
+
+```bash
+bash experiments/stable_diffusion/four_targets/run.sh check          # CPU, seconds: imports + MMD equivalence
+mkdir -p logs
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=02:00:00 \
+       --output=logs/sd-%j.out \
+       --wrap "bash experiments/stable_diffusion/four_targets/run.sh smoke balanced"
+sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=24:00:00 \
+       --output=logs/sd-%j.out \
+       --wrap "bash experiments/stable_diffusion/four_targets/run.sh full balanced"
+```
+
+Scenarios: `balanced`, `skewed`, `gender_interpolation`, `age_interpolation`, or `all`
+(with `--array=0-3` one scenario per task). Defaults come from
+`four_targets/config/<scenario>.env`; any `run_mlgd_f` flag after the scenario overrides
+them, e.g. `run.sh full skewed --base_zeta 5 --seed 2`. `DRY_RUN=1 bash .../run.sh ...`
+prints the command without running it. Watch a job with `squeue -u $USER` and
+`tail -f logs/sd-<jobid>.out`; the W&B link is printed near the top of the log.
+
+**5. Keep the results.** When the full runs are done:
+
+```bash
+python experiments/stable_diffusion/export_results.py                # outputs/full_* -> four_targets/results/
+```
+
 ## Requirements
 
 This experiment needs a CUDA GPU — the paper's runs used an L40S (48 GB) for the

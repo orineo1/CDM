@@ -22,6 +22,7 @@ pip install -r requirements.txt            # CPU is enough for the synthetic exa
 pip install -e .                           # makes `import cdm` work from anywhere
 # GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121
 # Stable Diffusion experiment only: pip install -r experiments/stable_diffusion/requirements.txt
+#   then `wandb login`; experiments/stable_diffusion/README.md has the cluster (sbatch) commands
 ```
 
 ## Finding x*: the main script
