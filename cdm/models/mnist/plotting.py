@@ -258,7 +258,7 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
                     color='orange', linewidth=2.5, zorder=4, label='Target')
             ax.set_theta_zero_location('N'); ax.set_theta_direction(-1)
             ax.set_yticklabels([]); ax.set_yticks([])
-            ax.tick_params(axis='x', labelsize=18, pad=11)
+            ax.tick_params(axis='x', labelsize=18, pad=12)
             ax.set_ylim(0, polar_ylim)
             if show_titles:
                 ax.set_title(f'Rank {rank+1} | Loss {loss_log[idx]:.4f} | Seed {seed_log[idx]}',
