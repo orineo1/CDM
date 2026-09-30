@@ -4,7 +4,8 @@
 #
 #   PARTITION=gpu VENV=~/venvs/cdm bash experiments/synthetic/paper_comparison/sbatch/submit_all.sh
 #
-# Optional: ACCOUNT=<slurm account>, CPU_PARTITION=<partition for the collect/compare jobs> (default PARTITION),
+# Optional: GRES=<gpu request for the GPU jobs, e.g. gpu:l40s:1> (default: gpu:1 from the job headers),
+#           ACCOUNT=<slurm account>, CPU_PARTITION=<partition for the collect/compare jobs> (default PARTITION),
 #           CONDA_ENV=<name> instead of VENV, N_RESTARTS=<toy trajectories, default 10>.
 # Everything a job needs is exported to it (sbatch --export=ALL, the default).
 set -euo pipefail
@@ -16,6 +17,7 @@ OPT=()
 [ -n "${ACCOUNT:-}" ] && OPT+=(--account="$ACCOUNT")
 CPU_OPT=("${OPT[@]}")
 [ -n "${CPU_PARTITION:-}" ] && CPU_OPT=(--partition="$CPU_PARTITION" ${ACCOUNT:+--account="$ACCOUNT"})
+[ -n "${GRES:-}" ] && OPT+=(--gres="$GRES")     # GPU jobs only; the command line overrides the #SBATCH header
 sub() { sbatch --parsable "$@" | cut -d';' -f1; }
 
 GRID=$(sub "${OPT[@]}" $D/01_grid.sh)

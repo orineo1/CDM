@@ -25,7 +25,7 @@ pip install -r requirements.txt && pip install -e .          # once, in the venv
 PARTITION=<gpu partition> VENV=<path to venv> bash experiments/synthetic/paper_comparison/sbatch/submit_all.sh
 ```
 
-Optional variables: `ACCOUNT`, `CPU_PARTITION` (for the collect / compare jobs), `CONDA_ENV` instead of `VENV`.
+Optional variables: `GRES` (e.g. `gpu:l40s:1` on a partition with typed GPUs), `ACCOUNT`, `CPU_PARTITION` (for the collect / compare jobs), `CONDA_ENV` instead of `VENV`.
 `submit_all.sh` chains the jobs with `--dependency`; logs go to `logs/`. A single job can be resubmitted on its
 own (`sbatch --partition=... experiments/synthetic/paper_comparison/sbatch/0X_*.sh`): every step whose output
 exists is skipped. When everything has finished (or at any point, on what exists so far):
