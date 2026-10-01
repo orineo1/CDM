@@ -19,7 +19,6 @@ The scenario is `config/nonstar_params.txt`. The pointwise arms use `find_xstar.
 
 Outputs go to `outputs/`, which is gitignored and ships empty.
 
-## Reference
+## Results
 
-`results/PUBLISHED.md` — the paper's numbers for this experiment, transcribed.
-Other files in `results/` are the outputs of the run reported in the paper's repository.
+`results/` holds the outputs of `run.sh full` behind the paper, copied from `outputs/`.

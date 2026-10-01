@@ -18,7 +18,6 @@ bash run.sh smoke   # exits 2
 
 Outputs go to `outputs/`, which is gitignored and ships empty.
 
-## Reference
+## Results
 
-`results/PUBLISHED.md` — the paper's numbers for this experiment, transcribed.
-Other files in `results/` are the outputs of the run reported in the paper's repository.
+No script produces this number; it is reported in the paper only.

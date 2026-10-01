@@ -29,7 +29,6 @@ Every step whose output already exists is skipped, so a killed run can be resubm
 Outputs go to `outputs/` (gitignored): `outputs/runs/<scenario>/` holds data, networks, the
 model check and one JSON per method; `outputs/table1.{json,md,tex}` is the table.
 
-## Reference
+## Results
 
-`results/PUBLISHED.md` has the paper's numbers for this experiment; `results/table1.md` is
-the table as produced by the run (same file `run.sh full` writes to `outputs/`).
+`results/` holds the outputs of `run.sh full` behind the paper, copied from `outputs/`.

@@ -41,7 +41,6 @@ results are `outputs/fig1_hard.png`, `outputs/fig1_hard_sim.json` and the per-me
 in the job log (`best of 25 ... k/25 restarts in the x* basin`). The twisted-SMC correction
 (`../smc_correction`) reads the networks this run trains under `outputs/ckpt/hard/`.
 
-## Reference
+## Results
 
-`results/PUBLISHED.md` — the paper's numbers for this experiment, transcribed.
-Other files in `results/` are the outputs of the run reported in the paper's repository.
+`results/` holds the outputs of `run.sh full` behind the paper, copied from `outputs/`.

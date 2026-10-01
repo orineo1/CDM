@@ -3,8 +3,7 @@
 One directory per Gaussian experiment in the paper. Each holds `README.md` (what it
 produces, the command, runtime, GPU), `run.sh` (a reduced `smoke` configuration and the
 full one, every flag literal), `config/` where the experiment has parameters, `results/`
-(reference numbers **imported** from a named GitHub commit) and `outputs/` (gitignored,
-written by a local run). The two are never mixed.
+(the outputs of the run behind the paper) and `outputs/` (gitignored, written by a local run).
 
 **Every `run.sh` calls the scripts in `pipeline/`**; the experiment directories hold
 no code of their own. `configs/mog/` holds the paper's fixed mixture settings and
@@ -53,7 +52,5 @@ result. Per-experiment runtimes and GPU requirements are in each `README.md`.
 
 ## Results
 
-Each experiment's `results/PUBLISHED.md` carries the paper's numbers for that experiment,
-transcribed with their location in the source. Other files in `results/` are the outputs of
-the run reported in the repository (the files `run.sh full` writes to `outputs/`). `outputs/` is
-gitignored and ships empty.
+Each experiment's `results/` holds the outputs of `run.sh full` behind the paper, copied from
+`outputs/`. `outputs/` is gitignored and ships empty.
