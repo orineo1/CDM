@@ -165,6 +165,8 @@ def parse_args():
     g.add_argument("--refine-lambda", type=float, default=0.0, help="weight of the prior score term")
     g.add_argument("--refine-optim", choices=["adam", "sgd"], default="adam")
     g.add_argument("--refine-n-cond", type=int, default=None, help="conditional samples per refinement step (default n_cond)")
+    g.add_argument("--refine-keep-best", action="store_true",
+                   help="return the refinement iterate with the lowest loss estimate instead of the last one")
     g.add_argument("--guide-grad", choices=["pathwise", "zo"], default="pathwise",
                    help="inner-loss gradient in the guided steps: backpropagation through the sampler, or zeroth-order "
                         "central differences (common random numbers) pulled back through the Tweedie estimate")
@@ -286,7 +288,7 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
         refine_steps=args.refine_steps, refine_lr=args.refine_lr, refine_lambda=args.refine_lambda,
         refine_optim=args.refine_optim, refine_n_cond=args.refine_n_cond,
         refine_grad=args.refine_grad, zo_eps=args.zo_eps, zo_dirs=args.zo_dirs,
-        guide_grad=args.guide_grad,
+        guide_grad=args.guide_grad, refine_keep_best=args.refine_keep_best,
         device=args.device, seed=seed, progress=args.progress,
         tag=f"find_xstar:{args.guidance}:{args.algo}:{'MLGD-F' if sampler_type == 'cm' else 'MLGD'}",
     )

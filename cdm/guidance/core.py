@@ -251,6 +251,8 @@ def refine(model_uncond, model_cond, loss_function, cfg, x0):
     opt = torch.optim.Adam([x], lr=cfg.refine_lr) if cfg.refine_optim == "adam" else torch.optim.SGD([x], lr=cfg.refine_lr)
     trace = []
     t_start = time.time()
+    keep_best = getattr(cfg, "refine_keep_best", False)
+    best_x, best_l = x.detach().clone(), float("inf")
     for k in range(cfg.refine_steps):
         opt.zero_grad()
         if getattr(cfg, "refine_grad", "pathwise") == "zo":
@@ -267,12 +269,16 @@ def refine(model_uncond, model_cond, loss_function, cfg, x0):
                 score = _prior_score(model_uncond, x.detach())
             prior_norm = float(score.norm())
             grad = grad - cfg.refine_lambda * score
+        if keep_best and float(loss_val) < best_l:      # loss_val is the estimate at the current x, before the step
+            best_l, best_x = float(loss_val), x.detach().clone()
         if not torch.isfinite(grad).all():
             break
         x.grad = grad
         opt.step()
         trace.append({"k": k, "loss": float(loss_val.detach()), "grad_norm": float(grad.norm()),
                       "prior_score_norm": prior_norm, "elapsed_s": time.time() - t_start})
+    if keep_best and cfg.refine_steps > 0:
+        return best_x, trace
     return x.detach(), trace
 
 

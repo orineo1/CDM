@@ -255,6 +255,7 @@ class GuidanceConfig:
     zo_eps: float = 0.05                 # finite-difference step (whitened units)
     zo_dirs: int = 0                     # 0: all coordinate directions (2 d loss evaluations); M > 0: M random Gaussian directions
     guide_grad: str = "pathwise"         # inner-loss gradient in guided steps: "pathwise" (autograd through the sampler) or "zo"
+    refine_keep_best: bool = False       # return the refinement iterate with the lowest loss estimate, not the last one
 
     # --- bookkeeping ---
     device: str = "cuda"
