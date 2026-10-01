@@ -216,6 +216,11 @@ are off by default). Every run uses the library default, a **detached** RBF band
 `--bandwidth-grad`), so the grid corresponds to the paper's detached rerun
 (`reference/table1_detach.md`), not to the published Table 1 run.
 
+`reproduction/run.sh` reruns all of it with the exact flags, step by step or at once
+(`bash experiments/synthetic/reproduction/run.sh all`, one GPU, about two days; the steps are
+`grid`, `checks`, `ablations`, `nonstar`, `fig1`, `smc`). It writes to the git-ignored
+`runs/reproduction/` and `results/reproduction/`.
+
 | file | command (from the repository root) |
 |---|---|
 | `table1.{md,json,tex}` | `$MT $T1 --runs-dir runs/table1v2` (no `--tag`, no `--extra`), then `--collect`: Table 1 and the refined columns of `tab:sim_full` |
