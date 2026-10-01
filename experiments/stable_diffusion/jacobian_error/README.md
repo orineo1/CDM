@@ -11,9 +11,9 @@ outlier analysis).
 
 The notebook is self-contained (only `torch`, `diffusers`, `huggingface_hub`,
 `safetensors`, `numpy`, `pandas`, `matplotlib`); it does not import the `cdm` package.
-Run it top to bottom on one GPU.
 
-## Provenance
+## Compute
 
-Copied verbatim from `orineo1/conditional-matching-paper` @ `fc4389d`,
-`SD_cond_SD_controlnet/notebooks/eps_g_experiment.ipynb`.
+The paper's run used one NVIDIA RTX PRO 6000 Blackwell GPU (96 GB VRAM). It evaluated
+N = 100 prompts with D = 10 VJP directions each, two reverse-mode passes per direction
+(one through the teacher, one through the student), about 3 hours of wall-clock time.
