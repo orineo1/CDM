@@ -177,6 +177,33 @@ The published table and figure came from the notebook
 The Table 1 networks (`runs/table1v2/<scenario>/models/`) are on Hugging Face under
 `simulations/checkpoints`. The paper links them as `\hfsim`.
 
+## Improved search at (10, 1) (research, after the AISTATS submission)
+
+Table 1 reaches TV 0.49 at (10, 1). Three changes bring it to a mean of 0.08 over five seeds (0.11 at
+worst, about 25 min per run on an L40S):
+
+1. A more accurate conditional sampler: diffusion, 256 units, 4 blocks, 100k batches of fresh draws.
+   Its TV to `G` at `x*` is 0.07, against 0.46 for the Table 1 network (`check_sampler_accuracy.py`).
+2. Zeroth-order guidance (`--guide-grad zo`): central differences of the sample loss with common
+   random numbers, pulled back to `x_t` through the Tweedie estimate. It recovers the mixture-weight
+   part of the gradient that backpropagation through the sampler misses.
+3. Refinement with 3,000 conditional samples that returns its best iterate (`--refine-keep-best`),
+   after 30 guided trajectories, then reselection of the 5 lowest-loss ones.
+
+```bash
+S=experiments/synthetic/slurm
+ARCH=diffusion BATCHES=100000 UNITS=256 BLOCKS=4 OUTD=runs/night/x10_y1/models/d256 \
+  sbatch --job-name=tr_d256 --export=ALL $S/slurm_train_sampler.sh
+NAME=D3_ref100_n3000 SAMPLER=runs/night/x10_y1/models/d256/model_conditional.pt \
+  EXTRA="--n-restarts 30 --guide-grad zo --refine-keep-best --refine-steps 100 --refine-n-cond 3000 \
+         --select-top 5 --select-n 2000 --select-repeats 5" \
+  sbatch --array=0-4 --job-name=D3 --export=ALL $S/slurm_search.sh
+python experiments/synthetic/pipeline/summarize_runs.py --runs-dir runs/night/x10_y1 --data runs/table1v2/x10_y1/data.pt
+```
+
+The analysis of why the Table 1 configuration fails here is in Section 13 of `optimization_notes.pdf`
+(paper repository).
+
 ## Research diagnostics (not in the paper)
 
 All of these use the Table 1 networks and flags. The usage line is at the top of each script.
@@ -190,6 +217,9 @@ All of these use the Table 1 networks and flags. The usage line is at the top of
 | `slurm/slurm_xt_vs_noise.sh` | `diag_xT_vs_noise.py`: the start `x_T` against the guidance noise at (10, 1) |
 | `pipeline/diag_trajectories.py` | per-trajectory TV and best-of-k statistics from result JSONs |
 | `pipeline/diag_sampler_at_xstar.py` | a trained sampler at `x*`: TV to `G`, and the loss at `x*` against the loss at the end points |
+| `pipeline/summarize_runs.py` | per-variant summary of `<variant>_s<seed>.json` result files |
+| `pipeline/check_sampler_accuracy.py` | TV of trained samplers to the exact conditional at `x*` and at random `x` (dim Y = 1) |
+| `slurm/slurm_search.sh`, `slurm/slurm_train_sampler.sh` | one search variant over seeds; train one network on fresh mixture draws |
 
 ## `reference/`
 
