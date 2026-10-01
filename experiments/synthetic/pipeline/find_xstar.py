@@ -179,6 +179,9 @@ def parse_args():
                    help="re-estimate the final loss of the best K trajectories with --select-n samples before choosing (0: off)")
     g.add_argument("--select-n", type=int, default=2000, help="--select-top: conditional samples per re-estimate")
     g.add_argument("--select-repeats", type=int, default=5, help="--select-top: independent re-estimates averaged")
+    g.add_argument("--select-samplers", nargs="*", default=[],
+                   help="--select-top: extra conditional-sampler checkpoints; the reselection loss is averaged over "
+                        "--sampler and these, so errors of independently trained samplers partly cancel")
     g = p.add_argument_group("inner estimator")
     g.add_argument("--n-cond", type=int, default=250)
     g.add_argument("--n-target", type=int, default=None)
@@ -357,6 +360,14 @@ def main():
             rec["refine"] = {k: (v.tolist() if torch.is_tensor(v) else v) for k, v in res["refine"].items()}
         return rec, cfg
 
+    extra_samplers = [load_model(pth, dev) for pth in args.select_samplers]
+
+    def sel_samplers(cfg_sel):
+        """The main sampler with its config, then each extra sampler with condition_on_slice set for its type."""
+        yield sampler, cfg_sel
+        for s_, arch_ in extra_samplers:
+            yield s_, dataclasses.replace(cfg_sel, condition_on_slice=(arch_ == "diffusion"))
+
     def reselect(runs, cfg):
         """--select-top K: fresh loss estimate with select_n samples for the K best, then the minimum."""
         if not args.select_top or len(runs) <= 1:
@@ -365,7 +376,8 @@ def main():
         cfg_sel = dataclasses.replace(cfg, final_n_cond=args.select_n)
         for q in cand:
             x = torch.tensor(q["x_hat"], device=dev).view(1, -1)
-            q["select_loss"] = float(sum(_final_loss(sampler, loss_fn, cfg_sel, x) for _ in range(args.select_repeats)) / args.select_repeats)
+            q["select_loss"] = float(sum(_final_loss(s_, loss_fn, c_, x) for s_, c_ in sel_samplers(cfg_sel)
+                                         for _ in range(args.select_repeats)) / (args.select_repeats * (1 + len(extra_samplers))))
         return min(cand, key=lambda q: q["select_loss"])
 
     def screened_attempt(a):
