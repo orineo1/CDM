@@ -88,11 +88,42 @@ def cmd_metrics(a):
     write_table(runs, os.path.join(a.out, "results_table.md"))
 
 
+def cmd_table(a):
+    write_table(json.load(open(os.path.join(a.out, "per_run.json"))), os.path.join(a.out, "results_table.md"))
+
+
+def best_of_starts(runs):
+    """Per target, the start whose returned eps has the lowest surrogate loss (what a user running all
+    starts would pick); its time is the sum over the starts."""
+    out = []
+    for fam in sorted({r["family"] for r in runs if "start" in r}):
+        by_t = {}
+        for r in runs:
+            if r["family"] == fam and "start" in r:
+                by_t.setdefault(r["target_id"], []).append(r)
+        for tid, rs in sorted(by_t.items()):
+            b = dict(min(rs, key=lambda q: q["surrogate_loss"]))
+            name = f"{fam}, best of {len(rs)} starts"
+            b.update({"method": name, "family": name, "time_s": sum(q["time_s"] for q in rs)})
+            del b["start"]
+            out.append(b)
+    return out
+
+
+def strict(r):
+    """success and, for multi-basin targets, mean |dF error| <= 1 k_BT (catches basins that keep a few
+    tenths of a percent of their mass, which the 0.5% rule still counts as populated)."""
+    return r["success"] and (not r["multi_basin"] or r["df_mae"] is None or r["df_mae"] <= 1.0)
+
+
 def summarize(rs):
     df = [r["df_median_abs_error"] for r in rs if r["multi_basin"] and r["df_median_abs_error"] is not None]
     return {"n": len(rs), "success": np.mean([r["success"] for r in rs]),
             "n_fail": int(sum(not r["success"] for r in rs)),
+            "strict": np.mean([strict(r) for r in rs]),
             "df_med": np.median(df) if df else float("nan"), "n_multi": len(df),
+            "df_mean": np.mean(df) if df else float("nan"),
+            "df_le03": np.mean([d <= 0.3 for d in df]) if df else float("nan"),
             "kl_med": np.median([r["kl"] for r in rs]), "kl_mean": np.mean([r["kl"] for r in rs]),
             "tv_med": np.median([r["tv_basins"] for r in rs]),
             "eps_err_med": np.median([r["eps_err"] for r in rs]),
@@ -100,6 +131,7 @@ def summarize(rs):
 
 
 def write_table(runs, path):
+    runs = runs + best_of_starts(runs)
     order = []
     for r in runs:
         if r["method"] not in order:
@@ -108,17 +140,19 @@ def write_table(runs, path):
     for r in runs:
         if r["family"] not in fams:
             fams.append(r["family"])
-    lines = ["| method | runs | success | failures | median dF err (k_BT) | median KDE-KL | mean KDE-KL | median basin TV | median abs(eps_hat - eps*) | time / run (s), median (mean) |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| method | runs | success | success, mean dF err <= 1 k_BT | median dF err (k_BT) | mean dF err | dF err <= 0.3 | median KDE-KL | mean KDE-KL | median basin TV | median abs(eps_hat - eps*) | time / run (s), median (mean) |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
 
     def row(name, rs):
         s = summarize(rs)
-        lines.append(f"| {name} | {s['n']} | {100 * s['success']:.1f}% | {s['n_fail']} | {s['df_med']:.3f} (n={s['n_multi']}) | "
+        lines.append(f"| {name} | {s['n']} | {100 * s['success']:.1f}% | {100 * s['strict']:.1f}% | {s['df_med']:.3f} (n={s['n_multi']}) | {s['df_mean']:.3f} | {100 * s['df_le03']:.0f}% | "
                      f"{s['kl_med']:.3f} | {s['kl_mean']:.3f} | {s['tv_med']:.3f} | {s['eps_err_med']:.3f} | {s['time_med']:.1f} ({s['time_mean']:.1f}) |")
     for f in fams:
         rs = [r for r in runs if r["family"] == f]
         row(f"**{f}** (all)", rs)
         subs = [m for m in order if m != f and any(r["method"] == m and r["family"] == f for r in runs)]
+        if len(subs) == 1:      # a single variant is the family row itself
+            subs = []
         for m in subs:
             row(f"&nbsp;&nbsp;{m}", [r for r in runs if r["method"] == m])
     open(path, "w").write("\n".join(lines) + "\n")
@@ -138,8 +172,10 @@ def main():
     m.add_argument("--targets-ens", required=True)
     m.add_argument("--kl-n", type=int, default=4096)
     m.add_argument("--out", required=True)
+    t = sub.add_parser("table", help="rewrite results_table.md from <out>/per_run.json")
+    t.add_argument("--out", required=True)
     a = p.parse_args()
-    {"collect": cmd_collect, "metrics": cmd_metrics}[a.cmd](a)
+    {"collect": cmd_collect, "metrics": cmd_metrics, "table": cmd_table}[a.cmd](a)
 
 
 if __name__ == "__main__":

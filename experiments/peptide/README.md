@@ -76,6 +76,37 @@ in (theta123, theta234)) and their `loss.kde_kl_target_to_generated` (bandwidth 
 4096 frames). Success = no target basin with mass > 5% is below 0.5% at eps_hat. dF error = their per-run
 median |dF_hat - dF| (k_BT, cap 6) over the non-reference active basins, multi-basin targets only.
 
-## Results
+## Results (40 held-out targets, 2026-10-01)
 
-See `results/results_table.md` (per-run values in `results/per_run.json`).
+`results/results_table.md` (written by step 4; `evaluate.py table --out experiments/peptide/results`
+rewrites it from `results/per_run.json`). All metrics on fresh 64-replica simulations at eps_hat.
+
+| method | runs | success | success, mean dF err <= 1 k_BT | median dF err (k_BT) | mean dF err | dF err <= 0.3 | median KDE-KL | mean KDE-KL | median basin TV | median abs(eps_hat - eps*) | time / run (s), median (mean) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **MLGD-F** (all) | 40 | 100.0% | 100.0% | 0.163 (n=26) | 0.189 | 73% | 0.031 | 0.042 | 0.018 | 0.190 | 116.5 (116.7) |
+| **MLGD** (all) | 40 | 100.0% | 100.0% | 0.053 (n=26) | 0.077 | 100% | 0.017 | 0.029 | 0.011 | 0.080 | 552.3 (552.8) |
+| **GB-FESO** (all) | 160 | 98.8% | 96.9% | 0.095 (n=104) | 0.357 | 85% | 0.022 | 0.130 | 0.013 | 0.200 | 96.8 (100.9) |
+| &nbsp;&nbsp;GB-FESO [low-low] | 40 | 100.0% | 100.0% | 0.089 (n=26) | 0.121 | 92% | 0.017 | 0.026 | 0.014 | 0.108 | 96.9 (103.5) |
+| &nbsp;&nbsp;GB-FESO [low-high] | 40 | 95.0% | 87.5% | 0.166 (n=26) | 1.058 | 69% | 0.033 | 0.433 | 0.018 | 0.286 | 96.7 (106.4) |
+| &nbsp;&nbsp;GB-FESO [high-low] | 40 | 100.0% | 100.0% | 0.084 (n=26) | 0.124 | 92% | 0.022 | 0.031 | 0.011 | 0.156 | 96.7 (96.8) |
+| &nbsp;&nbsp;GB-FESO [high-high] | 40 | 100.0% | 100.0% | 0.072 (n=26) | 0.126 | 85% | 0.024 | 0.029 | 0.012 | 0.219 | 96.9 (96.9) |
+| **grid** (all) | 40 | 100.0% | 100.0% | 0.106 (n=26) | 0.127 | 92% | 0.019 | 0.028 | 0.012 | 0.182 | 62.2 (62.8) |
+| **oracle** (all) | 40 | 100.0% | 100.0% | 0.041 (n=26) | 0.052 | 100% | 0.013 | 0.027 | 0.006 | 0.000 | 0.0 (0.0) |
+| **GB-FESO, best of 4 starts** (all) | 40 | 100.0% | 100.0% | 0.124 (n=26) | 0.127 | 92% | 0.018 | 0.025 | 0.011 | 0.136 | 390.4 (403.7) |
+
+Reading the table:
+- The oracle row is the noise floor: two independent 64-replica ensembles at the same eps differ by a
+  median dF of 0.041 k_BT and a median KDE-KL of 0.013.
+- MLGD is the most accurate: median dF error 0.053 k_BT (mean 0.077, every multi-basin target within
+  0.3 k_BT), median |eps_hat - eps*| 0.08, against 0.072-0.166 k_BT (mean 0.12-1.06) and 0.11-0.29 for
+  GB-FESO per start. Paired per target, MLGD has the smaller dF error than GB-FESO on 16-18 of 26
+  multi-basin targets (per start) and the smaller eps error on 26-31 of 40.
+- GB-FESO fails only from the low-high start (eps = (0.25, 1.4)): on 5 of 40 targets it ends at the
+  eps2 ceiling 1.54 with the target's second basin almost empty (dF errors 2.7-6 k_BT); 2 of these count
+  as failures under their 0.5% rule, all 5 under the dF <= 1 k_BT rule. Phase 1 ran on 4 of 160 runs.
+- The success rate under their definition is 99-100% for every method: on our simulated data the
+  benchmark does not separate the methods by success, only by dF / eps accuracy.
+- Cost: one MLGD run (10 restarts + refinement + reselection) takes 552 s on an L4, 5.7 times one
+  GB-FESO run (97 s) and 1.4 times GB-FESO over its four starts (390 s, best start by surrogate KL).
+  MLGD-F (consistency model) is fast (117 s) but less accurate than the 30 x 30 grid on our diffusion
+  surrogate (62 s): its few-step sampler is the limiting factor here.
