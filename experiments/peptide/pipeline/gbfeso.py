@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common   # noqa: E402,F401  (puts GB-FESO on the path, aliases their renamed classes)
 import dataset as gb_dataset   # noqa: E402
 import train as gb_train   # noqa: E402
+from simulate import EPS_BOX   # noqa: E402
 
 STARTS = {"low-low": (0.25, 0.25), "low-high": (0.25, 1.4), "high-low": (1.4, 0.25), "high-high": (1.4, 1.4)}
 
@@ -107,7 +108,11 @@ def cmd_opt(a):
         for sname in starts:
             if (tid, sname) in done:
                 continue
-            e1, e2 = STARTS[sname]
+            if sname in STARTS:
+                e1, e2 = STARTS[sname]
+            else:    # "rand<k>": uniform in the box, fixed per (target, k)
+                gr = torch.Generator().manual_seed(1000 * tid + int(sname[4:]))
+                e1, e2 = (EPS_BOX[0] + (EPS_BOX[1] - EPS_BOX[0]) * torch.rand(2, generator=gr)).tolist()
             torch.manual_seed(a.seed * 100003 + tid * 7 + starts.index(sname))
             oc = run_feso.EpsilonOptConfig(
                 traj_id=tid, optimize_eps="both", kde_bandwidth=a.kde_bandwidth, sample_steps=a.sample_steps,
@@ -132,7 +137,7 @@ def cmd_opt(a):
             records.append(rec)
             print(f"[gbfeso] target {tid} start {sname}: eps*={[round(v, 3) for v in rec['eps_star']]} "
                   f"eps_hat={[round(v, 3) for v in rec['eps_hat']]} KL={rec['surrogate_loss']:.4f} ({dt:.1f}s)", flush=True)
-            json.dump({"method": "GB-FESO", "args": vars(a), "runs": records}, open(a.out, "w"))
+            json.dump({"method": a.method_name, "args": vars(a), "runs": records}, open(a.out, "w"))
     print(f"[gbfeso] wrote {a.out}")
 
 
@@ -149,7 +154,9 @@ def main():
     o.add_argument("--ckpt", required=True)
     o.add_argument("--targets-ens", required=True)
     o.add_argument("--target-ids", default="all")
-    o.add_argument("--starts", default="low-low,low-high,high-low,high-high")
+    o.add_argument("--starts", default="low-low,low-high,high-low,high-high",
+                   help="comma-separated: low-low, low-high, high-low, high-high, or rand<k> (uniform in the box)")
+    o.add_argument("--method-name", default="GB-FESO", help="name of this variant in the results table")
     o.add_argument("--steps", type=int, default=201)
     o.add_argument("--lr", type=float, default=5e-2)
     o.add_argument("--lr-refine", type=float, default=5e-2)

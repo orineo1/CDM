@@ -40,12 +40,12 @@ def load_runs(paths):
             d = json.load(open(f))
             if "runs" in d:
                 for r in d["runs"]:
-                    method = d["method"] + (f" [{r['start']}]" if "start" in r else "")
+                    method = d["method"] + (f" [{r['start']}]" if "start" in r else "")   # GB-FESO: one row per start
                     runs.append({"method": method, "family": d["method"], **{k: r[k] for k in r if k not in ("loss_trace",)}})
-            else:    # search_mog output: one target per file, named <method>_t<id>.json
-                tid = int(os.path.basename(f).split("_t")[-1].split(".")[0])
-                b = d["best"]
-                runs.append({"method": d["method"], "family": d["method"], "target_id": tid,
+            else:    # search_peptide output: one target per file, named <method><tag>_t<id>.json
+                stem, tid = os.path.basename(f)[:-len(".json")].rsplit("_t", 1)
+                tid, b = int(tid), d["best"]
+                runs.append({"method": stem, "family": stem, "target_id": tid,
                              "x_hat_std": b["x_hat"], "eps_hat": (np.array(b["x_hat"]) * common.X_STD + common.X_MEAN).tolist(),
                              "surrogate_loss": b.get("select_loss", b["final_loss"]),
                              "time_s": d["summary"]["time_s"]["mean"]})
@@ -101,12 +101,16 @@ def best_of_starts(runs):
         for r in runs:
             if r["family"] == fam and "start" in r:
                 by_t.setdefault(r["target_id"], []).append(r)
-        for tid, rs in sorted(by_t.items()):
-            b = dict(min(rs, key=lambda q: q["surrogate_loss"]))
-            name = f"{fam}, best of {len(rs)} starts"
-            b.update({"method": name, "family": name, "time_s": sum(q["time_s"] for q in rs)})
-            del b["start"]
-            out.append(b)
+        for tid, rs_all in sorted(by_t.items()):
+            corners = [q for q in rs_all if not q["start"].startswith("rand")]
+            # with random starts present, report both the four corners and all starts
+            for rs, what in ([(corners, "corner starts"), (rs_all, "starts")] if len(corners) < len(rs_all)
+                             else [(rs_all, "starts")]):
+                b = dict(min(rs, key=lambda q: q["surrogate_loss"]))
+                name = f"{fam}, best of {len(rs)} {what}"
+                b.update({"method": name, "family": name, "time_s": sum(q["time_s"] for q in rs)})
+                del b["start"]
+                out.append(b)
     return out
 
 
