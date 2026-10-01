@@ -31,5 +31,5 @@ model check and one JSON per method; `outputs/table1.{json,md,tex}` is the table
 
 ## Reference
 
-`results/PUBLISHED.md` has the paper's numbers for this experiment; `results/table1_v3.md`
-is the table as produced by the run behind the paper (`PROVENANCE.md` says where it came from).
+`results/PUBLISHED.md` has the paper's numbers for this experiment; `results/table1.md` is
+the table as produced by the run (same file `run.sh full` writes to `outputs/`).

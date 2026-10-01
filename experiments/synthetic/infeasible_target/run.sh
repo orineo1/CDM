@@ -2,8 +2,7 @@
 # Table 9 + Figure 4: infeasible target (no x*).
 #
 #   bash run.sh smoke   CPU, ~1 min. Proves the path runs. NOT a reproduction.
-#   bash run.sh full    the published configuration (see config/nonstar_params.txt
-#                       and PROVENANCE.md for where every number comes from).
+#   bash run.sh full    the published configuration (see config/nonstar_params.txt).
 #
 # Every flag is literal in this file.
 set -euo pipefail

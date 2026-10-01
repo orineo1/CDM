@@ -16,6 +16,6 @@
 
 **(10, 1)**, paper.txt:910-911: the sliced-Wasserstein loss gives **0.81 +- 0.27**.
 
-Transcribed from `paper.txt`. Alongside: `table1_w1_5x1.md`, imported from
-`orineo1/GlobalConditional` `master` `9ddf570`. The projection count is not given in the
+Transcribed from `paper.txt`. Alongside: `table1_w1_5x1.md`, the output of the
+run. The projection count is not given in the
 text, so `run.sh full` leaves `--swd-projections` at the library default.

@@ -11,9 +11,7 @@ no code of their own. `configs/mog/` holds the paper's fixed mixture settings an
 `slurm/` the cluster templates.
 
 **Basis.** `orineo1/conditional-matching-paper` is the specification: it says what each
-experiment is, with which constants and seeds. Each directory's `PROVENANCE.md` names the
-branch, commit and path it was read from, or records that no counterpart exists there.
-The nine-scenario MLGD/MLGD-F/PMLGD/PMLGD-F grid, the particle methods and the twisted-SMC
+experiment is, with which constants and seeds. The nine-scenario MLGD/MLGD-F/PMLGD/PMLGD-F grid, the particle methods and the twisted-SMC
 correction have **no counterpart upstream** and are GlobalConditional-native.
 
 | directory | paper artifact (ICLR numbering; AISTATS will renumber) | producer |
@@ -53,12 +51,9 @@ bash <dir>/run.sh full    # the paper's configuration; most arms want a GPU
 The reduced configuration exercises the script chain end to end; its output is not a
 result. Per-experiment runtimes and GPU requirements are in each `README.md`.
 
-## The documents at this level
-
-- `REFERENCE-ARTIFACTS.md` — which reference artifacts for these experiments are in the
-  repository and which are not.
+## Results
 
 Each experiment's `results/PUBLISHED.md` carries the paper's numbers for that experiment,
-transcribed with their location in the source. Other files in `results/` are artifacts
-imported from a named commit, listed in that directory's `PROVENANCE.md`. `outputs/` is
+transcribed with their location in the source. Other files in `results/` are the outputs of
+the run reported in the repository (the files `run.sh full` writes to `outputs/`). `outputs/` is
 gitignored and ships empty.

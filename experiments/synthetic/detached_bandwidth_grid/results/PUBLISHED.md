@@ -16,5 +16,4 @@
 The paper states that the Table 1 runs used the non-detached bandwidth, and that detached
 is now the library default -- so `--extra=--bandwidth-grad` selects the Table 1 setting.
 
-Transcribed from `paper.txt`. Alongside: `table1_detach.md`, imported from
-`orineo1/GlobalConditional` `master` `9ddf570`.
+Transcribed from `paper.txt`. Alongside: `table1_detach.md`, the output of the run.

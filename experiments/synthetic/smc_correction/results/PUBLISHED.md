@@ -18,7 +18,7 @@ TV of the histogram to Q_beta:
 
 beta = 0's 0.03 is the histogram noise floor.
 
-Transcribed from `paper.txt`. Alongside, imported from `orineo1/GlobalConditional`
-`master` `9ddf570`: `fig_smc_hard.json`, `fig_smc_hard_cpu.json`, and the
-`--max-shift`/`--ess-frac` sweep `ms{0.25_ess1.0, 0.5_ess0.5, 0.5_ess1.0, 1.0_ess1.0}.json`
-(from `results/smc_sweep/`). `ms0.25_ess1.0` is the published configuration.
+Transcribed from `paper.txt`. Alongside: `fig_smc_hard.json` (the output of `run.sh full`),
+`fig_smc_hard_cpu.json`, and the `--max-shift`/`--ess-frac` sweep
+`ms{0.25_ess1.0, 0.5_ess0.5, 0.5_ess1.0, 1.0_ess1.0}.json`; `ms0.25_ess1.0` is the published
+configuration.

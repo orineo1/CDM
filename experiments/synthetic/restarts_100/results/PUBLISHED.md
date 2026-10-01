@@ -14,5 +14,4 @@
 | MLGD-X (oracle) | 0.39 +- 0.10 |
 | MLGD-F          | 0.52 +- 0.12 |
 
-Transcribed from `paper.txt`. Alongside: `table1_10x1_r100.md`, imported from
-`orineo1/GlobalConditional` `master` `9ddf570`.
+Transcribed from `paper.txt`. Alongside: `table1_10x1_r100.md`, the output of the run.

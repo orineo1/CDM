@@ -22,5 +22,4 @@ MLGD-F, Table 1 value -> long -> wide:
 MLGD "stays within noise of Table 1".
 
 Transcribed from `paper.txt`. Alongside: `table1_long.md`, `table1_wide.md` and eight
-`checks__{long,wide}_x{5,10}_y{5,10}.json`, imported from `orineo1/GlobalConditional`
-`master` `9ddf570`.
+`checks__{long,wide}_x{5,10}_y{5,10}.json`, the outputs of the run.

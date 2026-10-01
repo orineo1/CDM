@@ -18,5 +18,4 @@
 
 Transcribed from `paper.txt`.
 
-Alongside: `checks__x5_y5.json`, `checks__x5_y10.json`, `checks__x10_y5.json`,
-`checks__x10_y10.json`, imported from `orineo1/GlobalConditional` `master` `9ddf570`.
+Alongside: `checks__<scenario>.json`, the output of `check_models.py` for each scenario.

@@ -44,4 +44,4 @@ in the job log (`best of 25 ... k/25 restarts in the x* basin`). The twisted-SMC
 ## Reference
 
 `results/PUBLISHED.md` — the paper's numbers for this experiment, transcribed.
-See `PROVENANCE.md` for anything else in `results/`.
+Other files in `results/` are the outputs of the run reported in the paper's repository.
