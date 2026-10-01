@@ -12,7 +12,7 @@ conditional as sampler) and `exactloss` (closed-form MMD).
 | `pipeline/` | the Python entry points (below); every script has `--help` |
 | `slurm/` | SLURM job scripts for the HUJI cluster, and `cluster_setup.txt` |
 | `configs/mog/` | fixed mixture parameter files (`generate_data.py --params-file`) |
-| `reference/` | outputs of the runs behind the paper, imported from `orineo1/GlobalConditional` |
+| `reference/` | outputs of the runs behind the paper, imported from `orineo1/GlobalConditional` (this repository before it was renamed `orineo1/CDM`) |
 | `results/` | a full rerun of the paper's synthetic experiments with the current code (detached bandwidth) |
 
 Run everything from the repository root after `pip install -e .` (or with

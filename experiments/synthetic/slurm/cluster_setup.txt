@@ -1,5 +1,5 @@
 ================================================================================
- GlobalConditional - University Cluster Setup Instructions
+ CDM - University Cluster Setup Instructions
 ================================================================================
 
 PREREQUISITES
@@ -16,8 +16,8 @@ PREREQUISITES
 2. Clone the repo
 --------------------------------------------------------------------------------
 
-  git clone <your-repo-url> ~/GlobalConditional
-  cd ~/GlobalConditional
+  git clone https://github.com/orineo1/CDM.git ~/CDM
+  cd ~/CDM
 
 --------------------------------------------------------------------------------
 3. Load cluster modules
@@ -67,7 +67,7 @@ PREREQUISITES
 6. Quick test (interactive / login node, CPU only)
 --------------------------------------------------------------------------------
 
-  cd ~/GlobalConditional
+  cd ~/CDM
   source CDM_venv/bin/activate
   PYTHONPATH=$PWD python experiments/synthetic/pipeline/fig1_toy_example.py --quick --setting hard \
       --device cpu --ckpt-dir checkpoints/smoke --out results/smoke_fig1_hard.png
@@ -79,7 +79,7 @@ PREREQUISITES
 7. Submit a GPU job via SLURM
 --------------------------------------------------------------------------------
 
-  Save the following as job.sh in ~/GlobalConditional:
+  Save the following as job.sh in ~/CDM:
 
   ---- cut here ----
   #!/bin/bash
@@ -94,7 +94,7 @@ PREREQUISITES
   module load python/3.10
   module load cuda/12.1
   source /sci/labs/orzuk/orzuk/venvs/CDM_venv/bin/activate
-  cd ~/GlobalConditional
+  cd ~/CDM
 
   PYTHONPATH=$PWD python experiments/synthetic/pipeline/fig1_toy_example.py --setting hard --device cuda
   ---- cut here ----
@@ -130,7 +130,7 @@ PREREQUISITES
   module load python/3.10
   module load cuda/12.1
   source /sci/labs/orzuk/orzuk/venvs/CDM_venv/bin/activate
-  cd ~/GlobalConditional
+  cd ~/CDM
 
   PYTHONPATH=$PWD python experiments/synthetic/pipeline/fig1_toy_example.py --setting hard --device cuda
   ---- cut here ----
@@ -143,15 +143,15 @@ PREREQUISITES
 --------------------------------------------------------------------------------
 
   module load anaconda3          # or miniconda, name varies
-  conda create -n GlobalConditional python=3.10 -y
-  conda activate GlobalConditional
+  conda create -n CDM python=3.10 -y
+  conda activate CDM
   pip install torch numpy scipy tqdm POT scikit-learn matplotlib pandas
 
   Then in job scripts, replace the venv activation line with:
 
-    source activate GlobalConditional
+    source activate CDM
     # or
-    conda activate GlobalConditional
+    conda activate CDM
 
 --------------------------------------------------------------------------------
 10. The paper's runs
