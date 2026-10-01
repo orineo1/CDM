@@ -13,10 +13,10 @@ conditional as sampler) and `exactloss` (closed-form MMD).
 | `slurm/` | SLURM job scripts for the HUJI cluster, and `cluster_setup.txt` |
 | `configs/mog/` | fixed mixture parameter files (`generate_data.py --params-file`) |
 | `reference/` | outputs of the runs behind the paper, imported from `orineo1/GlobalConditional` |
-| `reproduction/` | a full rerun of the paper's synthetic experiments with the current code (detached bandwidth) |
+| `results/` | a full rerun of the paper's synthetic experiments with the current code (detached bandwidth) |
 
 Run everything from the repository root after `pip install -e .` (or with
-`PYTHONPATH=$PWD`). Outputs go to `runs/`, `results/` and `checkpoints/`, which are
+`PYTHONPATH=$PWD`). Outputs go to `runs/`, `results/` and `checkpoints/` at the repository root, which are
 git-ignored.
 
 ## `pipeline/`
@@ -208,7 +208,7 @@ Imported from `orineo1/GlobalConditional` `master` `9ddf570` (`results/`), excep
 | `smc/fig_smc_hard_cpu.json` | an earlier CPU run of 2,000 particles, from before the script recorded `--n-repeats` and `--max-shift` |
 | `smc/sweep/ms*_ess*.json` | the `--max-shift` / `--ess-frac` sweep |
 
-## `reproduction/`
+## `results/`
 
 A rerun of the synthetic experiments on NVIDIA L40S GPUs with the code of this repository
 (`find_xstar.py` and the losses as on `master` at `602c09a`; later commits add options that
@@ -216,8 +216,8 @@ are off by default). Every run uses the library default, a **detached** RBF band
 `--bandwidth-grad`), so the grid corresponds to the paper's detached rerun
 (`reference/table1_detach.md`), not to the published Table 1 run.
 
-`reproduction/run.sh` reruns all of it with the exact flags, step by step or at once
-(`bash experiments/synthetic/reproduction/run.sh all`, one GPU, about two days; the steps are
+`results/run.sh` reruns all of it with the exact flags, step by step or at once
+(`bash experiments/synthetic/results/run.sh all`, one GPU, about two days; the steps are
 `grid`, `checks`, `ablations`, `nonstar`, `fig1`, `smc`). It writes to the git-ignored
 `runs/reproduction/` and `results/reproduction/`.
 

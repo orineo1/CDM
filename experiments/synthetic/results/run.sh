@@ -2,14 +2,14 @@
 # Reruns the synthetic experiments whose outputs are in this folder, with the exact flags used.
 # Run from the repository root, on a GPU node:
 #
-#   bash experiments/synthetic/reproduction/run.sh all          # everything below, in order
-#   bash experiments/synthetic/reproduction/run.sh grid         # one step: grid | checks | ablations | nonstar | fig1 | smc
-#   SETTINGS="5x5" bash experiments/synthetic/reproduction/run.sh grid    # one scenario
+#   bash experiments/synthetic/results/run.sh all          # everything below, in order
+#   bash experiments/synthetic/results/run.sh grid         # one step: grid | checks | ablations | nonstar | fig1 | smc
+#   SETTINGS="5x5" bash experiments/synthetic/results/run.sh grid    # one scenario
 #
 # Detached RBF bandwidth throughout (the library default; no --bandwidth-grad). Outputs go to
 # runs/reproduction/ (networks, per-method JSONs) and results/reproduction/ (tables, figures),
 # both git-ignored. Every step whose output exists is skipped, so a killed run can be resumed.
-# On SLURM: sbatch --gres=gpu:1 --time=3-00:00:00 --wrap="bash experiments/synthetic/reproduction/run.sh all"
+# On SLURM: sbatch --gres=gpu:1 --time=3-00:00:00 --wrap="bash experiments/synthetic/results/run.sh all"
 set -euo pipefail
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 [ -f experiments/synthetic/pipeline/make_table1.py ] || { echo "run from the repository root" >&2; exit 1; }

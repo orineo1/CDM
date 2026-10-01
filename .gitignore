@@ -11,6 +11,7 @@ venv/
 results/
 # ...except the committed results of the experiments (written by export_results.py)
 !experiments/*/*/results/
+!experiments/*/results/
 
 # Model checkpoints (tracked deliberately only where small)
 *.ckpt
