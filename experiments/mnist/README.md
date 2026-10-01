@@ -16,6 +16,19 @@ which digit was found.
 | `checkpoints/` | where the networks and the classifier are placed; not in git (see its README) |
 | `export_results.py` | copies a finished run into the committed `results/` folders |
 
+## The search (shared by all experiments)
+
+Every experiment runs the same algorithm, `cdm.guidance.search.search`: R independent guided
+trajectories (`--n-restarts`), each optionally refined after guidance (`--refine-steps`,
+`--refine-n-cond`, `--refine-keep-best`), then selection of one design: the smallest final loss, or
+with `--select-top K` the K smallest re-scored with `--select-n` fresh conditional samples
+(`--select-repeats`, and `--select-samplers` to average over several trained samplers where they
+exist). The gradient in the guided steps is backpropagation through the conditional sampler
+(`--guide-grad pathwise`, default) or zeroth-order central differences of the loss
+(`--guide-grad zo`; 2 dim(x) + 1 loss values per step, so for low-dimensional designs). The
+driver of each experiment (`search_<dataset>.py`) only loads that dataset's models and target and
+builds its per-trajectory configuration; the search flags are the same in every driver.
+
 ## Results
 
 The results of the last full run are committed and can be read without running

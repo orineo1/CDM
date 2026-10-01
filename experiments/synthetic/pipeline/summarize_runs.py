@@ -1,4 +1,4 @@
-"""Summarize find_xstar result files by variant: per-seed selected TV, share of good trajectories, time.
+"""Summarize search_mog result files by variant: per-seed selected TV, share of good trajectories, time.
 
 Files are grouped by name prefix: <variant>_s<seed>.json. For each variant it prints the exact TV of the
 returned design per seed, its mean and maximum, how many seeds end below TV 0.1, the share of trajectories

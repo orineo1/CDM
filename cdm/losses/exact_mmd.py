@@ -5,7 +5,7 @@ For Y ~ N(a, A), Y' ~ N(b, B) independent and k_h(u) = exp(-|u|^2 / h):
     E k_h(Y - Y') = det(I + 2 (A + B) / h)^(-1/2) exp(-1/2 (a - b)^T (A + B + h/2 I)^(-1) (a - b)).
 The loss is differentiable in x through the component means, the conditional covariances and the
 mixture weights pi_k(x); a pathwise estimator through samples only sees the first. Used as an
-oracle ("--sampler exactloss" in find_xstar.py) to test whether the sample-based gradient is the
+oracle ("--sampler exactloss" in search_mog.py) to test whether the sample-based gradient is the
 bottleneck of the search.
 """
 import torch

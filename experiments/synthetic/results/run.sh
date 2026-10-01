@@ -65,7 +65,7 @@ nonstar() {     # tab:nonstar_results: point-mass target, MLGD-F, 25 restarts pe
   mkdir -p "$OUT/nonstar"
   for arm in "MMD_n250 mmd 250" "L2_n250 l2 250" "L2_n1 l2 1"; do
     set -- $arm
-    python $P/find_xstar.py --prior "$d/models/uncond/model_unconditional.pt" \
+    python $P/search_mog.py --prior "$d/models/uncond/model_unconditional.pt" \
       --sampler "$d/models/cm/model_conditional.pt" --target "$d/data.pt" \
       --algo lgd --n-restarts 1 --n-attempts 25 --n-mc 1 --init zeros \
       --guidance-optim adam --step-size 0.05 --refine-steps 0 --loss "$2" --n-cond "$3" \

@@ -1,5 +1,5 @@
 #!/bin/bash
-# One find_xstar variant at (10, 1) over seeds 42, 43, ... (one array task per seed), Table 1 flags as defaults;
+# One search_mog variant at (10, 1) over seeds 42, 43, ... (one array task per seed), Table 1 flags as defaults;
 # EXTRA overrides them (argparse keeps the last value). Outputs <OUTDIR>/<NAME>_s<seed>.json.
 #   NAME=best SAMPLER=runs/night/x10_y1/models/d256/model_conditional.pt \
 #   EXTRA="--n-restarts 30 --guide-grad zo --refine-keep-best --refine-steps 100 --refine-n-cond 3000 --select-top 5" \
@@ -20,7 +20,7 @@ D=${D:-runs/table1v2/x10_y1}
 S=$((42 + ${SLURM_ARRAY_TASK_ID:-0}))
 OUTDIR=${OUTDIR:-runs/night/x10_y1}; mkdir -p "$OUTDIR"
 echo "$NAME seed $S sampler $SAMPLER extra: ${EXTRA:-} ($(hostname) $(date))"
-python experiments/synthetic/pipeline/find_xstar.py --prior ${PRIOR:-$D/models/uncond/model_unconditional.pt} \
+python experiments/synthetic/pipeline/search_mog.py --prior ${PRIOR:-$D/models/uncond/model_unconditional.pt} \
   --sampler "$SAMPLER" --target $D/data.pt --algo lgd --n-attempts 1 --n-cond 250 \
   --refine-lr 0.02 --refine-n-cond 1000 --guidance-optim adam --step-size 0.05 \
   --seed $S --device cuda --out "$OUTDIR/${NAME}_s$S.json" ${EXTRA:-}

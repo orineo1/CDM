@@ -8,7 +8,7 @@ explained by x_T (between-start variance / total), the agreement of the final mi
 across guidance seeds of one start, and the step after which the dominant component of the Tweedie
 estimate x0_hat stops changing.
 
-All find_xstar flags are accepted (the same settings as the run being diagnosed), plus:
+All search_mog flags are accepted (the same settings as the run being diagnosed), plus:
   --n-xt N --n-guide G --xt-seed-base S --out results/xt_vs_noise.json
 """
 import argparse, json, os, sys, time
@@ -16,7 +16,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(__file__))
-import find_xstar as fx                                                            # noqa: E402
+import search_mog as fx                                                            # noqa: E402
 from make_table1 import _load_mixture, scale_free_distances                        # noqa: E402
 from cdm.guidance import optimize_guided                                           # noqa: E402
 from cdm.losses.exact_mmd import ExactConditionalMMD, IdentitySampler              # noqa: E402

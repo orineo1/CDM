@@ -19,16 +19,29 @@ Run everything from the repository root after `pip install -e .` (or with
 `PYTHONPATH=$PWD`). Outputs go to `runs/`, `results/` and `checkpoints/` at the repository root, which are
 git-ignored.
 
+## The search (shared by all experiments)
+
+Every experiment runs the same algorithm, `cdm.guidance.search.search`: R independent guided
+trajectories (`--n-restarts`), each optionally refined after guidance (`--refine-steps`,
+`--refine-n-cond`, `--refine-keep-best`), then selection of one design: the smallest final loss, or
+with `--select-top K` the K smallest re-scored with `--select-n` fresh conditional samples
+(`--select-repeats`, and `--select-samplers` to average over several trained samplers where they
+exist). The gradient in the guided steps is backpropagation through the conditional sampler
+(`--guide-grad pathwise`, default) or zeroth-order central differences of the loss
+(`--guide-grad zo`; 2 dim(x) + 1 loss values per step, so for low-dimensional designs). The
+driver of each experiment (`search_<dataset>.py`) only loads that dataset's models and target and
+builds its per-trajectory configuration; the search flags are the same in every driver.
+
 ## `pipeline/`
 
 | script | role |
 |---|---|
 | `generate_data.py` | draw `P(X, Y)` (random mixture `--random-mog --standardize`, or `--params-file`), define `G`, save `data.pt` |
 | `train_models.py` | train the prior `P(X)` (unconditional diffusion) and a conditional sampler `P(Y \| X)` (`--architecture diffusion` or `cm`) |
-| `find_xstar.py` | the method: prior + conditional sampler + target → `x_hat` (restarts or particles, guidance, refinement, oracles) |
+| `search_mog.py` | the method: prior + conditional sampler + target → `x_hat` (restarts or particles, guidance, refinement, oracles) |
 | `run_optimization.py` | older step 3 of the pipeline; also holds `load_model`, the checkpoint loader the other scripts import |
 | `check_models.py` | trained networks against the analytic mixture (score error, prior SWD, sampler error at `x*` and over `x`) |
-| `make_table1.py` | the grid driver: per scenario runs `generate_data`, `train_models`, `check_models`, `find_xstar`, then collects the tables |
+| `make_table1.py` | the grid driver: per scenario runs `generate_data`, `train_models`, `check_models`, `search_mog`, then collects the tables |
 | `fig1_toy_example.py` | Figure 1: the 1-D toy (`--setting hard`), its networks, the four methods and the β-sweep |
 | `fig_smc_correction.py` | twisted-SMC correction of the β-sweep (Figure 1(d)) |
 | `refine_endpoints.py`, `diag_trajectories.py`, `diag_xT_vs_noise.py`, `diag_sampler_at_xstar.py` | diagnostics of the (10, 1) cell (research, not in the paper) |
@@ -113,7 +126,7 @@ holds the `--max-shift` / `--ess-frac` sweep that chose 0.25 / 1.0. On the clust
 D=runs/table1v2/x10_y1; P=experiments/synthetic/pipeline
 python $P/train_models.py --data $D/data.pt --model conditional --architecture diffusion --fresh-samples \
     --epochs 50000 --batch-size 1024 --nunits 128 --nblocks 3 --seed 42 --device cuda --output-dir $D/models/diffusion_50k
-python $P/find_xstar.py --prior $D/models/uncond/model_unconditional.pt --sampler $D/models/diffusion_50k/model_conditional.pt \
+python $P/search_mog.py --prior $D/models/uncond/model_unconditional.pt --sampler $D/models/diffusion_50k/model_conditional.pt \
     --target $D/data.pt --algo lgd --n-restarts 10 --n-attempts 5 --n-cond 250 --guidance-optim adam --step-size 0.05 \
     --refine-steps 100 --refine-lr 0.02 --refine-n-cond 1000 --seed 42 --device cuda --out $D/MLGD_50k.json
 ```
@@ -148,7 +161,7 @@ python $P/train_models.py --data $D/data.pt --model unconditional --architecture
 python $P/train_models.py --data $D/data.pt --model conditional --architecture cm --fresh-samples \
     --epochs 20000 --batch-size 1024 --nunits 128 --nblocks 3 --seed 42 --device cuda --output-dir $D/models/cm
 for arm in "mmd 250" "l2 250" "l2 1"; do set -- $arm
-  python $P/find_xstar.py --prior $D/models/uncond/model_unconditional.pt --sampler $D/models/cm/model_conditional.pt \
+  python $P/search_mog.py --prior $D/models/uncond/model_unconditional.pt --sampler $D/models/cm/model_conditional.pt \
       --target $D/data.pt --algo lgd --n-restarts 1 --n-attempts 25 --n-mc 1 --init zeros \
       --guidance-optim adam --step-size 0.05 --refine-steps 0 --loss $1 --n-cond $2 \
       --seed 42 --device cuda --out $D/arm_$1_n$2.json
@@ -210,7 +223,7 @@ All of these use the Table 1 networks and flags. The usage line is at the top of
 
 | job | what it runs |
 |---|---|
-| `slurm/slurm_screen.sh` | `find_xstar --init screen` (screened start) on the grid, tags `_screen_refine` / `_screen_guided` |
+| `slurm/slurm_screen.sh` | `search_mog --init screen` (screened start) on the grid, tags `_screen_refine` / `_screen_guided` |
 | `slurm/slurm_zoguide.sh` | zeroth-order guidance `--guide-grad zo`: the (10, 1) exact-sampler test and the grid, tag `_zoguide` |
 | `slurm/slurm_diag_10x1.sh` | (10, 1) with the `exact` and `exactloss` oracles, 10 and 100 trajectories |
 | `slurm/slurm_refine_select.sh` | `refine_endpoints.py`: pathwise or zeroth-order refinement and reselection of the Table 1 end points at (10, 1) |
@@ -241,7 +254,7 @@ Imported from `orineo1/GlobalConditional` `master` `9ddf570` (`results/`), excep
 ## `results/`
 
 A rerun of the synthetic experiments on NVIDIA L40S GPUs with the code of this repository
-(`find_xstar.py` and the losses as on `master` at `602c09a`; later commits add options that
+(`search_mog.py` and the losses as on `master` at `602c09a`; later commits add options that
 are off by default). Every run uses the library default, a **detached** RBF bandwidth (no
 `--bandwidth-grad`), so the grid corresponds to the paper's detached rerun
 (`reference/table1_detach.md`), not to the published Table 1 run.

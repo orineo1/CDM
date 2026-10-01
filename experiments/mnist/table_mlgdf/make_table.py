@@ -1,4 +1,4 @@
-"""Build paper Table 2 from the run records written by run_mlgdf.py.
+"""Build paper Table 2 from the run records written by search_mnist.py.
 
 Reads every `.pkl` in a results directory (one per target) and prints one row
 per target in the layout of the paper's Table 2:

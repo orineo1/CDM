@@ -1,8 +1,8 @@
 """
 Grid-search baseline over eps in the box, on the same surrogate and loss as our method: for every grid
-point, the MMD between --n-cond conditional samples of our trained sampler and the target (find_xstar's
+point, the MMD between --n-cond conditional samples of our trained sampler and the target (search_mog's
 own make_cfg / make_loss / _final_loss), then the --select-top best points are re-estimated with
---select-n samples x --select-repeats (the reselection find_xstar uses) and the minimum is returned.
+--select-n samples x --select-repeats (the reselection search_mog uses) and the minimum is returned.
 
     python experiments/peptide/pipeline/grid_search.py --prior runs/peptide/models/prior/model_unconditional.pt \
         --sampler runs/peptide/models/diff/model_conditional.pt --targets-dir runs/peptide/targets \
@@ -22,7 +22,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "..", "synthetic", "pipeline"))
 from common import x_to_std, x_from_std   # noqa: E402
 from simulate import EPS_BOX   # noqa: E402
-import find_xstar as fx   # noqa: E402
+import search_mog as fx   # noqa: E402
 from cdm.guidance.core import _final_loss   # noqa: E402
 from gbfeso import parse_ids   # noqa: E402
 
@@ -49,7 +49,7 @@ def main():
     records = []
     for tid in parse_ids(a.target_ids, len(eps_star)):
         tgt = os.path.join(a.targets_dir, f"target_{tid:03d}.npy")
-        sys.argv = ["find_xstar", "--prior", a.prior, "--sampler", a.sampler, "--target", tgt, "--device", dev]
+        sys.argv = ["search_mog", "--prior", a.prior, "--sampler", a.sampler, "--target", tgt, "--device", dev]
         args = fx.parse_args()
         if not records:
             prior, _ = fx.load_model(a.prior, dev)

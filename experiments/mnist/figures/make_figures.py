@@ -3,7 +3,7 @@
 cartesian histograms of P(Y | X = x_hat) against the target density
 (paper Figure 5 and Figures 6-8).
 
-Reads the `.pkl` run records written by `table_mlgdf/run_mlgdf.py`.
+Reads the `.pkl` run records written by `table_mlgdf/search_mnist.py`.
 
     python make_figures.py --results-dir <dir with .pkl> --out <dir>
 

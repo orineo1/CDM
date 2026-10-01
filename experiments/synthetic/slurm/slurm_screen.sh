@@ -1,5 +1,5 @@
 #!/bin/bash
-# Screened start (find_xstar --init screen) on the Table 1 grid, with Table 1's networks and flags.
+# Screened start (search_mog --init screen) on the Table 1 grid, with Table 1's networks and flags.
 # One array task per (scenario, finish): 9 scenarios x {refine, guided} = 18 tasks.
 #   RUNS=<runs dir with data.pt + models/ per scenario> sbatch --array=0-17 experiments/synthetic/slurm/slurm_screen.sh
 # Collect afterwards:

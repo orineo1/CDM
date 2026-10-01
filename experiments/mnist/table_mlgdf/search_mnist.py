@@ -1,10 +1,12 @@
 #!/usr/bin/env python
-"""MLGD-F on the MNIST rotated-digits task (paper Table 2).
+"""MNIST rotated digits (paper Table 2): the shared search with the MNIST models, target and config.
 
-One target, N seeds. The loop is `guidance.core.optimize_guided`; this script
-only builds the models, the target and the config, and records what comes back.
+One target, N seeds; each seed is one run of `cdm.guidance.search.search` (--n-restarts guided
+trajectories, optional refinement, selection). This script only builds the MNIST models, the target
+and the per-trajectory `GuidanceConfig`, and records what comes back. With the default search flags
+(one trajectory, no refinement, no re-scoring) it is exactly the paper's Table 2 run.
 
-    python run_mlgdf.py --target unimodal --steps 130 --n-cond 1500 \
+    python search_mnist.py --target unimodal --steps 130 --n-cond 1500 \
         --n-mc 3 --step-size-mode double --n-seeds 15
 
 Ported from `MNIST/run_mlgdf.py` of `orineo1/conditional-matching-paper`
@@ -29,6 +31,8 @@ MNIST_DIR = os.path.dirname(HERE)                       # experiments/mnist
 
 from diffusers import DDIMScheduler                                  # noqa: E402
 from cdm.guidance.core import optimize_guided                            # noqa: E402
+from cdm.guidance.search import add_search_args, search_overrides, search   # noqa: E402
+import dataclasses                                                         # noqa: E402
 
 from cdm.models.mnist.checkpoints import (load_cond_model, load_uncond_model,  # noqa: E402
                                    make_noise_scheduler)
@@ -82,7 +86,11 @@ def parse_args():
     p.add_argument("--no-warmup", action="store_true",
                    help="skip the untimed GPU warm-up run before seed 0")
     p.add_argument("--out", required=True, help="output directory")
-    return p.parse_args()
+    add_search_args(p)                     # --n-restarts, --guide-grad, --refine-*, --select-* (shared)
+    a = p.parse_args()
+    if a.select_samplers:
+        p.error("--select-samplers is not available for MNIST (one conditional sampler)")
+    return a
 
 
 def main():
@@ -130,21 +138,26 @@ def main():
         torch.cuda.synchronize()
         print(f"[warm-up] {time.time() - t0:.1f}s (not timed)")
 
-    results, loss_log, seed_log, time_log = [], [], [], []
+    results, loss_log, seed_log, time_log, restart_log = [], [], [], [], []
     for seed in range(args.seed_start, args.seed_start + args.n_seeds):
-        cfg = build_config(target, ddim, n_cond=args.n_cond, n_mc=args.n_mc,
-                           step_size_mode=args.step_size_mode, device=device,
-                           seed=seed, clamp=not args.no_clamp,
-                           tag=run_name)
+        def make_cfg(s):
+            return dataclasses.replace(
+                build_config(target, ddim, n_cond=args.n_cond, n_mc=args.n_mc,
+                             step_size_mode=args.step_size_mode, device=device,
+                             seed=s, clamp=not args.no_clamp, tag=run_name),
+                **search_overrides(args))
+        R = args.n_restarts
         if str(device).startswith("cuda"):
             torch.cuda.synchronize()
         t0 = time.time()
-        out = optimize_guided(uncond_model, cond_model, loss_function, cfg)
+        out = search(uncond_model, cond_model, loss_function, make_cfg, [seed * R + r for r in range(R)],
+                     select_top=args.select_top, select_n=args.select_n, select_repeats=args.select_repeats)
         if str(device).startswith("cuda"):
             torch.cuda.synchronize()
         elapsed = time.time() - t0
-        loss = float(out["final_loss"])
-        results.append(out["x_final"].squeeze().detach().cpu().numpy())
+        loss = float(out["best"]["final_loss"])
+        restart_log.append([q["final_loss"] for q in out["runs"]])
+        results.append(out["best"]["x"].squeeze().detach().cpu().numpy())
         loss_log.append(loss)
         seed_log.append(seed)
         time_log.append(elapsed)
@@ -163,6 +176,8 @@ def main():
         "loss_log": loss_log,
         "seed_log": seed_log,
         "time_log": time_log,
+        "restart_losses": restart_log,
+        "search": {k: v for k, v in vars(args).items() if k.startswith(("n_restarts", "guide_grad", "zo_", "refine", "select"))},
         "x_range": x_range,
         "target_pdf": target_pdf,
         "use_uniform": target.is_uniform,

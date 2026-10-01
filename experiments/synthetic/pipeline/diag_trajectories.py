@@ -1,4 +1,4 @@
-"""Per-trajectory diagnostics of a find_xstar result file (a scenario with the mixture known).
+"""Per-trajectory diagnostics of a search_mog result file (a scenario with the mixture known).
 
 For every trajectory (restart) of every attempt: exact TV of P(Y | X = x_hat) to the target after and
 (when saved) before refinement, the mixture responsibilities pi_k(x_hat), and the final loss estimate

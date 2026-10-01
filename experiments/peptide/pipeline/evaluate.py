@@ -42,7 +42,7 @@ def load_runs(paths):
                 for r in d["runs"]:
                     method = d["method"] + (f" [{r['start']}]" if "start" in r else "")
                     runs.append({"method": method, "family": d["method"], **{k: r[k] for k in r if k not in ("loss_trace",)}})
-            else:    # find_xstar output: one target per file, named <method>_t<id>.json
+            else:    # search_mog output: one target per file, named <method>_t<id>.json
                 tid = int(os.path.basename(f).split("_t")[-1].split(".")[0])
                 b = d["best"]
                 runs.append({"method": d["method"], "family": d["method"], "target_id": tid,

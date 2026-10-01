@@ -1,5 +1,5 @@
 #!/bin/bash
-# Step 3a: our method (find_xstar.py) on the targets, one array task per block of targets.
+# Step 3a: our method (search_peptide.py) on the targets, one array task per block of targets.
 #   SAMPLER=diff sbatch --array=0-7 experiments/peptide/slurm/slurm_ours.sh    # MLGD   (conditional diffusion)
 #   SAMPLER=cm   sbatch --array=0-7 experiments/peptide/slurm/slurm_ours.sh    # MLGD-F (consistency model)
 # Task k handles targets k*PER .. k*PER+PER-1. Output runs/peptide/results/<MLGD|MLGD-F>_t<id>.json
@@ -21,7 +21,7 @@ k=${SLURM_ARRAY_TASK_ID:-0}
 for t in $(seq $((k * PER)) $((k * PER + PER - 1))); do
   tid=$(printf %03d $t); [ -f $R/targets/target_$tid.npy ] || continue
   [ -f $OUT/${NAME}${TAG:-}_t$tid.json ] && continue
-  python experiments/synthetic/pipeline/find_xstar.py --prior $R/models/prior/model_unconditional.pt \
+  python experiments/peptide/pipeline/search_peptide.py --prior $R/models/prior/model_unconditional.pt \
     --sampler $R/models/$SAMPLER/model_conditional.pt --target $R/targets/target_$tid.npy \
     --algo lgd --n-attempts 1 --n-cond 250 --guidance-optim adam --step-size 0.05 --guide-grad zo \
     --n-restarts ${RESTARTS:-10} --refine-steps 100 --refine-lr 0.02 --refine-n-cond 3000 --refine-keep-best \

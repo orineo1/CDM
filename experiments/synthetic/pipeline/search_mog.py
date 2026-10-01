@@ -1,14 +1,15 @@
 """
-Find x*: the input whose induced conditional P(Y | X = x) matches a target G(Y).
+Gaussian-mixture experiments: find x*, the input whose conditional P(Y | X = x) matches a target G(Y).
 
-This is the paper's method as one command. Give it a prior over X (a trained
-unconditional diffusion checkpoint), a conditional sampler for Y | X (a trained
-consistency-model or conditional-diffusion checkpoint) and a target G(Y); it
-runs guided reverse diffusion over X with the distributional loss as guidance,
-as independent restarts or as a resampled particle population, optionally
-polishes the answer with a few gradient steps, and returns the best x_hat.
+The search itself is shared by all experiments (`cdm.guidance.search`: R guided trajectories,
+optional refinement, selection; flags from `add_search_args`). This driver supplies what is
+specific to vector data with trained checkpoints: it loads a prior over X (unconditional diffusion
+checkpoint), a conditional sampler for Y | X (consistency-model or conditional-diffusion
+checkpoint, or the mixture oracles `exact` / `exactloss`) and a target G(Y), builds the
+per-trajectory `GuidanceConfig`, evaluates designs against the mixture when it is known, and adds
+the particle and screened-start variants. The peptide experiment reuses it for its vector data.
 
-    python experiments/synthetic/pipeline/find_xstar.py --prior runs/mog4d/models/model_unconditional.pt \
+    python experiments/synthetic/pipeline/search_mog.py --prior runs/mog4d/models/model_unconditional.pt \
         --sampler runs/mog4d/models/model_conditional.pt --target runs/mog4d/data.pt \
         --n-attempts 10 --out runs/mog4d/xstar.json
 
@@ -100,6 +101,7 @@ from cdm.guidance import GuidanceConfig, optimize_guided, optimize_guided_popula
 from cdm.guidance.config import update_ddim_minus_grad                                             # noqa: E402
 from cdm.losses.exact_mmd import ExactConditionalMMD, IdentitySampler                  # noqa: E402
 from cdm.guidance.core import refine as refine_x, _final_loss                                  # noqa: E402
+from cdm.guidance.search import add_search_args, search_overrides, run_trajectory, select, search, strip   # noqa: E402
 import dataclasses                                                                           # noqa: E402
 from cdm.guidance.config import (init_randn, init_zeros, perturb_beta_ratio,               # noqa: E402
                              perturb_beta_prod_ratio_sq, perturb_sqrt_beta_prod, perturb_none,
@@ -151,7 +153,6 @@ def parse_args():
     g.add_argument("--algo", choices=["lgd", "particles"], default="lgd",
                    help="lgd: independent trajectories, best of --n-attempts; particles: --n-particles trajectories "
                         "run in lockstep with loss-weighted resampling (one population per attempt)")
-    g.add_argument("--n-restarts", type=int, default=10, help="lgd: trajectories per attempt; the best final loss is returned")
     g.add_argument("--n-particles", type=int, default=10, help="particles: population size (same role as --n-restarts)")
     g.add_argument("--resample-beta", type=float, default=5.0, help="particle weights exp(-beta*loss); 'none' disables")
     g.add_argument("--ess-frac", type=float, default=0.5, help="resample when ESS < ess_frac * n_particles")
@@ -159,29 +160,8 @@ def parse_args():
     g.add_argument("--weight-mode", choices=["fresh", "accumulated"], default="fresh")
     g.add_argument("--resample-schedule", choices=["constant", "linear"], default="constant",
                    help="linear: resampling strength ramps from 0 to --resample-beta over the reverse process (annealing)")
-    g = p.add_argument_group("post-refinement (any --algo)")
-    g.add_argument("--refine-steps", type=int, default=0, help="gradient steps on the plug-in loss from the returned x")
-    g.add_argument("--refine-lr", type=float, default=0.05)
-    g.add_argument("--refine-lambda", type=float, default=0.0, help="weight of the prior score term")
-    g.add_argument("--refine-optim", choices=["adam", "sgd"], default="adam")
-    g.add_argument("--refine-n-cond", type=int, default=None, help="conditional samples per refinement step (default n_cond)")
-    g.add_argument("--refine-keep-best", action="store_true",
-                   help="return the refinement iterate with the lowest loss estimate instead of the last one")
-    g.add_argument("--guide-grad", choices=["pathwise", "zo"], default="pathwise",
-                   help="inner-loss gradient in the guided steps: backpropagation through the sampler, or zeroth-order "
-                        "central differences (common random numbers) pulled back through the Tweedie estimate")
-    g.add_argument("--refine-grad", choices=["pathwise", "zo"], default="pathwise",
-                   help="refinement gradient: backpropagation through the sampler, or zeroth-order central differences "
-                        "of the sample loss with common random numbers")
-    g.add_argument("--zo-eps", type=float, default=0.05, help="--refine-grad zo: finite-difference step")
-    g.add_argument("--zo-dirs", type=int, default=0, help="--refine-grad zo: 0 = all coordinates, M = M random directions")
-    g.add_argument("--select-top", type=int, default=0,
-                   help="re-estimate the final loss of the best K trajectories with --select-n samples before choosing (0: off)")
-    g.add_argument("--select-n", type=int, default=2000, help="--select-top: conditional samples per re-estimate")
-    g.add_argument("--select-repeats", type=int, default=5, help="--select-top: independent re-estimates averaged")
-    g.add_argument("--select-samplers", nargs="*", default=[],
-                   help="--select-top: extra conditional-sampler checkpoints; the reselection loss is averaged over "
-                        "--sampler and these, so errors of independently trained samplers partly cancel")
+    add_search_args(p)                         # --n-restarts, --guide-grad, --refine-*, --select-* (shared)
+    p.set_defaults(n_restarts=10, refine_lr=0.05)
     g = p.add_argument_group("inner estimator")
     g.add_argument("--n-cond", type=int, default=250)
     g.add_argument("--n-target", type=int, default=None)
@@ -288,12 +268,9 @@ def make_cfg(args, prior, sampler_type, target_generator, seed):
                                                        else args.resample_beta),
         ess_frac=args.ess_frac, resample_every=args.resample_every, weight_mode=args.weight_mode,
         resample_schedule=args.resample_schedule,
-        refine_steps=args.refine_steps, refine_lr=args.refine_lr, refine_lambda=args.refine_lambda,
-        refine_optim=args.refine_optim, refine_n_cond=args.refine_n_cond,
-        refine_grad=args.refine_grad, zo_eps=args.zo_eps, zo_dirs=args.zo_dirs,
-        guide_grad=args.guide_grad, refine_keep_best=args.refine_keep_best,
+        **search_overrides(args),
         device=args.device, seed=seed, progress=args.progress,
-        tag=f"find_xstar:{args.guidance}:{args.algo}:{'MLGD-F' if sampler_type == 'cm' else 'MLGD'}",
+        tag=f"search_mog:{args.guidance}:{args.algo}:{'MLGD-F' if sampler_type == 'cm' else 'MLGD'}",
     )
 
 
@@ -334,7 +311,7 @@ def main():
         assert info.get("mu_list") is not None, "--sampler exactloss needs a target file with the mixture"
         _exact = ExactConditionalMMD(info["mu_list"], info["Sigma_list"], info["alpha"], info["target"])
         loss_fn = lambda pred, target: _exact(pred[0]).float().to(pred.device)   # noqa: E731
-    print(f"[find_xstar] {method} with {args.guidance.upper()} guidance | loss={args.loss} n_cond={args.n_cond} "
+    print(f"[search_mog] {method} with {args.guidance.upper()} guidance | loss={args.loss} n_cond={args.n_cond} "
           f"n_mc={args.n_mc} perturb={args.perturb} aggregate={args.aggregate} step={args.step_size} "
           f"select={args.select}{'' if args.select == 'all' else f'(n_sel={args.n_sel})'} init={args.init} eta={args.eta} "
           f"| budget R={R} {'particles' if args.algo == 'particles' else 'restarts'}, attempts={args.n_attempts} "
@@ -345,40 +322,21 @@ def main():
 
     def one_trajectory(seed, run):
         cfg = make_cfg(args, prior, sampler_type, target_generator, seed)
-        t0 = time.time()
-        res = run(prior, sampler, loss_fn, cfg)
-        x_hat = res["x_final"].detach().float().view(-1)
-        rec = {"seed": seed, "x_hat": x_hat.cpu().tolist(), "final_loss": float(res["final_loss"]),
-               "best_loss": res["best_loss"], "n_steps": res["n_steps"], "time_s": time.time() - t0,
-               **evaluate(x_hat, info), "trace": res["trace"]}
+        rec, res = run_trajectory(prior, sampler, loss_fn, cfg, seed, run=run,
+                                  evaluate=lambda x: evaluate(x.float().view(-1), info))
         if args.algo == "particles":
             rec.update({"best_particle": res["best_particle"], "n_resamples": res["n_resamples"],
                         "resample_steps": res["resample_steps"],
                         "particles": [{"x_hat": x.tolist(), "final_loss": l, **evaluate(x, info)}
                                       for x, l in zip(res["x_particles"].float().cpu(), res["final_losses"])]})
-        if res.get("refine") is not None:
-            rec["refine"] = {k: (v.tolist() if torch.is_tensor(v) else v) for k, v in res["refine"].items()}
         return rec, cfg
 
-    extra_samplers = [load_model(pth, dev) for pth in args.select_samplers]
-
-    def sel_samplers(cfg_sel):
-        """The main sampler with its config, then each extra sampler with condition_on_slice set for its type."""
-        yield sampler, cfg_sel
-        for s_, arch_ in extra_samplers:
-            yield s_, dataclasses.replace(cfg_sel, condition_on_slice=(arch_ == "diffusion"))
+    # extra samplers for the re-scoring, each with its output slicing (diffusion samplers model the joint)
+    extra_samplers = [(m, lambda c, a_=arch_: dataclasses.replace(c, condition_on_slice=(a_ == "diffusion")))
+                      for m, arch_ in (load_model(pth, dev) for pth in args.select_samplers)]
 
     def reselect(runs, cfg):
-        """--select-top K: fresh loss estimate with select_n samples for the K best, then the minimum."""
-        if not args.select_top or len(runs) <= 1:
-            return min(runs, key=lambda q: q["final_loss"])
-        cand = sorted(runs, key=lambda q: q["final_loss"])[:args.select_top]
-        cfg_sel = dataclasses.replace(cfg, final_n_cond=args.select_n)
-        for q in cand:
-            x = torch.tensor(q["x_hat"], device=dev).view(1, -1)
-            q["select_loss"] = float(sum(_final_loss(s_, loss_fn, c_, x) for s_, c_ in sel_samplers(cfg_sel)
-                                         for _ in range(args.select_repeats)) / (args.select_repeats * (1 + len(extra_samplers))))
-        return min(cand, key=lambda q: q["select_loss"])
+        return select(runs, sampler, loss_fn, cfg, args.select_top, args.select_n, args.select_repeats, extra_samplers)
 
     def screened_attempt(a):
         """--init screen: rank n_screen unguided prior samples by the sample loss (forward only), keep the
@@ -413,11 +371,11 @@ def main():
                 res = optimize_guided(prior, sampler, loss_fn, cfg)
                 x_f, fl = res["x_final"], float(res["final_loss"])
             x_hat = x_f.detach().float().view(-1)
-            runs.append({"seed": seed_r, "screen_index": int(idx), "screen_loss": float(losses[idx]),
+            runs.append({"seed": seed_r, "x": x_f.detach(), "screen_index": int(idx), "screen_loss": float(losses[idx]),
                          "x_hat": x_hat.cpu().tolist(), "final_loss": fl, "time_s": time.time() - t1, **evaluate(x_hat, info)})
         best = reselect(runs, cfg0)
         q = torch.quantile(losses, torch.tensor([0.0, 0.01, 0.1, 0.5]))
-        return {"attempt": a, **best, "restarts": runs,
+        return {"attempt": a, **strip(best), "restarts": [strip(q) for q in runs],
                 "screen": {"n": int(X.shape[0]), "n_cond": cfg_s.final_n_cond, "finish": args.screen_finish,
                            "t_frac": args.screen_t_frac, "time_s": t_screen,
                            "loss_min_p1_p10_median": [float(v) for v in q]}}
@@ -432,13 +390,15 @@ def main():
             att = screened_attempt(a)
         elif args.algo == "particles":
             rec, cfg = one_trajectory(args.seed * 1000 + a, optimize_guided_population)
-            att = {"attempt": a, **rec}
+            att = {"attempt": a, **strip(rec)}
         else:   # R independent restarts, the smallest final loss wins: that is the algorithm's answer
-            outs = [one_trajectory(args.seed * 1000 + a * R + r, optimize_guided) for r in range(R)]
-            runs = [o[0] for o in outs]
-            best = reselect(runs, outs[0][1])
-            att = {"attempt": a, **{k: v for k, v in best.items() if k != "trace"},
-                   "restarts": [{k: v for k, v in q.items() if k != "trace"} for q in runs],
+            out = search(prior, sampler, loss_fn, lambda sd: make_cfg(args, prior, sampler_type, target_generator, sd),
+                         [args.seed * 1000 + a * R + r for r in range(R)], select_top=args.select_top,
+                         select_n=args.select_n, select_repeats=args.select_repeats, extra_samplers=extra_samplers,
+                         evaluate=lambda x: evaluate(x.float().view(-1), info))
+            runs, best = out["runs"], out["best"]
+            att = {"attempt": a, **strip(best, ("x", "trace")),
+                   "restarts": [strip(q, ("x", "trace")) for q in runs],
                    "traces": [q["trace"] for q in runs], "time_s": sum(q["time_s"] for q in runs)}
         att["time_s"] = time.time() - t_att
         attempts.append(att)
@@ -455,17 +415,17 @@ def main():
         vals = [a[k] for a in attempts if k in a]
         if vals:
             summary[k] = {"mean": float(np.mean(vals)), "std": float(np.std(vals)), "n": len(vals)}
-    print(f"[find_xstar] {method}: over {args.n_attempts} attempt(s) "
+    print(f"[search_mog] {method}: over {args.n_attempts} attempt(s) "
           + "  ".join(f"{k} {v['mean']:.4f}+-{v['std']:.4f}" for k, v in summary.items())
           + f" | best attempt {best['attempt']+1}: loss={best['final_loss']:.5f}, x_hat={np.round(np.array(best['x_hat']), 4)}")
     if info.get("x_star") is not None:
-        print(f"[find_xstar] true x* = {np.round(info['x_star'].float().view(-1).numpy(), 4)}")
+        print(f"[search_mog] true x* = {np.round(info['x_star'].float().view(-1).numpy(), 4)}")
     out = args.out or os.path.splitext(args.target)[0] + "_xstar.json"
     with open(out, "w") as f:
         json.dump({"method": method, "algo": args.algo, "guidance": args.guidance, "budget": R, "args": vars(args),
                    "summary": summary, "best": best, "attempts": attempts,
                    "x_star": None if info.get("x_star") is None else info["x_star"].float().view(-1).tolist()}, f, indent=2)
-    print(f"[find_xstar] wrote {out}")
+    print(f"[search_mog] wrote {out}")
 
 
 if __name__ == "__main__":

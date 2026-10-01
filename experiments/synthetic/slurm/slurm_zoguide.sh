@@ -1,5 +1,5 @@
 #!/bin/bash
-# Zeroth-order guidance (find_xstar --guide-grad zo), Table 1 flags throughout.
+# Zeroth-order guidance (search_mog --guide-grad zo), Table 1 flags throughout.
 #   task 0     : Stage 1 diagnostic, (10,1) with exact conditional samples, 10 trajectories x 5 attempts
 #   tasks 1-18 : Stage 2, Table 1 grid (9 settings x {MLGD, MLGD-F}) with the Table 1 networks
 #   RUNS=runs/screen sbatch --array=0-18 experiments/synthetic/slurm/slurm_zoguide.sh
@@ -22,7 +22,7 @@ RUNS=${RUNS:-runs/screen}
 echo "=== task $SLURM_ARRAY_TASK_ID on $(hostname) $(date) ==="
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
   D=runs/table1v2/x10_y1
-  python experiments/synthetic/pipeline/find_xstar.py --prior $D/models/uncond/model_unconditional.pt \
+  python experiments/synthetic/pipeline/search_mog.py --prior $D/models/uncond/model_unconditional.pt \
     --target $D/data.pt --sampler exact --algo lgd --n-cond 250 --guide-grad zo \
     --refine-steps 100 --refine-lr 0.02 --refine-n-cond 1000 --guidance-optim adam --step-size 0.05 \
     --seed 42 --device cuda --n-restarts 10 --n-attempts 5 --out $D/MLGD-X_zoguide10.json

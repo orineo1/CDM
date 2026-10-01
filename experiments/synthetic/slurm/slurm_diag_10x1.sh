@@ -21,8 +21,8 @@ D=${D:-runs/table1v2/x10_y1}
 COMMON="--prior $D/models/uncond/model_unconditional.pt --target $D/data.pt --algo lgd --n-cond 250
         --refine-steps 100 --refine-lr 0.02 --refine-n-cond 1000 --guidance-optim adam --step-size 0.05 --seed 42 --device cuda"
 case "$SLURM_ARRAY_TASK_ID" in
-  0) python experiments/synthetic/pipeline/find_xstar.py $COMMON --sampler exact --n-restarts 10 --n-attempts 5 --out $D/MLGD-X_diag10.json ;;
-  1) python experiments/synthetic/pipeline/find_xstar.py $COMMON --sampler exactloss --n-restarts 10 --n-attempts 5 --out $D/MLGD-E_diag10.json ;;
-  2) python experiments/synthetic/pipeline/find_xstar.py $COMMON --sampler exactloss --n-restarts 100 --n-attempts 3 --out $D/MLGD-E_diag100.json ;;
+  0) python experiments/synthetic/pipeline/search_mog.py $COMMON --sampler exact --n-restarts 10 --n-attempts 5 --out $D/MLGD-X_diag10.json ;;
+  1) python experiments/synthetic/pipeline/search_mog.py $COMMON --sampler exactloss --n-restarts 10 --n-attempts 5 --out $D/MLGD-E_diag10.json ;;
+  2) python experiments/synthetic/pipeline/search_mog.py $COMMON --sampler exactloss --n-restarts 100 --n-attempts 3 --out $D/MLGD-E_diag100.json ;;
 esac
 echo "done $(date)"

@@ -1,10 +1,10 @@
 """
 Convert simulated ensembles into the inputs of our pipeline (experiments/synthetic/pipeline/train_models.py,
-find_xstar.py):
+search_mog.py):
 
   <out>/data.pt          joint rows [x(2), y(7)] for train_models.py --model conditional (condition_on = 2)
   <out>/prior_data.pt    fresh uniform draws of eps in the box, for train_models.py --model unconditional
-  <out>/targets/target_XXX.npy   standardized 7D target samples for find_xstar.py --target
+  <out>/targets/target_XXX.npy   standardized 7D target samples for search_peptide.py --target
   <out>/meta.json        standardization constants and the target eps*
 
 x = (eps - 0.88) / 0.387 (the uniform box standardized); y = standardized

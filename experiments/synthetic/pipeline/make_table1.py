@@ -20,7 +20,7 @@ Per scenario, under <runs-dir>/<scenario>/ (every step is skipped when its outpu
   models/diffusion/model_conditional.pt     experiments/synthetic/pipeline/train_models.py --model conditional --architecture diffusion
   models/cm/model_conditional.pt            experiments/synthetic/pipeline/train_models.py --model conditional --architecture cm
   check.json / check.png           experiments/synthetic/pipeline/check_models.py (networks vs. the analytic mixture)
-  <METHOD>.json                    experiments/synthetic/pipeline/find_xstar.py, METHOD in MLGD, MLGD-F, PMLGD, PMLGD-F:
+  <METHOD>.json                    experiments/synthetic/pipeline/search_mog.py, METHOD in MLGD, MLGD-F, PMLGD, PMLGD-F:
                                    --n-attempts independent runs, each returning the best of
                                    --budget trajectories (restarts or particles)
 
@@ -71,8 +71,8 @@ def parse_args():
     g.add_argument("--refine-lr", type=float, default=0.02)
     g.add_argument("--refine-n-cond", type=int, default=1000)
     g.add_argument("--guidance-optim", choices=["sgd", "adam"], default="sgd")
-    g.add_argument("--step-size", default=None, help="find_xstar --step-size (default: preset)")
-    g.add_argument("--extra", default="", help="extra flags passed verbatim to find_xstar.py")
+    g.add_argument("--step-size", default=None, help="search_mog --step-size (default: preset)")
+    g.add_argument("--extra", default="", help="extra flags passed verbatim to search_mog.py")
     g = p.add_argument_group("control")
     g.add_argument("--seed", type=int, default=42)
     g.add_argument("--device", default=None)
@@ -157,7 +157,7 @@ def search(setting, paths, log, method, args):
         return out
     sampler = paths["cm"] if method.endswith("-F") else ("exact" if method.endswith("-X") else paths["diffusion"])
     algo = "particles" if method.startswith("P") else "lgd"
-    cmd = [py, os.path.join(SCRIPTS, "find_xstar.py"), "--prior", paths["prior"], "--sampler", sampler, "--target", paths["data"],
+    cmd = [py, os.path.join(SCRIPTS, "search_mog.py"), "--prior", paths["prior"], "--sampler", sampler, "--target", paths["data"],
            "--algo", algo, "--n-restarts", str(args.budget), "--n-particles", str(args.budget),
            "--n-attempts", str(args.attempts), "--n-cond", str(args.n_cond), "--resample-beta", str(args.resample_beta),
            "--resample-schedule", args.resample_schedule,

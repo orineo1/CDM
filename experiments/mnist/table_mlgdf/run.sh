@@ -25,7 +25,7 @@ mkdir -p "$OUT"
 case "$TIER" in
   smoke)
     for target in uniform bimodal unimodal; do
-      "$PY" "$HERE/run_mlgdf.py" --target "$target" \
+      "$PY" "$HERE/search_mnist.py" --target "$target" \
         --steps 4 --n-cond 32 --n-mc 2 --step-size-mode original \
         --n-seeds 1 --device cpu --no-classify --allow-untrained-prior \
         --out "$OUT/smoke"
@@ -49,7 +49,7 @@ case "$TIER" in
       extra=()
       [ "$target" = "unimodal" ] && extra=(--unimodal-var "$variance")
       [ "$target" = "bimodal" ]  && extra=(--bimodal-var  "$variance")
-      "$PY" "$HERE/run_mlgdf.py" --target "$target" \
+      "$PY" "$HERE/search_mnist.py" --target "$target" \
         --steps "$steps" --n-cond "$n_cond" --n-mc "$n_mc" \
         --step-size-mode "$mode" "${extra[@]}" \
         --n-seeds 15 --device cuda --threshold 0.8 --no-clamp \

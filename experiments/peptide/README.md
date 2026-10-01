@@ -1,6 +1,6 @@
 # Peptide benchmark: CDM vs GB-FESO on the four-bead toy chain
 
-Head-to-head comparison of our method (MLGD / MLGD-F, `find_xstar.py`) with GB-FESO (Zick & Mendels 2026,
+Head-to-head comparison of our method (MLGD / MLGD-F, `search_peptide.py`, which runs the shared vector-data driver) with GB-FESO (Zick & Mendels 2026,
 "Gradient-Based Inverse Design of Free-Energy Landscapes with Diffusion Models", arXiv:2607.06421) on
 their toy-peptide benchmark: X = (eps1, eps2), the LJ strengths of the 4-bead 2D chain; Y = (r12, r23,
 r34, theta123, theta234); the target G is the simulated equilibrium ensemble at a held-out eps*.
@@ -8,7 +8,7 @@ r34, theta123, theta234); the target G is the simulated equilibrium ensemble at 
 GB-FESO runs from THEIR code (github GB-FESO, MIT), cloned next to this repository (`../GB-FESO`, or
 `$GBFESO_DIR`): their `train.py` trains the surrogate, their `run_feso.optimize_epsilon_condition` optimizes,
 their `utils.py` / `loss.py` score every method. Our method runs from `experiments/synthetic/pipeline/
-train_models.py` and `find_xstar.py` unchanged. New code: the simulator, the data conversion, the
+train_models.py` and `search_mog.py` unchanged. New code: the simulator, the data conversion, the
 GB-FESO / grid-search drivers and the evaluation.
 
 ## Pipeline (cluster, from the repo root)
@@ -63,11 +63,11 @@ wall times compare.
   at lr_refine 5e-2 when the phase-0 best KL > 0.2, 3500 samples, KDE bandwidth 0.5, kl_lambda 1, clamp
   to the box, perturbation std 0.05, 0.005 for high-high starts), 40 DDIM steps (their paper; the code
   default is 100). Four starts per target: low = 0.25, high = 1.4 (their README example).
-- MLGD / MLGD-F: `find_xstar.py --guide-grad zo --n-restarts 10 --n-cond 250 --guidance-optim adam
+- MLGD / MLGD-F: `search_peptide.py --guide-grad zo --n-restarts 10 --n-cond 250 --guidance-optim adam
   --step-size 0.05 --refine-steps 100 --refine-lr 0.02 --refine-n-cond 3000 --refine-keep-best
   --select-top 5 --select-n 2000 --select-repeats 5`.
 - Grid: 30 x 30 grid of the box, MMD with 1000 samples of our diffusion surrogate per point, top-5
-  reselection as in `find_xstar`.
+  reselection as in `search_mog`.
 - Oracle: eps_hat = eps* (an independent re-simulation), the noise floor of the metrics.
 
 **Evaluation** (`pipeline/evaluate.py`): every eps_hat (clamped to the box) is re-simulated with the

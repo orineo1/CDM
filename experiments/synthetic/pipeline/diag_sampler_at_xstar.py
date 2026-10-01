@@ -2,7 +2,7 @@
 
 For each sampler: (1) TV between the sampler's draws at x* and G (1-D Y: histogram against the exact
 target density; the same estimate on exact draws gives the noise floor); (2) the Table 1 sample loss
-(MMD, mean of 5 x 2000 draws) at x* and at the saved endpoints of a find_xstar run, with the endpoints'
+(MMD, mean of 5 x 2000 draws) at x* and at the saved endpoints of a search_mog run, with the endpoints'
 exact TV; (3) refinement from x* on the sampler's own loss (zeroth-order and pathwise gradients):
 exact TV and sampler loss before and after, i.e. where the sampler's loss pulls a design that
 starts at the true answer.
@@ -16,7 +16,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(__file__))
-import find_xstar as fx                                                # noqa: E402
+import search_mog as fx                                                # noqa: E402
 from make_table1 import _load_mixture, scale_free_distances            # noqa: E402
 from run_optimization import load_model                                # noqa: E402
 from cdm.guidance.core import refine as refine_x, _final_loss          # noqa: E402
@@ -46,7 +46,7 @@ def main():
     p.add_argument("--out", required=True)
     a = p.parse_args()
     D, dev = a.runs_dir, a.device
-    sys.argv = ["find_xstar", "--prior", f"{D}/models/uncond/model_unconditional.pt", "--sampler", "x", "--target",
+    sys.argv = ["search_mog", "--prior", f"{D}/models/uncond/model_unconditional.pt", "--sampler", "x", "--target",
                 f"{D}/data.pt", "--device", dev, "--n-cond", "250", "--refine-lr", "0.02", "--refine-n-cond", "1000",
                 "--guidance-optim", "adam", "--step-size", "0.05"]
     args = fx.parse_args()

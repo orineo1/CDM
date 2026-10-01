@@ -1,10 +1,10 @@
-"""Redo only the post-refinement and the selection of a finished find_xstar run.
+"""Redo only the post-refinement and the selection of a finished search_mog run.
 
 Reads a result JSON whose restarts saved their pre-refinement end points (refine.x_before), refines
 every end point again with the chosen refinement (pathwise or zeroth-order gradient) and selects the
 returned x_hat per attempt (lowest final loss, optionally re-estimated for the top K). The guided
 trajectories are reused unchanged, so the comparison isolates refinement and selection. Output has the
-find_xstar format (make_table1 --collect and diag_trajectories.py read it).
+search_mog format (make_table1 --collect and diag_trajectories.py read it).
 
   python experiments/synthetic/pipeline/refine_endpoints.py --result runs/table1v2/x10_y1/MLGD_adam_refine.json \
       --refine-grad zo --select-top 3 --out runs/table1v2/x10_y1/MLGD_zo_sel3.json
@@ -13,7 +13,7 @@ import argparse, json, os, sys, time, dataclasses
 import torch
 
 sys.path.insert(0, os.path.dirname(__file__))
-import find_xstar as fx                                                       # noqa: E402
+import search_mog as fx                                                       # noqa: E402
 from cdm.guidance.core import refine, _final_loss                            # noqa: E402
 
 
@@ -35,7 +35,7 @@ def main():
     r = json.load(open(a.result))
     # current defaults first (results written before a flag existed lack it), then the saved settings
     argv0 = sys.argv
-    sys.argv = ["find_xstar.py", "--prior", "_", "--sampler", "_", "--target", "_"]
+    sys.argv = ["search_mog.py", "--prior", "_", "--sampler", "_", "--target", "_"]
     args = fx.parse_args()
     sys.argv = argv0
     for k, v in r["args"].items():

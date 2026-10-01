@@ -21,10 +21,10 @@ The file names do not predict the contents. Concretely:
   (POT-backed, `ot.wasserstein_1d`) are in `functions.py`; the *class*
   `SupportAwareSlicedWassersteinLoss` (pure-torch, differentiable) is in `sliced.py`.
   Importers are split the same way: `experiments/synthetic/pipeline/check_models.py` and `cdm/utils/evaluation.py`
-  take the function from `functions`, `experiments/synthetic/pipeline/find_xstar.py` and the MNIST experiment
+  take the function from `functions`, `experiments/synthetic/pipeline/search_mog.py` and the MNIST experiment
   take the class from `sliced`. The class's `forward` is *not* the loss contract below —
   it takes four arguments and returns `(loss, dict)`; call sites that need a plain loss
-  use its `sliced_wasserstein_distance` method instead (see `experiments/synthetic/pipeline/find_xstar.py`).
+  use its `sliced_wasserstein_distance` method instead (see `experiments/synthetic/pipeline/search_mog.py`).
 - **`circular.py` holds no distance.** It is target-distribution helper code for the MNIST
   angle representation, imported by the MNIST experiment.
 
