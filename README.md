@@ -1,6 +1,5 @@
 # CDM: Inverse Design for Conditional Distribution Matching
 
-Code for the paper *Inverse Design for Conditional Distribution Matching* (Meidler, Tolkowsky, Zuk).
 **Conditional Distribution Matching (CDM)**: given a joint distribution `P(X, Y)`, available through
 trained generative models, and a target distribution `G(Y)`, find an input `x*` whose induced
 conditional `P(Y | X = x*)` matches `G`. The solver, MLGD, is loss-guided reverse diffusion over `X`
@@ -95,7 +94,7 @@ JSON holds all of them and the best.
 
 ## Paper figures and tables: which script produces each
 
-Numbers follow the AISTATS 2027 version of the paper. Each experiment README has the exact flags.
+Numbers follow the current version of the paper (see Citation below). Each experiment README has the exact flags.
 
 | paper item | content | script (from the repository root) |
 |---|---|---|
@@ -184,3 +183,20 @@ torch). `experiments/synthetic/slurm/slurm_fig1.sh` is a ready SLURM job for the
 (`sbatch experiments/synthetic/slurm/slurm_fig1.sh hard`, `N_RESTARTS=50` to change the restart
 count); it writes the figures and their simulation caches to `results/`, which
 you copy back and redraw locally without recomputing.
+
+## Citation
+
+Ori Meidler, Shaul Tolkovsky, and Or Zuk. *Inverse Design for Conditional Distribution Matching.*
+arXiv:2605.09439, 2026. https://arxiv.org/abs/2605.09439
+
+```bibtex
+@misc{meidler2026inverse,
+  title         = {Inverse Design for Conditional Distribution Matching},
+  author        = {Ori Meidler and Shaul Tolkovsky and Or Zuk},
+  year          = {2026},
+  eprint        = {2605.09439},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  url           = {https://arxiv.org/abs/2605.09439}
+}
+```
