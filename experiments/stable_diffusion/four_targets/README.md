@@ -144,11 +144,12 @@ tables use the protocol of `cdm/models/sd/eval_all_experiments.py`, a port of th
    **p(male)** by CLIP zero-shot with a binomial 95% CI; Δ% is the improvement over the
    source scribble.
 
-Right after a run the scribbles are `source` and `mlgd_f` (and `unguided` with
-`--run_unguided`); `avg`, `avg_latent`, `sdedit`, `sdedit_best` are picked up from
-`baselines/` once `eval_baselines.py` has produced them, or passed with
-`--scribbles name=path`. The paper's own six scribbles (`SD_cond_SD_controlnet/experiments/
-<Scenario>/` in the paper repository) can be evaluated with `--run_dir <that directory>`.
+Right after a run the scribbles are `source` and `mlgd_f`; `avg_prompt` and `sdedit_best`
+are picked up from `baselines/` once `run.sh baselines` has produced them. Any other
+scribble (e.g. the paper's older `avg`, `avg_latent`, `sdedit`, or `final_scribble_regular.png`
+of a `--run_unguided` run) is evaluated only when passed with `--scribbles name=path`.
+The paper's own scribbles (`SD_cond_SD_controlnet/experiments/<Scenario>/` in the paper
+repository) can be evaluated with `--run_dir <that directory>`.
 
 ```
 bash run.sh eval balanced                                           # outputs/full_BalancedTarget -> outputs/eval_BalancedTarget

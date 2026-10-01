@@ -68,7 +68,9 @@ def test_eval_scribble_discovery(ev, tmp_path):
     paper.mkdir()
     for f in ["scribble_source.png", "scribble_avg.png", "scribble_sdedit_best.png", "scribble_mlgdd.png"]:
         Image.new("RGB", (4, 4)).save(paper / f)
-    assert list(ev.find_scribbles(str(paper), [])) == ["source", "avg", "sdedit_best", "mlgd_f"]
+    assert list(ev.find_scribbles(str(paper), [])) == ["source", "sdedit_best", "mlgd_f"]   # old methods: opt-in
+    both = ev.find_scribbles(str(paper), [f"avg={paper / 'scribble_avg.png'}"])
+    assert list(both) == ["source", "sdedit_best", "mlgd_f", "avg"]
 
 
 def test_eval_numbers_match_the_papers_json(ev):
