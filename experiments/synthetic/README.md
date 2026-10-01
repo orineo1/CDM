@@ -13,6 +13,7 @@ conditional as sampler) and `exactloss` (closed-form MMD).
 | `slurm/` | SLURM job scripts for the HUJI cluster, and `cluster_setup.txt` |
 | `configs/mog/` | fixed mixture parameter files (`generate_data.py --params-file`) |
 | `reference/` | outputs of the runs behind the paper, imported from `orineo1/GlobalConditional` |
+| `reproduction/` | a full rerun of the paper's synthetic experiments with the current code (detached bandwidth) |
 
 Run everything from the repository root after `pip install -e .` (or with
 `PYTHONPATH=$PWD`). Outputs go to `runs/`, `results/` and `checkpoints/`, which are
@@ -206,3 +207,24 @@ Imported from `orineo1/GlobalConditional` `master` `9ddf570` (`results/`), excep
 | `smc/fig_smc_hard.{json,npz}` | twisted-SMC populations and TVs of Figure 1(d), published configuration |
 | `smc/fig_smc_hard_cpu.json` | an earlier CPU run of 2,000 particles, from before the script recorded `--n-repeats` and `--max-shift` |
 | `smc/sweep/ms*_ess*.json` | the `--max-shift` / `--ess-frac` sweep |
+
+## `reproduction/`
+
+A rerun of the synthetic experiments on NVIDIA L40S GPUs with the code of this repository
+(`find_xstar.py` and the losses as on `master` at `602c09a`; later commits add options that
+are off by default). Every run uses the library default, a **detached** RBF bandwidth (no
+`--bandwidth-grad`), so the grid corresponds to the paper's detached rerun
+(`reference/table1_detach.md`), not to the published Table 1 run.
+
+| file | command (from the repository root) |
+|---|---|
+| `table1.{md,json,tex}` | `$MT $T1 --runs-dir runs/table1v2` (no `--tag`, no `--extra`), then `--collect`: Table 1 and the refined columns of `tab:sim_full` |
+| `checks/table1_*.json` | `check_models.py` on the nine scenarios' networks, `--n-random-x 100`: `tab:model_quality` |
+| `nonstar/arm_*.json` | the [no-star target](#no-star-target) commands above: `tab:nonstar_results` |
+| `fig1/fig1_hard{.png,_sim.json,_sweep.npz}` | `fig1_toy_example.py --setting hard --n-restarts 25 --n-cond 250 --n-mc 3 --methods MLGD MLGD-F PMLGD PMLGD-F --betas 0 2 8 16 --n-beta-samples 2000 --rerun-sim --device cuda` (25 trajectories per method, not 10) |
+| `smc/fig_smc_hard.{json,png}` | `fig_smc_correction.py` with the Figure 1 flags above, on the networks of `fig1/` |
+
+Seeds are fixed (42), but trained weights differ across GPUs and library versions, so the
+numbers agree with the paper within run-to-run noise rather than digit for digit. The
+`tab:sim_full` ablation columns (plain, annealed, oracle) are not in this folder yet.
+
