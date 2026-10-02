@@ -22,6 +22,10 @@ share the architecture, so models and the fixed part are unchanged and the per-s
 scales with K*/K: M_var x K*/K and t_var x K*/K. A full run is --n_steps - --start_step
 guided steps. This is an extrapolation, not a measurement.
 
+Fast (non-deterministic) GPU kernels by default: a cost measurement needs no bit-identical
+results, and the deterministic ones (--deterministic; what run_mlgd_f uses) are slower and
+use more memory.
+
 Writes to --output_dir: step_cost.json (every measurement, the settings, GPU, model revisions,
 versions) and step_cost.md (the two tables: memory and run time, Turbo vs Base; per-step
 time, All vs Uniform).
@@ -217,8 +221,8 @@ def parse_args(argv=None):
     p.add_argument("--controlnet_scale", type=float, default=0.5)
     p.add_argument("--variation_prompt", type=str, default=VARIATION_PROMPT)
     p.add_argument("--seed", type=int, default=1)
-    p.add_argument("--no_deterministic", action="store_true",
-                   help="fast kernels; the paper's runs use deterministic ones")
+    p.add_argument("--deterministic", action="store_true",
+                   help="deterministic kernels, as run_mlgd_f uses (slower, more memory); default: fast")
     for m in ("architect", "sprinter", "controlnet", "hed", "clip"):
         p.add_argument(f"--{m}_revision", type=str, default=None)
     p.add_argument("--wandb_project", type=str, default="sdxl-step-cost")
@@ -239,15 +243,15 @@ def main(argv=None):
     if not torch.cuda.is_available():
         raise SystemExit("step_cost measures GPU memory: needs a CUDA GPU")
     os.makedirs(args.output_dir, exist_ok=True)
-    if args.no_deterministic:
-        torch.manual_seed(args.seed); np.random.seed(args.seed)
-    else:
+    if args.deterministic:
         make_deterministic(args.seed)
+    else:
+        torch.manual_seed(args.seed); np.random.seed(args.seed)
     gpu = torch.cuda.get_device_name(0)
     gpu_total = torch.cuda.get_device_properties(0).total_memory
     guided = args.n_steps - args.start_step
     ratio = args.base_steps / args.turbo_steps
-    print(f"{gpu}, {gpu_total / GB:.0f} GB; deterministic kernels: {not args.no_deterministic}", flush=True)
+    print(f"{gpu}, {gpu_total / GB:.0f} GB; deterministic kernels: {args.deterministic}", flush=True)
 
     ctx = setup(args, "cuda")
     revisions = {DEFAULT_ARCHITECT_MODEL_ID: resolved_revision(DEFAULT_ARCHITECT_MODEL_ID, args.architect_revision),
@@ -282,13 +286,13 @@ def main(argv=None):
                 _reset()
                 rows.append({"rule": rule, "n_cond": n, "n_sel": n_sel, "oom": True})
 
-    md = (f"# One MLGD-F guidance step: {gpu}, deterministic kernels: {not args.no_deterministic}\n\n"
+    md = (f"# One MLGD-F guidance step: {gpu}, deterministic kernels: {args.deterministic}\n\n"
           + memory_table(rows, gpu, guided, args.turbo_steps, args.base_steps) + "\n\n"
           + runtime_table(rows, gpu, args.uniform_fraction) + "\n")
     with open(os.path.join(args.output_dir, "step_cost.md"), "w") as f:
         f.write(md)
     with open(os.path.join(args.output_dir, "step_cost.json"), "w") as f:
-        json.dump({"gpu": gpu, "gpu_gb": gpu_total / GB, "deterministic": not args.no_deterministic,
+        json.dump({"gpu": gpu, "gpu_gb": gpu_total / GB, "deterministic": args.deterministic,
                    "guided_steps": guided, "base_over_turbo": ratio, "rows": rows,
                    "settings": {k: v for k, v in vars(args).items() if not k.endswith("_revision")},
                    "model_revisions": revisions, "versions": library_versions(),

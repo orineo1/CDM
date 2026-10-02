@@ -36,7 +36,7 @@ and the next one runs (on a 48 GB L40S, n_cond = 120 with All may not fit):
 
 ```bash
 bash experiments/stable_diffusion/step_cost/run.sh --num_variations 100 --rules all --n_repeats 1
-bash experiments/stable_diffusion/step_cost/run.sh --no_deterministic      # the fast kernels
+bash experiments/stable_diffusion/step_cost/run.sh --deterministic         # the runs' kernels: slower
 ```
 
 Every flag: `bash experiments/stable_diffusion/step_cost/run.sh help`. `DRY_RUN=1` prints
@@ -54,8 +54,9 @@ step, then for every n_cond and rule, 5 times:
 | fixed | Architect UNet forward, pred_x0, VAE decode | peak memory above models, time |
 | samples | the n_cond Sprinter samples (K = 2), the MMD, the backward through the n_sel selected ones | peak memory above the fixed part, time |
 
-Deterministic kernels are on by default, as in the paper's runs (`--no_deterministic` for
-the fast ones; they use less memory and time).
+Fast GPU kernels by default: a cost measurement needs no bit-identical results, and the
+deterministic kernels of the optimisation runs (`--deterministic`) are slower and use more
+memory. `step_cost.md` states which were used.
 
 ## Outputs
 
