@@ -8,7 +8,10 @@ No GPU, no model download, seconds. What it establishes:
     the table) -- everything of it that is not generation;
   - the interpolation figures' axes (orientation, monotonicity in age) and the sorted
     grid's even / by-hand picks;
-  - export_results.py on a fake finished run with baselines/ and eval/.
+  - the saliency analysis' scribble change and correlations, and the step-cost
+    projection and tables -- everything of them that is not a GPU pass;
+  - export_results.py on a fake finished run with baselines/, eval/ and saliency/, and a
+    step-cost output.
 
 `eval_all_experiments` imports `peft` and `controlnet_aux` through the package; those are
 SD-only dependencies (experiments/stable_diffusion/requirements.txt), so its part is
@@ -129,6 +132,50 @@ def test_age_axis_is_monotone_in_age(itp):
 
 
 # ---------------------------------------------------------------------------
+# saliency and step_cost: the CPU parts
+# ---------------------------------------------------------------------------
+
+def test_saliency_change_and_correlation(tmp_path):
+    from cdm.models.sd import saliency as sal
+    src = np.zeros((64, 64, 3), np.float32)
+    src[20:40, 10:50] = 1.0
+    opt = src.copy()
+    opt[20:30, 10:50] = 0.0        # a stroke removed
+    opt[45:50, 5:60] = 1.0         # a stroke added
+    change, signed = sal.scribble_change(src, opt, sigma=1.0)
+    assert signed[47, 30] > 0 and signed[25, 30] < 0 and change[5, 5] == 0
+    c = sal.change_counts(signed, 0.1)
+    assert c["added_pct"] > 0 and c["removed_pct"] > 0
+    assert abs(c["unchanged_pct"] + c["added_pct"] + c["removed_pct"] - 100) < 1e-9
+    rng = np.random.default_rng(0)
+    corr = sal.saliency_change_correlation(change + 1e-3 * rng.random(change.shape), change, src, n_bins=5)
+    assert corr["n_line_pixels"] == 20 * 40 and corr["spearman_rho"] > 0.8
+    assert corr["bin_saliency"] == sorted(corr["bin_saliency"]) and len(corr["bin_change"]) == 5
+    lat = sal.latent_correlation(rng.random((8, 8)), rng.random((8, 8)))
+    assert -1 <= lat["pearson_r"] <= 1 and sal.latent_correlation(np.ones((8, 8)), rng.random((8, 8)))["pearson_r"] is None
+    sal.plot_scribble_change(src, opt, signed, 0.1, str(tmp_path / "f7.png"))
+    sal.plot_saliency_correlation(change, corr, src, str(tmp_path / "f8.png"))
+    assert (tmp_path / "f7.png").exists() and (tmp_path / "f8.png").exists()
+
+
+def test_step_cost_projection_and_tables():
+    from cdm.models.sd import step_cost as sc
+    G = sc.GB
+    rep = lambda t: {"t_fixed": 3.0, "t_var": t, "models": 20 * G, "fixed": 3 * G, "var": 20 * G, "peak": 43 * G}
+    all100 = sc.summarize([rep(120.0), rep(122.0)], 100, 100, "all", 80 * G, 125, 15)
+    assert abs(all100["step_s_mean"] - 124.0) < 1e-9 and abs(all100["step_s_std"] - 1.0) < 1e-9
+    assert abs(all100["base"]["peak_gb"] - (20 + 3 + 20 * 15)) < 1e-9          # models + fixed + 15 x samples
+    assert abs(all100["base"]["step_s"] - (3 + 121 * 15)) < 1e-9 and all100["base"]["x_gpu"] > 4
+    assert abs(all100["run_h"] - 124 * 125 / 3600) < 1e-9
+    uni100 = sc.summarize([rep(69.0)], 100, 50, "uniform", 80 * G, 125, 15)
+    rows = [all100, uni100, {"rule": "all", "n_cond": 120, "n_sel": 120, "oom": True}]
+    mem = sc.memory_table(rows, "A100", 125, 2, 30)
+    assert "| 100 | 20.0 | 3.0 | 20.0 | 43.0 | 323 | 4.0x | 4.3 | 63 |" in mem and "| 120 | | | | OOM |" in mem
+    rt = sc.runtime_table(rows, "A100", 0.5)
+    assert "| 100 | 124.00 ± 1.00 | 72.00 ± 0.00 | 42% |" in rt and "| 120 | OOM | OOM |  |" in rt
+
+
+# ---------------------------------------------------------------------------
 # export_results on a fake finished run
 # ---------------------------------------------------------------------------
 
@@ -157,14 +204,25 @@ def test_export_results(tmp_path):
     (run / "eval" / "eval_table.md").write_text("# eval: N = 2000\n\n| Method | MMD |\n|---|---|\n| mlgd_f | 0.386 |\n")
     (run / "eval" / "embeddings.npz").write_bytes(b"big")   # must not be exported
 
+    (run / "saliency").mkdir()
+    json.dump({"saliency_vs_change": {"spearman_rho": 0.5}}, open(run / "saliency" / "saliency_results.json", "w"))
+    for f in ["scribble_change.png", "saliency_correlation.png"]:
+        Image.new("RGB", (4, 4)).save(run / "saliency" / f)
+    cost = tmp_path / "cost" / "A100_7"
+    cost.mkdir(parents=True)
+    json.dump({"gpu": "NVIDIA A100"}, open(cost / "step_cost.json", "w"))
+    (cost / "step_cost.md").write_text("# One MLGD-F guidance step\n")
+
     r = subprocess.run([sys.executable, os.path.join(SD_EXP, "export_results.py"),
                         "--run-dir", str(outs), "--dest", str(tmp_path / "res"),
-                        "--interp-dir", str(tmp_path / "none"), "--interp-dest", str(tmp_path / "ires")],
+                        "--interp-dir", str(tmp_path / "none"), "--interp-dest", str(tmp_path / "ires"),
+                        "--cost-dir", str(tmp_path / "cost"), "--cost-dest", str(tmp_path / "cres")],
                        capture_output=True, text=True, cwd=REPO)
     assert r.returncode == 0, r.stdout + r.stderr
     dest = tmp_path / "res" / "full_BalancedTarget_seed1_123"
     kept = ["metrics.json", "run_info.txt", "curves.png", "scribble_source.png", "final_scribble_mlgd_f.png",
-            "baselines/scribble_sdedit_best.png", "eval/eval_results.json", "eval/preview_source.png"]
+            "baselines/scribble_sdedit_best.png", "eval/eval_results.json", "eval/preview_source.png",
+            "saliency/saliency_results.json", "saliency/scribble_change.png", "saliency/saliency_correlation.png"]
     assert all((dest / f).exists() for f in kept), [f for f in kept if not (dest / f).exists()]
     # each file once: duplicates, plots of tabulated numbers and large files stay in outputs/
     dropped = ["steps.csv", "final_photos_mlgd_f.png", "baselines/scribble_source.png",
@@ -172,3 +230,4 @@ def test_export_results(tmp_path):
     assert not any((dest / f).exists() for f in dropped), [f for f in dropped if (dest / f).exists()]
     assert not (tmp_path / "res" / "mlgdf_runs.md").exists()
     assert "## full_BalancedTarget_seed1_123: N = 2000" in (tmp_path / "res" / "eval_table.md").read_text()
+    assert (tmp_path / "cres" / "A100_7" / "step_cost.md").exists()

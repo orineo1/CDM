@@ -21,6 +21,11 @@
 #                                                  vs a 2,000-image target, MMD / SWD / p(male),
 #                                                  of every scribble of a run, into
 #                                                  <run dir>/eval/. No photos are saved.
+#   bash run.sh saliency <scenario> [flags...]     GPU, ~10 min. Where MLGD-F edited the scribble
+#                                                  and why there (Figs. 7 and 8): scribble change,
+#                                                  gender saliency, their correlation, the latent
+#                                                  view, into <run dir>/saliency/. Gender
+#                                                  scenarios only.
 #
 # Every run gets its own directory, outputs/<tier>_<Scenario>_seed<S>_<id>/, where <id> is
 # the SLURM job id (a timestamp outside SLURM; RUN_TAG=... sets it). baselines and eval
@@ -65,78 +70,14 @@
 #                            HF_HOME, MPLCONFIGDIR, WANDB_DIR, ... override one by one)
 #   DRY_RUN=1                print the command instead of running it
 set -euo pipefail
-export PYTHONUNBUFFERED=1   # print lines reach the log as they happen, also under sbatch
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="$(cd "$HERE/../../.." && pwd)"
-PY="${PYTHON:-python}"
-# no venv active (e.g. sbatch from a plain login shell): try VENV, then the repo's .venv
-if ! command -v "$PY" >/dev/null 2>&1; then
-  for cand in ${VENV:+"$VENV/bin/python"} "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/.venv/bin/python"; do
-    [ -x "$cand" ] && { PY="$cand"; break; }
-  done
-  command -v "$PY" >/dev/null 2>&1 || { echo "run.sh: no python on PATH -- activate the venv before sbatch" \
-    "(source /path/to/venv/bin/activate), or set VENV=/path/to/venv or PYTHON=/path/to/python" >&2; exit 69; }
-fi
 OUT="$HERE/outputs"
+# shellcheck source=../env.sh
+source "$HERE/../env.sh"      # REPO, PY, caches kept out of $HOME, the helpers below
 SCENARIOS=(balanced skewed gender_interpolation age_interpolation)
 TIER="${1:-check}"
-cd "$REPO"
 
-# Keep every cache next to the repo (e.g. lab storage), not in $HOME: model weights,
-# matplotlib, wandb, torch, pip, CUDA/Triton kernels. Anything already set in the
-# environment is kept. The wandb key: `wandb login` (writes ~/.netrc) or WANDB_API_KEY.
-CACHE_DIR="${CACHE_DIR:-$REPO/.cache}"
-export HF_HOME="${HF_HOME:-$CACHE_DIR/huggingface}"
-export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$CACHE_DIR}"
-export MPLCONFIGDIR="${MPLCONFIGDIR:-$CACHE_DIR/matplotlib}"
-export TORCH_HOME="${TORCH_HOME:-$CACHE_DIR/torch}"
-export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$CACHE_DIR/pip}"
-export WANDB_DIR="${WANDB_DIR:-$OUT}"                  # wandb/ run files (and offline runs)
-export WANDB_CACHE_DIR="${WANDB_CACHE_DIR:-$CACHE_DIR/wandb}"
-export WANDB_DATA_DIR="${WANDB_DATA_DIR:-$CACHE_DIR/wandb-data}"
-export WANDB_ARTIFACT_DIR="${WANDB_ARTIFACT_DIR:-$CACHE_DIR/wandb-artifacts}"
-export WANDB_CONFIG_DIR="${WANDB_CONFIG_DIR:-$CACHE_DIR/wandb-config}"
-export CUDA_CACHE_PATH="${CUDA_CACHE_PATH:-$CACHE_DIR/nv}"
-export TRITON_CACHE_DIR="${TRITON_CACHE_DIR:-$CACHE_DIR/triton}"
-mkdir -p "$CACHE_DIR" "$MPLCONFIGDIR" "$OUT"
-# deterministic cuBLAS (run_mlgd_f.make_deterministic also sets it; here it is set
-# before the interpreter starts, which is what cuBLAS requires)
-export CUBLAS_WORKSPACE_CONFIG="${CUBLAS_WORKSPACE_CONFIG:-:4096:8}"
-
-usage() { echo "usage: bash run.sh [check | help | smoke|full|baselines|eval <balanced|skewed|gender_interpolation|age_interpolation|all> [flags...]]" >&2; exit 64; }
-
-revision_args() {   # the pinned weights of config/models.env, as --*_revision flags
-  local rev v
-  for rev in ARCHITECT SPRINTER CONTROLNET HED CLIP; do
-    v="${rev}_REVISION"
-    [ -n "${!v:-}" ] && echo "--$(tr 'A-Z' 'a-z' <<< "$rev")_revision" "${!v}"
-  done
-}
-
-flag_value() {   # flag_value <flag> <default> [args...]: the last value given to <flag>
-  local flag="$1" val="$2" prev="" a; shift 2
-  for a in "$@"; do [ "$prev" = "$flag" ] && val="$a"; prev="$a"; done
-  printf '%s' "$val"
-}
-
-latest_run() {   # latest_run <Scenario>: the newest finished full run directory, or nothing
-  local d
-  for d in $(ls -dt "$OUT/full_${1}_seed"* "$OUT/full_${1}" 2>/dev/null); do
-    [ -f "$d/metrics.json" ] && { printf '%s' "$d"; return; }
-  done
-}
-
-resolve_run_dir() {   # resolve_run_dir <Scenario> [args...]: --run_dir, else the latest run
-  local d
-  d="$(flag_value --run_dir "" "${@:2}")"
-  [ -n "$d" ] || d="$(latest_run "$1")"
-  if [ -z "$d" ]; then
-    [ -n "${DRY_RUN:-}" ] && { printf '%s' "$OUT/full_${1}_seed<S>_<id>"; return; }
-    echo "no finished full run of $1 in $OUT: run 'run.sh full' first, or pass --run_dir" >&2; exit 66
-  fi
-  if [ -z "${DRY_RUN:-}" ] && [ ! -d "$d" ]; then echo "no such run directory: $d" >&2; exit 66; fi
-  [ -d "$d" ] && (cd "$d" && pwd) || printf '%s' "$d"
-}
+usage() { echo "usage: bash run.sh [check | help | smoke|full|baselines|eval|saliency <balanced|skewed|gender_interpolation|age_interpolation|all> [flags...]]" >&2; exit 64; }
 
 baselines_one() {   # baselines_one <scenario> [extra flags...]: sdedit_best + avg_prompt
   local name="$1"; shift
@@ -169,15 +110,32 @@ baselines_one() {   # baselines_one <scenario> [extra flags...]: sdedit_best + a
     echo "=== baselines | $name | wandb ${WANDB_PROJECT:-sdxl-baselines}/$WANDB_NAME ==="
     printf '%q ' "${cmd[@]}"; echo
     [ -n "${DRY_RUN:-}" ] && exit 0
-    mkdir -p "$outdir"
-    {
-      echo "date:       $(date -Iseconds)"
-      echo "git commit: $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)$(git -C "$REPO" diff --quiet 2>/dev/null || echo ' (dirty)')"
-      echo "host:       $(hostname)  slurm job: ${SLURM_JOB_ID:-none}"
-      "$PY" -c "import torch; print('gpu:       ', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none', '| torch', torch.__version__)"
-      echo "config:     config/$name.env  overrides: ${*:-none}"
-      printf 'command:    '; printf '%q ' "${cmd[@]}"; echo
-    } > "$outdir/run_info.txt"
+    write_run_info "$outdir" "config/$name.env  overrides: ${*:-none}" "${cmd[@]}"
+    "${cmd[@]}"
+  )
+}
+
+saliency_one() {   # saliency_one <scenario> [extra flags...]: Figs. 7 and 8 of a finished run
+  local name="$1"; shift
+  local cfg="$HERE/config/${name}.env"
+  [ -f "$cfg" ] || { echo "no such scenario: $name (config/$name.env)" >&2; usage; }
+  (
+    set -a; source "$HERE/config/models.env"; source "$cfg"; set +a
+    [ "$MODE" = gender ] || { echo "$name: the saliency analysis needs a gender scenario" >&2; exit 64; }
+    local rundir; rundir="$(resolve_run_dir "$SCENARIO" "$@")" || exit $?
+    local outdir; outdir="$(flag_value --output_dir "$rundir/saliency" "$@")"
+    local args=( --run_dir "$rundir" --output_dir "$outdir" --controlnet_scale "$CONTROLNET_SCALE"
+                 $(revision_args) --wandb_project "${WANDB_PROJECT:-sdxl-saliency}" )
+    [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
+    args+=( "$@" )
+    export WANDB_NAME="${WANDB_NAME:-saliency_$(basename "$rundir")}"
+    export WANDB_RUN_GROUP="${WANDB_RUN_GROUP:-$(basename "$rundir")}"
+    export WANDB_TAGS="${WANDB_TAGS:-saliency,$name}"
+    local cmd=( "$PY" -m cdm.models.sd.saliency "${args[@]}" )
+    echo "=== saliency | $name | $outdir | wandb ${WANDB_PROJECT:-sdxl-saliency}/$WANDB_NAME ==="
+    printf '%q ' "${cmd[@]}"; echo
+    [ -n "${DRY_RUN:-}" ] && exit 0
+    write_run_info "$outdir" "config/$name.env  overrides: ${*:-none}" "${cmd[@]}"
     "${cmd[@]}"
   )
 }
@@ -211,17 +169,7 @@ eval_one() {   # eval_one <scenario> [extra flags...]: the N=2000 final evaluati
     echo "=== eval | $name | wandb ${WANDB_PROJECT:-sdxl-eval}/$WANDB_NAME ==="
     printf '%q ' "${cmd[@]}"; echo
     [ -n "${DRY_RUN:-}" ] && exit 0
-    mkdir -p "$outdir"
-    {
-      echo "date:       $(date -Iseconds)"
-      echo "git commit: $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)$(git -C "$REPO" diff --quiet 2>/dev/null || echo ' (dirty)')"
-      echo "host:       $(hostname)  slurm job: ${SLURM_JOB_ID:-none}"
-      "$PY" -c "import torch; print('gpu:       ', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none', '| torch', torch.__version__)"
-      echo "config:     config/$name.env  overrides: ${*:-none}"
-      printf 'command:    '; printf '%q ' "${cmd[@]}"; echo
-      "$PY" -c "from cdm.models.sd.run_mlgd_f import library_versions as v; print('versions:   ', v())"
-    } > "$outdir/run_info.txt"
-    "$PY" -m pip freeze > "$outdir/pip_freeze.txt" 2>/dev/null || true
+    write_run_info "$outdir" "config/$name.env  overrides: ${*:-none}" "${cmd[@]}"
     "${cmd[@]}"
   )
 }
@@ -276,17 +224,7 @@ run_one() {   # run_one <tier> <scenario> [extra flags...]
     printf '%q ' "${cmd[@]}"; echo
     [ -n "${DRY_RUN:-}" ] && exit 0
 
-    mkdir -p "$outdir"
-    {   # what produced this run
-      echo "date:       $(date -Iseconds)"
-      echo "git commit: $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)$(git -C "$REPO" diff --quiet 2>/dev/null || echo ' (dirty)')"
-      echo "host:       $(hostname)  slurm job: ${SLURM_JOB_ID:-none}"
-      "$PY" -c "import torch; print('gpu:       ', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none', '| torch', torch.__version__)"
-      echo "config:     config/$name.env  overrides: ${*:-none}"
-      printf 'command:    '; printf '%q ' "${cmd[@]}"; echo
-      "$PY" -c "from cdm.models.sd.run_mlgd_f import library_versions as v; print('versions:   ', v())"
-    } > "$outdir/run_info.txt"
-    "$PY" -m pip freeze > "$outdir/pip_freeze.txt" 2>/dev/null || true   # the exact environment
+    write_run_info "$outdir" "config/$name.env  overrides: ${*:-none}" "${cmd[@]}"
     "${cmd[@]}"
   )
 }
@@ -304,9 +242,7 @@ case "$TIER" in
   baselines)
     SCEN="${2:-}"; [ -n "$SCEN" ] || usage
     shift 2
-    if [ -z "${DRY_RUN:-}" ]; then
-      "$PY" -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 'no CUDA GPU visible (sbatch: add --gres=gpu:1)')"
-    fi
+    require_gpu
     if [ "$SCEN" = all ] && [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
       SCEN="${SCENARIOS[$SLURM_ARRAY_TASK_ID]:?array index must be 0-3}"
     fi
@@ -321,9 +257,7 @@ case "$TIER" in
   eval)
     SCEN="${2:-}"; [ -n "$SCEN" ] || usage
     shift 2
-    if [ -z "${DRY_RUN:-}" ]; then
-      "$PY" -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 'no CUDA GPU visible (sbatch: add --gres=gpu:1)')"
-    fi
+    require_gpu
     if [ "$SCEN" = all ] && [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
       SCEN="${SCENARIOS[$SLURM_ARRAY_TASK_ID]:?array index must be 0-3}"
     fi
@@ -335,11 +269,23 @@ case "$TIER" in
     [ -n "${DRY_RUN:-}" ] || echo "save into results/: python experiments/stable_diffusion/export_results.py"
     ;;
 
+  saliency)
+    SCEN="${2:-}"; [ -n "$SCEN" ] || usage
+    shift 2
+    require_gpu
+    if [ "$SCEN" = all ]; then
+      for s in balanced skewed gender_interpolation; do saliency_one "$s" "$@"; done
+    else
+      saliency_one "$SCEN" "$@"
+    fi
+    [ -n "${DRY_RUN:-}" ] || echo "save into results/: python experiments/stable_diffusion/export_results.py"
+    ;;
+
   smoke|full)
     SCEN="${2:-}"; [ -n "$SCEN" ] || usage
     shift 2
-    if [ -z "${DRY_RUN:-}" ]; then   # fail now, not after loading the models
-      "$PY" -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 'no CUDA GPU visible (sbatch: add --gres=gpu:1)')"
+    require_gpu
+    if [ -z "${DRY_RUN:-}" ]; then
       if [ -z "${WANDB_API_KEY:-}" ] && [ "${WANDB_MODE:-}" != offline ] && ! grep -q api.wandb.ai ~/.netrc 2>/dev/null; then
         echo "warning: no wandb login found; run 'wandb login' once, or export WANDB_API_KEY / WANDB_MODE=offline" >&2
       fi

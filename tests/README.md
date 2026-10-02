@@ -8,7 +8,7 @@ Cheapest first. `tests/run_all_tests.sh` runs all of them.
 | `test_determinism.py` | 2 | the same seed twice gives the same answer |
 | `test_population.py` | — | particle/refinement plumbing, structure only (the file says outright that its values are meaningless) |
 | `test_refactor_guards.py` | 0.5 | narrow guards that inspect an object directly, one per defect they pin |
-| `test_sd.py` | 0.5 | the Stable Diffusion experiment's CPU parts: its package imports and shared MMD (`run.sh check`), the N = 2,000 evaluation's bookkeeping, the interpolation axes, `export_results.py` |
+| `test_sd.py` | 0.5 | the Stable Diffusion experiment's CPU parts: its package imports and shared MMD (`run.sh check`), the N = 2,000 evaluation's bookkeeping, the interpolation axes, the saliency change / correlation and the step-cost tables, `export_results.py` |
 
 All of the above are CPU-only, seconds, tiny untrained models, no downloads.
 

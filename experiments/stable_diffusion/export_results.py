@@ -20,6 +20,10 @@ from, each file once:
         eval/                                   eval_results.json (every number), run_info.txt,
                                                 preview_<method>.png and target_preview_<group>.png
                                                 (5 portraits each)
+        saliency/                               saliency_results.json, scribble_change.png (Fig. 7),
+                                                saliency_correlation.png (Fig. 8), run_info.txt
+    step_cost/results/<GPU>_<id>/               step_cost.md (the two tables), step_cost.json,
+                                                run_info.txt
     interpolation/results/<Scenario>/
         sorted_grid.png, pca_scatter.png, ranked_all.png, picks.json (from the notebook's
         outputs/<Scenario>)
@@ -47,9 +51,12 @@ import matplotlib.pyplot as plt
 HERE = os.path.dirname(os.path.abspath(__file__))
 EXP = os.path.join(HERE, "four_targets")
 INTERP = os.path.join(HERE, "interpolation")
+STEP_COST = os.path.join(HERE, "step_cost")
 BASELINE_FILES = ["scribble_avg_prompt.png", "scribble_sdedit_best.png", "avg_prompt_portrait.png",
                   "sdedit_search.png", "baselines_meta.json", "run_info.txt"]
 EVAL_FILES = ["eval_results.json", "run_info.txt"]
+SALIENCY_FILES = ["saliency_results.json", "scribble_change.png", "saliency_correlation.png", "run_info.txt"]
+STEP_COST_FILES = ["step_cost.md", "step_cost.json", "run_info.txt"]
 INTERP_FILES = ["sorted_grid.png", "pca_scatter.png", "ranked_all.png", "picks.json"]
 ORDER = ["BalancedTarget", "SkewedTarget", "GenderInterpolation", "AgeInterpolation"]
 SINGLE_FILES = ["metrics.json", "run_info.txt", "source_portrait.png", "final_scribble_mlgd_f.png",
@@ -101,6 +108,7 @@ def export_run(run_dir, dest):
         shutil.copy2(os.path.join(run_dir, "scribble.png"), os.path.join(dest, "scribble_source.png"))
     copy_sub(os.path.join(run_dir, "baselines"), os.path.join(dest, "baselines"), BASELINE_FILES, ())
     copy_sub(os.path.join(run_dir, "eval"), os.path.join(dest, "eval"), EVAL_FILES, ("*preview_*.png",))
+    copy_sub(os.path.join(run_dir, "saliency"), os.path.join(dest, "saliency"), SALIENCY_FILES, ())
 
 
 def copy_sub(src, dest, names, patterns):
@@ -173,6 +181,14 @@ def export_interpolation(run_dir, dest):
         print(f"exported {d} -> {out}")
 
 
+def export_step_cost(cost_dir, dest):
+    """step_cost/outputs/<GPU>_<id>/ -> step_cost/results/<GPU>_<id>/."""
+    for d in sorted(glob.glob(os.path.join(cost_dir, "*"))):
+        if os.path.exists(os.path.join(d, "step_cost.json")):
+            copy_sub(d, os.path.join(dest, os.path.basename(d)), STEP_COST_FILES, ())
+            print(f"exported {d} -> {os.path.join(dest, os.path.basename(d))}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--tier", default="full", help="export outputs/<tier>_* (default full)")
@@ -183,10 +199,14 @@ def main():
     p.add_argument("--interp-dir", default=os.path.join(INTERP, "outputs"),
                    help="the interpolation notebook's outputs (default interpolation/outputs)")
     p.add_argument("--interp-dest", default=os.path.join(INTERP, "results"))
+    p.add_argument("--cost-dir", default=os.path.join(STEP_COST, "outputs"),
+                   help="step_cost/run.sh's outputs (default step_cost/outputs)")
+    p.add_argument("--cost-dest", default=os.path.join(STEP_COST, "results"))
     args = p.parse_args()
 
     export_evals(args.run_dir, args.dest)
     export_interpolation(args.interp_dir, args.interp_dest)
+    export_step_cost(args.cost_dir, args.cost_dest)
 
     runs = {}
     for d in sorted(glob.glob(os.path.join(args.run_dir, f"{args.tier}_*"))):
