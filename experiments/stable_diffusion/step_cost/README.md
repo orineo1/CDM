@@ -18,7 +18,12 @@ guidance step measured in isolation:
 | GPU | yes; the default (2 x n_cond, 2 rules, 5 repeats) is about an hour. Numbers depend on the GPU: the paper's ablation used an A100 (80 GB) |
 | W&B | project `sdxl-step-cost` |
 
-Ported from the paper's `measure_dps_step_memory.ipynb`; the selection-rule timing is new.
+Ported from the paper's `measure_dps_step_memory.ipynb` (memory) and from
+`scripts/time_dps_step.py` / `time_dps_step.sh` on branch `test-witness-result` of
+`orineo1/conditional-matching-paper` (the per-step timing of the selection table), and
+measured the same way: random latents and 250 random target CLIP vectors (the content does
+not change the cost), fast kernels, `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`, one
+untimed call of each configuration, then 5 timed calls, mean ± std.
 
 ## Run
 
@@ -44,9 +49,9 @@ the command.
 
 ## What happens
 
-The first guidance step of a run, set up as `run_mlgd_f.py` sets it up (M = 100 detached
-target portraits, a HED scribble, SDEdit init at step 125 of 250), one unmeasured warm-up
-step, then for every n_cond and rule, 5 times:
+One guidance step as `run_mlgd_f.py` runs it (mid-schedule timestep, step 125 of 250), on
+random latents and 250 random target CLIP vectors; for every n_cond and rule, one untimed
+warm-up call, then 5 timed calls:
 
 | part | what | measured |
 |---|---|---|
@@ -67,9 +72,11 @@ into `results/<GPU>_<id>/`.
 
 ## Differences from the notebook
 
-- The step is the pipeline's (SDXL Base Architect, 250 / 125 steps, ControlNet scale 0.5;
-  the notebook used Turbo as Architect, 30 / 15 steps, scale 0.8); the notebook unpacked six
-  return values of `run_dps_step_clip`, which returns five.
+- The step is the pipeline's (SDXL Base Architect, ControlNet scale 0.5; the notebook used
+  Turbo as Architect and scale 0.8); the notebook unpacked six return values of
+  `run_dps_step_clip`, which returns five.
+- As in `time_dps_step.py`: random inputs instead of generated targets and a scribble, a
+  warm-up call per configuration, the Uniform gradient not rescaled (cost-neutral).
 - Base is projected from the decomposition (fixed part unchanged, per-sample part x K*/K)
   for memory and time alike; the notebook's separate Turbo-vs-Base sampling timing and
   sample images are left out.

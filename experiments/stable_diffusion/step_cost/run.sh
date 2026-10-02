@@ -26,6 +26,7 @@ OUT="$HERE/outputs"
 source "$HERE/../env.sh"
 CFG="$SD_DIR/four_targets/config"
 
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"   # as time_dps_step.sh
 if [ "${1:-}" = help ]; then "$PY" -m cdm.models.sd.step_cost --help; exit 0; fi
 require_gpu
 set -a; source "$CFG/models.env"; source "$CFG/balanced.env"; set +a
