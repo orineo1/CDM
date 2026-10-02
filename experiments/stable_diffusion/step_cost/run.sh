@@ -27,6 +27,9 @@ source "$HERE/../env.sh"
 CFG="$SD_DIR/four_targets/config"
 
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"   # as time_dps_step.sh
+# env.sh sets CUBLAS_WORKSPACE_CONFIG for deterministic runs; it limits cuBLAS's workspace and
+# slows large matmuls, so drop it unless --deterministic is asked for (time_dps_step.sh has none)
+case " $* " in *" --deterministic "*) ;; *) unset CUBLAS_WORKSPACE_CONFIG ;; esac
 if [ "${1:-}" = help ]; then "$PY" -m cdm.models.sd.step_cost --help; exit 0; fi
 require_gpu
 set -a; source "$CFG/models.env"; source "$CFG/balanced.env"; set +a

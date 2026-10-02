@@ -109,10 +109,13 @@ def runtime_table(rows, gpu, fraction):
 # GPU part
 # ---------------------------------------------------------------------------
 
-def _reset():
+def _reset(free_cache=False):
+    """Restart the peak-memory counter. The cache is kept between calls, as in
+    time_dps_step.py: emptying it would make every timed step re-allocate from the driver."""
     import torch
-    gc.collect()
-    torch.cuda.empty_cache()
+    if free_cache:
+        gc.collect()
+        torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
 
 
@@ -258,7 +261,7 @@ def main(argv=None):
                 rows.append(summarize(reps, n, n_sel, rule, gpu_total, guided, ratio))
             except torch.cuda.OutOfMemoryError:
                 print("  OOM", flush=True)
-                _reset()
+                _reset(free_cache=True)
                 rows.append({"rule": rule, "n_cond": n, "n_sel": n_sel, "oom": True})
 
     md = (f"# One MLGD-F guidance step: {gpu}, deterministic kernels: {args.deterministic}\n\n"
