@@ -258,7 +258,12 @@ bash experiments/stable_diffusion/four_targets/run.sh eval balanced --run_dir <r
 ```
 
 and likewise `skewed --seed 6`, `gender_interpolation --seed 8`, and
-`age_interpolation --seed 2 --base_zeta 7.5 --age_source min` (budget 178). The other
+`age_interpolation --seed 2 --base_zeta 7.5 --age_source min` (budget 178). The SDEdit
+budgets are the MLGD-F optimisation times of the original, non-deterministic code. The
+code here forces deterministic GPU kernels (see Reproducibility), which is slower, so a run
+now takes longer than 150 / 178 min; the budget is therefore passed explicitly with
+`--lgd_cm_minutes` instead of being read from the run's `metrics.json`, so the baselines get
+the same compute as in the paper. The other
 settings are `config/<scenario>.env`; each run's exact commands are in its `run_info.txt`,
 `baselines/run_info.txt` and `eval/run_info.txt`.
 
