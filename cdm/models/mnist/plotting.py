@@ -202,14 +202,6 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
     target_rad_x_closed = np.append(target_rad_x, target_rad_x[0])
     target_rad_y_closed = np.append(target_rad_y, target_rad_y[0])
 
-    local_polar_max = target_rad_y.max()
-    for ang in temp_angs:
-        counts, _ = np.histogram(
-            np.deg2rad(ang.detach().cpu().numpy()),
-            bins=np.linspace(0, 2 * np.pi, 37), density=True)
-        local_polar_max = max(local_polar_max, counts.max() if len(counts) else 0)
-    polar_ylim = local_polar_max * 1.1
-
     def _make_cart(show_titles, show_legend):
         fig, cart_axes = plt.subplots(1, dist_k, figsize=(dist_k * 4, 4), sharey=True)
         cart_axes = np.array(cart_axes).reshape(dist_k)
@@ -239,9 +231,11 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
         return fig
 
     def _make_polar(show_titles, show_legend):
-        fig, polar_axes = plt.subplots(1, dist_k, figsize=(dist_k * 4.6, 4),
+        fig, polar_axes = plt.subplots(1, dist_k, figsize=(dist_k * 4.2, 4.4),
                                        subplot_kw={'projection': 'polar'},
-                                       gridspec_kw=dict(wspace=0.75))
+                                       gridspec_kw=dict(wspace=0.35, left=0.02, right=0.98,
+                                                        top=0.88 if show_titles else 0.92,
+                                                        bottom=0.08))
         polar_axes = np.array(polar_axes).reshape(dist_k)
         for rank, (idx, ang) in enumerate(zip(dist_ix, temp_angs)):
             ang_rad   = np.deg2rad(ang.detach().cpu().numpy())
@@ -258,8 +252,11 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
                     color='orange', linewidth=2.5, zorder=4, label='Target')
             ax.set_theta_zero_location('N'); ax.set_theta_direction(-1)
             ax.set_yticklabels([]); ax.set_yticks([])
-            ax.tick_params(axis='x', labelsize=18, pad=12)
-            ax.set_ylim(0, polar_ylim)
+            ax.set_xticks(np.deg2rad(np.arange(0, 360, 45)))
+            ax.set_xticklabels(['' if a == 0 else f'{a}°' for a in range(0, 360, 45)])  # no 0° label
+            ax.tick_params(axis='x', labelsize=16, pad=8)
+            # each circle is scaled to its own maximum (sampled bars or target)
+            ax.set_ylim(0, max(counts.max() if len(counts) else 0, target_rad_y.max()) * 1.05)
             if show_titles:
                 ax.set_title(f'Rank {rank+1} | Loss {loss_log[idx]:.4f} | Seed {seed_log[idx]}',
                              fontsize=9, pad=14)
