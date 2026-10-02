@@ -110,3 +110,17 @@ Reading the table:
   GB-FESO run (97 s) and 1.4 times GB-FESO over its four starts (390 s, best start by surrogate KL).
   MLGD-F (consistency model) is fast (117 s) but less accurate than the 30 x 30 grid on our diffusion
   surrogate (62 s): its few-step sampler is the limiting factor here.
+
+## Equal-compute comparison and evaluation noise (2 October 2026)
+
+`results/` now holds a re-evaluation of all runs together with three equal-compute variants:
+MLGD with 2 trajectories (`SAMPLER=diff RESTARTS=2 TAG=_r2 sbatch --array=0-7 slurm/slurm_ours.sh`, about
+the time of one GB-FESO run), GB-FESO with two extra random starts (`TAG=_rand EXTRA='--starts rand1,rand2'
+sbatch --array=0-7 slurm/slurm_gbfeso.sh`, best of 6 starts is about MLGD's time), and GB-FESO with
+1,150 instead of 201 steps per start (`PER=2 TAG=_long EXTRA='--steps 1150 --method-name GB-FESO-long'
+sbatch --array=0-19 slurm/slurm_gbfeso.sh`). Scored with `EV=runs/peptide/eval_v2 sbatch slurm/slurm_eval.sh`.
+
+Re-simulating the same eps changes a target's dF error by a median 0.04 k_BT (up to 0.24), the same
+size as the differences between the methods' median errors, so medians do not separate the methods.
+The robust differences are in the tail: the share of targets within 0.3 k_BT, the mean dF error and the
+eps error.
