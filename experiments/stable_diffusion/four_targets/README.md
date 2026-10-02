@@ -187,14 +187,20 @@ python experiments/stable_diffusion/export_results.py                  # outputs
 python experiments/stable_diffusion/export_results.py --tier smoke --dest /tmp/x   # try it on smoke runs
 ```
 
-It exports every finished run to `results/<run>/`, including that run's `baselines/` and
-`eval/`. For the older layout it also copies `outputs/eval_<Scenario>/` into `results/<Scenario>/eval/` (JSON, table,
-previews, plots, run info) and writes `results/eval_table.md` with every scenario's
-evaluation. It writes `results/mlgdf_runs.md` (one row per scenario: final MMD next to the paper's,
-unguided MMD, steps, settings, time, commit, W&B link) and `results/<Scenario>/` with
-`metrics.json`, `steps.csv`, `run_info.txt`, `curves.png` (the per-step curves),
-the scribbles (`scribble_source.png` is the name `eval_baselines` expects), the source
-portrait, the final photos and the target plots. The large arrays stay in `outputs/`.
+It writes `results/eval_table.md` (every run's N = 2,000 table) and, per run,
+`results/<run>/` with only what the results are read from, each file once:
+
+| file | contents |
+|---|---|
+| `metrics.json`, `run_info.txt`, `curves.png` | the run's record (args, every step, model revisions, W&B link), the exact command, the per-step curves |
+| `scribble_source.png`, `source_portrait.png`, `final_scribble_mlgd_f.png` | the source scribble and portrait, the MLGD-F scribble |
+| `baselines/` | `scribble_avg_prompt.png`, `scribble_sdedit_best.png`, `avg_prompt_portrait.png`, `sdedit_search.png`, `baselines_meta.json`, `run_info.txt` |
+| `eval/` | `eval_results.json` (every number), `run_info.txt`, `preview_<method>.png` and `target_preview_<group>.png` (5 portraits each) |
+
+`<run>` is the run directory's name; to publish a run without its job id, point
+`--run-dir` at a folder of symlinks named e.g. `full_BalancedTarget_seed4`. Everything else
+(`steps.csv`, also inside `metrics.json`; photo grids; target galleries; the bar and CI
+plots of numbers that are in `eval_table.md`; `npy/`; embeddings) stays in `outputs/`.
 
 ## Reproducibility
 
@@ -231,10 +237,34 @@ job and `diff` the two `steps.csv` (ignoring `elapsed_s`) and `cmp` the two
 implementation is printed during the run (`warn_only`); if one appears, that operation is
 the remaining source of drift.
 
-## Reference numbers
+## The paper's runs
 
-`results/table3_sd_results.md`, `results/table15_sd_swd.md` — transcribed from the paper.
-Provenance in `results/PROVENANCE.md`.
+The paper reports one run per scenario, all with `base_zeta` 7.5; `results/` holds exactly
+these four (`results/eval_table.md` has their N = 2,000 tables):
+
+| scenario | `results/` | seed | SDEdit budget (min) |
+|---|---|---|---|
+| balanced | `full_BalancedTarget_seed4` | 4 | 150 |
+| skewed | `full_SkewedTarget_seed6` | 6 | 150 |
+| gender_interpolation | `full_GenderInterpolation_seed8` | 8 | 150 |
+| age_interpolation | `full_AgeInterpolation_seed2` (source portrait: age 40) | 2 | 178 |
+
+To reproduce one (GPU: NVIDIA L40S; the weights are pinned by `config/models.env`):
+
+```
+bash experiments/stable_diffusion/four_targets/run.sh full balanced --seed 4 --base_zeta 7.5
+bash experiments/stable_diffusion/four_targets/run.sh baselines balanced --run_dir <run> --lgd_cm_minutes 150
+bash experiments/stable_diffusion/four_targets/run.sh eval balanced --run_dir <run>
+```
+
+and likewise `skewed --seed 6`, `gender_interpolation --seed 8`, and
+`age_interpolation --seed 2 --base_zeta 7.5 --age_source min` (budget 178). The other
+settings are `config/<scenario>.env`; each run's exact commands are in its `run_info.txt`,
+`baselines/run_info.txt` and `eval/run_info.txt`.
+
+The code in `cdm/models/sd/` is ported from `orineo1/conditional-matching-paper` @ `cb8bc91`
+(branch `claude/sd-shared-controlnet-hvt-uniform`, `SD_cond_SD_controlnet/`);
+`cdm/models/sd/README.md` lists what is carried there and what is shared.
 
 `outputs/` is for local runs and ships empty; `export_results.py` is what copies a run
 into `results/`.

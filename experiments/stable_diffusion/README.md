@@ -119,10 +119,10 @@ python experiments/stable_diffusion/export_results.py   # outputs/full_* -> four
 ```
 
 copies the finished runs into the committed `four_targets/results/`: per run its
-`metrics.json`, `steps.csv`, `run_info.txt`, the curves, the scribbles and previews, and
-its `baselines/` and `eval/`; plus `mlgdf_runs.md` (one row per run) and `eval_table.md`
-(every run's N = 2,000 table). `table3_sd_results.md` and `table15_sd_swd.md` there are
-transcribed from the paper. The per-step visualisations are in wandb only.
+`metrics.json`, `run_info.txt`, the curves, the scribbles and its `baselines/` and `eval/`
+(numbers and 5-image previews), each file once; plus `eval_table.md` (every run's
+N = 2,000 table). `four_targets/results/` holds the paper's four runs (`base_zeta` 7.5;
+`four_targets/README.md`, "The paper's runs"). The per-step visualisations are in wandb only.
 
 ## Not covered here
 

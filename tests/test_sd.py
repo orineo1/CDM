@@ -148,8 +148,9 @@ def test_export_results(tmp_path):
                "final_mlgd_f_mmd": 0.44, "final_mmd_n": 250, "optimization_time_sec": 60,
                "wandb": {"name": "x"}}, open(run / "metrics.json", "w"))
     (run / "run_info.txt").write_text("git commit: abc1234\n")
-    for f in ["scribble.png", "final_scribble_mlgd_f.png", "baselines/scribble_sdedit_best.png",
-              "baselines/preview_mlgd_f.png", "eval/preview_source.png"]:
+    for f in ["scribble.png", "final_scribble_mlgd_f.png", "final_photos_mlgd_f.png",
+              "baselines/scribble_sdedit_best.png", "baselines/scribble_source.png",
+              "baselines/preview_mlgd_f.png", "eval/preview_source.png", "eval/mmd_bar.png"]:
         Image.new("RGB", (4, 4)).save(run / f)
     json.dump({"n_eval": 2000, "results": {"source": {"mmd": .565}, "mlgd_f": {"mmd": .386}}},
               open(run / "eval" / "eval_results.json", "w"))
@@ -162,9 +163,12 @@ def test_export_results(tmp_path):
                        capture_output=True, text=True, cwd=REPO)
     assert r.returncode == 0, r.stdout + r.stderr
     dest = tmp_path / "res" / "full_BalancedTarget_seed1_123"
-    assert (dest / "steps.csv").exists() and (dest / "curves.png").exists()
-    assert (dest / "baselines" / "scribble_sdedit_best.png").exists()
-    assert (dest / "eval" / "eval_results.json").exists() and not (dest / "eval" / "embeddings.npz").exists()
-    summary = (tmp_path / "res" / "mlgdf_runs.md").read_text()
-    assert "| full_BalancedTarget_seed1_123 | BalancedTarget | 1 | 123 | 0.386 | 0.565 |" in summary
+    kept = ["metrics.json", "run_info.txt", "curves.png", "scribble_source.png", "final_scribble_mlgd_f.png",
+            "baselines/scribble_sdedit_best.png", "eval/eval_results.json", "eval/preview_source.png"]
+    assert all((dest / f).exists() for f in kept), [f for f in kept if not (dest / f).exists()]
+    # each file once: duplicates, plots of tabulated numbers and large files stay in outputs/
+    dropped = ["steps.csv", "final_photos_mlgd_f.png", "baselines/scribble_source.png",
+               "baselines/preview_mlgd_f.png", "eval/mmd_bar.png", "eval/eval_table.md", "eval/embeddings.npz"]
+    assert not any((dest / f).exists() for f in dropped), [f for f in dropped if (dest / f).exists()]
+    assert not (tmp_path / "res" / "mlgdf_runs.md").exists()
     assert "## full_BalancedTarget_seed1_123: N = 2000" in (tmp_path / "res" / "eval_table.md").read_text()
