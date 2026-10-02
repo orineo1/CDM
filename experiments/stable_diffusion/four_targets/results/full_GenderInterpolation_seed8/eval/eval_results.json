@@ -1,0 +1,125 @@
+{
+  "scenario": "eval",
+  "mode": "gender",
+  "n_eval": 2000,
+  "seed": 42,
+  "deterministic": true,
+  "eval_prompt": "a superrealistic professional photograph of",
+  "controlnet_scale": 0.5,
+  "target_groups": [
+    [
+      "Woman",
+      500
+    ],
+    [
+      "WomanMasc",
+      500
+    ],
+    [
+      "ManFem",
+      500
+    ],
+    [
+      "Man",
+      500
+    ]
+  ],
+  "target_n": 2000,
+  "scribbles": {
+    "source": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/scribble.png",
+    "avg_prompt": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/baselines/scribble_avg_prompt.png",
+    "sdedit_best": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/baselines/scribble_sdedit_best.png",
+    "mlgd_f": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/final_scribble_mlgd_f.png"
+  },
+  "results": {
+    "source": {
+      "mmd": 0.5353311896324158,
+      "swd": 0.013294631615281105,
+      "n": 2000,
+      "p_male": 0.9855,
+      "ci_lo": 0.9802609397980172,
+      "ci_hi": 0.9907390602019829,
+      "n_male": 1971,
+      "n_female": 29,
+      "seconds": 570.2181196212769,
+      "mmd_improvement": 0.0,
+      "mmd_improvement_pct": 0.0,
+      "swd_improvement": 0.0,
+      "swd_improvement_pct": 0.0
+    },
+    "avg_prompt": {
+      "mmd": 0.4371255338191986,
+      "swd": 0.010013542138040066,
+      "n": 2000,
+      "p_male": 0.778,
+      "ci_lo": 0.7597859149886689,
+      "ci_hi": 0.7962140850113312,
+      "n_male": 1556,
+      "n_female": 444,
+      "seconds": 568.7880463600159,
+      "mmd_improvement": 0.09820565581321716,
+      "mmd_improvement_pct": 18.34484104702547,
+      "swd_improvement": 0.0032810894772410393,
+      "swd_improvement_pct": 24.679807400377246
+    },
+    "sdedit_best": {
+      "mmd": 0.4549460709095001,
+      "swd": 0.010845227167010307,
+      "n": 2000,
+      "p_male": 0.7445,
+      "ci_lo": 0.7253852387982481,
+      "ci_hi": 0.763614761201752,
+      "n_male": 1489,
+      "n_female": 511,
+      "seconds": 569.21702003479,
+      "mmd_improvement": 0.08038511872291565,
+      "mmd_improvement_pct": 15.015960265291465,
+      "swd_improvement": 0.0024494044482707977,
+      "swd_improvement_pct": 18.424011429210307
+    },
+    "mlgd_f": {
+      "mmd": 0.34917956590652466,
+      "swd": 0.008228433318436146,
+      "n": 2000,
+      "p_male": 0.537,
+      "ci_lo": 0.5151466152552975,
+      "ci_hi": 0.5588533847447026,
+      "n_male": 1074,
+      "n_female": 926,
+      "seconds": 569.4354479312897,
+      "mmd_improvement": 0.1861516237258911,
+      "mmd_improvement_pct": 34.77316983038328,
+      "swd_improvement": 0.005066198296844959,
+      "swd_improvement_pct": 38.10709798849766
+    }
+  },
+  "model_revisions": {
+    "stabilityai/sdxl-turbo": "71153311d3dbb46851df1931d3ca6e939de83304",
+    "xinsir/controlnet-scribble-sdxl-1.0": "0bed4973b80c2329f76e0abf4196c51dfbf9108c",
+    "openai/clip-vit-large-patch14": "32bd64288804d66eefd0ccbe215aa642df71cc41"
+  },
+  "versions": {
+    "python": "3.11.2",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8",
+    "cudnn": 91900,
+    "gpu": "NVIDIA L40S",
+    "diffusers": "0.40.0",
+    "transformers": "5.17.0",
+    "controlnet_aux": "0.0.10",
+    "peft": "0.21.1",
+    "accelerate": "1.15.0",
+    "numpy": "2.4.6",
+    "sklearn": "1.9.1",
+    "PIL": "12.3.0",
+    "huggingface_hub": "1.33.0"
+  },
+  "total_minutes": 47.40886838436127,
+  "wandb": {
+    "project": "sdxl-eval-gender_interpolation",
+    "entity": "conditional-matching",
+    "name": "eval_full_GenderInterpolation_seed8_zeta7.5_46284633",
+    "id": "i917k81u",
+    "url": "https://wandb.ai/conditional-matching/sdxl-eval-gender_interpolation/runs/i917k81u"
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "scenario": "eval",
+  "mode": "gender",
+  "n_eval": 2000,
+  "seed": 42,
+  "deterministic": true,
+  "eval_prompt": "a superrealistic professional photograph of",
+  "controlnet_scale": 0.5,
+  "target_groups": [
+    [
+      "Man",
+      1000
+    ],
+    [
+      "Woman",
+      1000
+    ]
+  ],
+  "target_n": 2000,
+  "scribbles": {
+    "source": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/scribble.png",
+    "avg_prompt": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/baselines/scribble_avg_prompt.png",
+    "sdedit_best": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/baselines/scribble_sdedit_best.png",
+    "mlgd_f": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/final_scribble_mlgd_f.png"
+  },
+  "results": {
+    "source": {
+      "mmd": 0.5062155723571777,
+      "swd": 0.011062289588153362,
+      "n": 2000,
+      "p_male": 0.8825,
+      "ci_lo": 0.8683870642671342,
+      "ci_hi": 0.8966129357328657,
+      "n_male": 1765,
+      "n_female": 235,
+      "seconds": 580.1102931499481,
+      "mmd_improvement": 0.0,
+      "mmd_improvement_pct": 0.0,
+      "swd_improvement": 0.0,
+      "swd_improvement_pct": 0.0
+    },
+    "avg_prompt": {
+      "mmd": 0.4526437819004059,
+      "swd": 0.009811855852603912,
+      "n": 2000,
+      "p_male": 0.412,
+      "ci_lo": 0.39042859937787994,
+      "ci_hi": 0.43357140062212,
+      "n_male": 824,
+      "n_female": 1176,
+      "seconds": 575.0519394874573,
+      "mmd_improvement": 0.05357179045677185,
+      "mmd_improvement_pct": 10.582801751300618,
+      "swd_improvement": 0.00125043373554945,
+      "swd_improvement_pct": 11.303570798657658
+    },
+    "sdedit_best": {
+      "mmd": 0.4392029345035553,
+      "swd": 0.011062102392315865,
+      "n": 2000,
+      "p_male": 0.6515,
+      "ci_lo": 0.6306166736797032,
+      "ci_hi": 0.6723833263202967,
+      "n_male": 1303,
+      "n_female": 697,
+      "seconds": 575.2059054374695,
+      "mmd_improvement": 0.06701263785362244,
+      "mmd_improvement_pct": 13.237964518076772,
+      "swd_improvement": 1.8719583749771118e-07,
+      "swd_improvement_pct": 0.0016921979487698438
+    },
+    "mlgd_f": {
+      "mmd": 0.3476620614528656,
+      "swd": 0.007953529246151447,
+      "n": 2000,
+      "p_male": 0.4935,
+      "ci_lo": 0.47158838558663463,
+      "ci_hi": 0.5154116144133654,
+      "n_male": 987,
+      "n_female": 1013,
+      "seconds": 575.1724638938904,
+      "mmd_improvement": 0.15855351090431213,
+      "mmd_improvement_pct": 31.321342045250095,
+      "swd_improvement": 0.003108760342001915,
+      "swd_improvement_pct": 28.102322916325527
+    }
+  },
+  "model_revisions": {
+    "stabilityai/sdxl-turbo": "71153311d3dbb46851df1931d3ca6e939de83304",
+    "xinsir/controlnet-scribble-sdxl-1.0": "0bed4973b80c2329f76e0abf4196c51dfbf9108c",
+    "openai/clip-vit-large-patch14": "32bd64288804d66eefd0ccbe215aa642df71cc41"
+  },
+  "versions": {
+    "python": "3.11.2",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8",
+    "cudnn": 91900,
+    "gpu": "NVIDIA L40S",
+    "diffusers": "0.40.0",
+    "transformers": "5.17.0",
+    "controlnet_aux": "0.0.10",
+    "peft": "0.21.1",
+    "accelerate": "1.15.0",
+    "numpy": "2.4.6",
+    "sklearn": "1.9.1",
+    "PIL": "12.3.0",
+    "huggingface_hub": "1.33.0"
+  },
+  "total_minutes": 48.028975478808086,
+  "wandb": {
+    "project": "sdxl-eval-balanced",
+    "entity": "conditional-matching",
+    "name": "eval_full_BalancedTarget_seed4_zeta7.5_46275291",
+    "id": "3unyvufc",
+    "url": "https://wandb.ai/conditional-matching/sdxl-eval-balanced/runs/3unyvufc"
+  }
+}

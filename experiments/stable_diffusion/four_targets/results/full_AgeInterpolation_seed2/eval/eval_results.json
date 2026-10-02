@@ -1,0 +1,249 @@
+{
+  "scenario": "eval",
+  "mode": "age",
+  "n_eval": 2000,
+  "seed": 42,
+  "deterministic": true,
+  "eval_prompt": "a superrealistic professional photograph of",
+  "controlnet_scale": 0.5,
+  "target_groups": [
+    [
+      "40",
+      50
+    ],
+    [
+      "41",
+      50
+    ],
+    [
+      "42",
+      50
+    ],
+    [
+      "43",
+      50
+    ],
+    [
+      "44",
+      50
+    ],
+    [
+      "45",
+      50
+    ],
+    [
+      "46",
+      50
+    ],
+    [
+      "47",
+      50
+    ],
+    [
+      "48",
+      50
+    ],
+    [
+      "49",
+      50
+    ],
+    [
+      "50",
+      50
+    ],
+    [
+      "51",
+      50
+    ],
+    [
+      "52",
+      50
+    ],
+    [
+      "53",
+      50
+    ],
+    [
+      "54",
+      50
+    ],
+    [
+      "55",
+      50
+    ],
+    [
+      "56",
+      50
+    ],
+    [
+      "57",
+      50
+    ],
+    [
+      "58",
+      50
+    ],
+    [
+      "59",
+      50
+    ],
+    [
+      "60",
+      50
+    ],
+    [
+      "61",
+      50
+    ],
+    [
+      "62",
+      50
+    ],
+    [
+      "63",
+      50
+    ],
+    [
+      "64",
+      50
+    ],
+    [
+      "65",
+      50
+    ],
+    [
+      "66",
+      50
+    ],
+    [
+      "67",
+      50
+    ],
+    [
+      "68",
+      50
+    ],
+    [
+      "69",
+      50
+    ],
+    [
+      "70",
+      50
+    ],
+    [
+      "71",
+      50
+    ],
+    [
+      "72",
+      50
+    ],
+    [
+      "73",
+      50
+    ],
+    [
+      "74",
+      50
+    ],
+    [
+      "75",
+      50
+    ],
+    [
+      "76",
+      50
+    ],
+    [
+      "77",
+      50
+    ],
+    [
+      "78",
+      50
+    ],
+    [
+      "79",
+      50
+    ]
+  ],
+  "target_n": 2000,
+  "scribbles": {
+    "source": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_AgeInterpolation_seed2_zeta7.5_46276541/scribble.png",
+    "avg_prompt": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_AgeInterpolation_seed2_zeta7.5_46276541/baselines/scribble_avg_prompt.png",
+    "sdedit_best": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_AgeInterpolation_seed2_zeta7.5_46276541/baselines/scribble_sdedit_best.png",
+    "mlgd_f": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_AgeInterpolation_seed2_zeta7.5_46276541/final_scribble_mlgd_f.png"
+  },
+  "results": {
+    "source": {
+      "mmd": 0.5195276737213135,
+      "swd": 0.013120057061314583,
+      "n": 2000,
+      "seconds": 561.3231694698334,
+      "mmd_improvement": 0.0,
+      "mmd_improvement_pct": 0.0,
+      "swd_improvement": 0.0,
+      "swd_improvement_pct": 0.0
+    },
+    "avg_prompt": {
+      "mmd": 0.4467397630214691,
+      "swd": 0.009309139102697372,
+      "n": 2000,
+      "seconds": 571.5032670497894,
+      "mmd_improvement": 0.07278791069984436,
+      "mmd_improvement_pct": 14.010401058806632,
+      "swd_improvement": 0.0038109179586172104,
+      "swd_improvement_pct": 29.046504453505555
+    },
+    "sdedit_best": {
+      "mmd": 0.4805607199668884,
+      "swd": 0.011750694364309311,
+      "n": 2000,
+      "seconds": 561.1999831199646,
+      "mmd_improvement": 0.03896695375442505,
+      "mmd_improvement_pct": 7.500457766822988,
+      "swd_improvement": 0.001369362697005272,
+      "swd_improvement_pct": 10.43717028520352
+    },
+    "mlgd_f": {
+      "mmd": 0.34509244561195374,
+      "swd": 0.007680861279368401,
+      "n": 2000,
+      "seconds": 560.9663214683533,
+      "mmd_improvement": 0.17443522810935974,
+      "mmd_improvement_pct": 33.57573367745773,
+      "swd_improvement": 0.005439195781946182,
+      "swd_improvement_pct": 41.45710461872941
+    }
+  },
+  "model_revisions": {
+    "stabilityai/sdxl-turbo": "71153311d3dbb46851df1931d3ca6e939de83304",
+    "xinsir/controlnet-scribble-sdxl-1.0": "0bed4973b80c2329f76e0abf4196c51dfbf9108c",
+    "openai/clip-vit-large-patch14": "32bd64288804d66eefd0ccbe215aa642df71cc41"
+  },
+  "versions": {
+    "python": "3.11.2",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8",
+    "cudnn": 91900,
+    "gpu": "NVIDIA L40S",
+    "diffusers": "0.40.0",
+    "transformers": "5.17.0",
+    "controlnet_aux": "0.0.10",
+    "peft": "0.21.1",
+    "accelerate": "1.15.0",
+    "numpy": "2.4.6",
+    "sklearn": "1.9.1",
+    "PIL": "12.3.0",
+    "huggingface_hub": "1.33.0"
+  },
+  "total_minutes": 47.26074862082799,
+  "wandb": {
+    "project": "sdxl-eval-age_interpolation",
+    "entity": "conditional-matching",
+    "name": "eval_full_AgeInterpolation_seed2_zeta7.5_46276541",
+    "id": "jx9vnhhc",
+    "url": "https://wandb.ai/conditional-matching/sdxl-eval-age_interpolation/runs/jx9vnhhc"
+  }
+}
