@@ -21,9 +21,10 @@ guidance step measured in isolation:
 Ported from the paper's `measure_dps_step_memory.ipynb` (memory) and from
 `scripts/time_dps_step.py` / `time_dps_step.sh` on branch `test-witness-result` of
 `orineo1/conditional-matching-paper` (the per-step timing of the selection table), and
-measured the same way: random latents and 250 random target CLIP vectors (the content does
-not change the cost), fast kernels, `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`, one
-untimed call of each configuration, then 5 timed calls, mean ± std.
+measured the same way: random latents and random target CLIP vectors (the content does not
+change the cost), fast kernels, `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`, one
+untimed call of each configuration, then 5 timed calls, mean ± std. The target set has as
+many vectors as n_cond (the original used 250; `--n_target` sets a fixed number).
 
 ## Run
 
@@ -50,7 +51,7 @@ the command.
 ## What happens
 
 One guidance step as `run_mlgd_f.py` runs it (mid-schedule timestep, step 125 of 250), on
-random latents and 250 random target CLIP vectors; for every n_cond and rule, one untimed
+random latents and n_cond random target CLIP vectors; for every n_cond and rule, one untimed
 warm-up call, then 5 timed calls:
 
 | part | what | measured |

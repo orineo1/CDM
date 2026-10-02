@@ -1,7 +1,7 @@
 # Port of orineo1/conditional-matching-paper SD_cond_SD_controlnet/notebooks/measure_dps_step_memory.ipynb
 # (memory) and of scripts/time_dps_step.py on branch test-witness-result (the per-step timing of the
 # selection table), measured the same way: random latents and target embeddings, one warm-up call
-# of the same configuration, then the timed repeats. Run as:
+# of the same configuration, then the timed repeats; the target set has n_cond vectors. Run as:
 #     bash experiments/stable_diffusion/step_cost/run.sh
 #     python -m cdm.models.sd.step_cost --help
 
@@ -10,8 +10,9 @@ step_cost.py -- GPU memory and time of one MLGD-F guidance step (paper: ablation
 Base; selection rules, per-step time).
 
 One guidance step as in run_mlgd_f.py (CFG noise prediction at a mid-schedule timestep,
-pred_x0, checkpointed VAE decode, run_dps_step_clip), on random latents and --n_target random
-target CLIP vectors: the content does not change the cost. Measured for every --num_variations
+pred_x0, checkpointed VAE decode, run_dps_step_clip), on random latents and random target
+CLIP vectors, as many as n_cond (--n_target fixes another number): the content does not
+change the cost. Measured for every --num_variations
 (n_cond) and each selection rule, All (every sample backpropagated, n_sel = n_cond) and
 Uniform (n_sel = --uniform_fraction * n_cond), with one untimed warm-up call of the same
 configuration and then --n_repeats timed calls.
@@ -123,6 +124,7 @@ def measure_once(ctx, n_cond, n_sel, args):
     from cdm.models.sd.metrics import compute_mmd
 
     a, s = ctx["architect"], ctx["sprinter"]
+    targets = torch.randn(args.n_target or n_cond, 768, device="cuda")   # m = n_cond by default
     _reset()
     models = torch.cuda.memory_allocated()
     torch.cuda.synchronize(); t0 = time.perf_counter()
@@ -138,7 +140,7 @@ def measure_once(ctx, n_cond, n_sel, args):
     fixed_peak = torch.cuda.max_memory_allocated()
     grad, *_ = run_dps_step_clip(
         latents=latents, latents_step=latents_step, noise_pred=noise_pred, pixel_x0_norm=px,
-        sprinter=s, all_clip_embeddings=ctx["targets"], num_variations=n_cond, variation_batch_size=1,
+        sprinter=s, all_clip_embeddings=targets, num_variations=n_cond, variation_batch_size=1,
         base_zeta_prime=args.base_zeta, clip_model=ctx["clip_model"], clip_processor=ctx["clip_processor"],
         vae=s.vae, vae_scaling_factor=s.vae.config.scaling_factor, variation_prompt=args.variation_prompt,
         loss_fn=compute_mmd, controlnet_scale=args.controlnet_scale,
@@ -151,7 +153,7 @@ def measure_once(ctx, n_cond, n_sel, args):
 
 
 def setup(args, device):
-    """Models, the CFG text state, a mid-schedule timestep, random target CLIP vectors."""
+    """Models, the CFG text state and a mid-schedule timestep."""
     import torch
     from cdm.models.sd.clip_utils import load_clip_model
     from cdm.models.sd.models import load_models, setup_gradient_checkpointing
@@ -169,7 +171,6 @@ def setup(args, device):
     architect.scheduler.set_timesteps(args.n_steps, device=device)
     return {"architect": architect, "sprinter": sprinter, "clip_model": clip_model,
             "clip_processor": clip_processor, "t": architect.scheduler.timesteps[args.start_step],
-            "targets": torch.randn(args.n_target, 768, device=device),
             "latents_shape": (1, architect.unet.config.in_channels, 64, 64),
             "cfg_states": torch.cat([npe, pe], dim=0),
             "added_cond": {"text_embeds": torch.cat([nppe, ppe], dim=0),
@@ -186,8 +187,8 @@ def parse_args(argv=None):
     p.add_argument("--uniform_fraction", type=float, default=0.5, help="n_sel / n_cond of the Uniform rule")
     p.add_argument("--n_warmup", type=int, default=1, help="untimed calls of each configuration first")
     p.add_argument("--n_repeats", type=int, default=5)
-    p.add_argument("--n_target", type=int, default=250,
-                   help="random target CLIP vectors (only the MMD matrix size depends on it)")
+    p.add_argument("--n_target", type=int, default=None,
+                   help="random target CLIP vectors; default: as many as n_cond")
     p.add_argument("--n_steps", type=int, default=250)
     p.add_argument("--start_step", type=int, default=125, help="guided steps per run: n_steps - start_step")
     p.add_argument("--turbo_steps", type=int, default=2)
