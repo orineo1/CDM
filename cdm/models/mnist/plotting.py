@@ -253,7 +253,7 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
             ax.set_theta_zero_location('N'); ax.set_theta_direction(-1)
             ax.set_yticklabels([]); ax.set_yticks([])
             ax.set_xticks(np.deg2rad(np.arange(0, 360, 45)))
-            ax.set_xticklabels(['' if a == 0 else f'{a}°' for a in range(0, 360, 45)])  # no 0° label
+            ax.set_xticklabels(['' if a == 0 else f'{a}' for a in range(0, 360, 45)])  # no 0 label, no degree sign
             ax.tick_params(axis='x', labelsize=22, pad=16)
             # each circle is scaled to its own maximum (sampled bars or target)
             ax.set_ylim(0, max(counts.max() if len(counts) else 0, target_rad_y.max()) * 1.05)
