@@ -231,9 +231,9 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
         return fig
 
     def _make_polar(show_titles, show_legend):
-        fig, polar_axes = plt.subplots(1, dist_k, figsize=(dist_k * 4.2, 4.4),
+        fig, polar_axes = plt.subplots(1, dist_k, figsize=(dist_k * 4.8, 4.4),
                                        subplot_kw={'projection': 'polar'},
-                                       gridspec_kw=dict(wspace=0.5, left=0.02, right=0.98,
+                                       gridspec_kw=dict(wspace=0.7, left=0.02, right=0.98,
                                                         top=0.88 if show_titles else 0.92,
                                                         bottom=0.08))
         polar_axes = np.array(polar_axes).reshape(dist_k)
@@ -254,7 +254,7 @@ def plot_top_k_distributions(payload, model_cond, top_ix, plots_dir,
             ax.set_yticklabels([]); ax.set_yticks([])
             ax.set_xticks(np.deg2rad(np.arange(0, 360, 45)))
             ax.set_xticklabels(['' if a == 0 else f'{a}°' for a in range(0, 360, 45)])  # no 0° label
-            ax.tick_params(axis='x', labelsize=22, pad=12)
+            ax.tick_params(axis='x', labelsize=22, pad=16)
             # each circle is scaled to its own maximum (sampled bars or target)
             ax.set_ylim(0, max(counts.max() if len(counts) else 0, target_rad_y.max()) * 1.05)
             if show_titles:
