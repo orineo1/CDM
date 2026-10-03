@@ -249,7 +249,7 @@ RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_main OUT=results/table1_gbfeso ARGS="-
 
 The last array task writes the table; rebuild it once every task is done (`--collect` reads the JSONs only):
 `python experiments/synthetic/pipeline/make_table1.py --collect --runs-dir runs/table1v2 --tag _main --methods GBFESO-KL GBFESO-MMD --out results/table1_gbfeso`.
-The committed results are in `results/table1_gbfeso.md` (this folder), next to the Table 1 methods.
+The committed results are `results/table1_gbfeso.{json,tex}` (the `--collect` output) and `results/table1_gbfeso.md`, written from it and `results/table1.json` by `python experiments/synthetic/pipeline/make_table1_gbfeso.py`.
 
 ## Research diagnostics (not in the paper)
 
