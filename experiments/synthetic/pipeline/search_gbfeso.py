@@ -16,17 +16,21 @@ and evaluation, so it is scored exactly like search_mog.py's MLGD:
            default) runs it in every case, so the KL and MMD arms are treated identically
            (--phase1 threshold --phase1-threshold 0.2 reproduces their rule).
   answer   the better of the two best iterates, by its loss.
+  score    the answer is scored on --final-n fresh generated and target samples; the run returns the
+           start with the lowest score (MLGD scores and selects its restarts the same way).
 
-Their command-line defaults: 201 steps, lr 0.05, lr_refine 0.05, 3,500 generated samples per step,
-a fixed target set of 4,496 samples, KDE bandwidth 0.5, kl_lambda 1 (symmetric KL), noise 0.05,
-clamping on. Two of their rules have no counterpart here and are not ported: the 0.005 noise for
+Samples: phase 0 draws --num-samples generated samples per step, phase 1 --num-samples-phase1, and
+every loss is computed against the same number of target samples, drawn fresh at each step (as MLGD
+does). Their code instead keeps one fixed target set (4,496 frames of a simulation); --fixed-target N
+restores that. Their command-line defaults otherwise: 201 steps, lr 0.05, lr_refine 0.05, 3,500
+samples per step, KDE bandwidth 0.5, kl_lambda 1 (symmetric KL), noise 0.05, clamping on. Two of their rules have no counterpart here and are not ported: the 0.005 noise for
 starts with both eps >= 0.9 (tied to their eps units), and the corner starts; starts are
 x0 ~ N(0, I), the distribution of MLGD's x_T, and the box is the range of X in the data.
 
 --loss kl   their KDE-KL (cdm/losses/kde_kl.py, copied from their loss.py), Euclidean coordinates
 --loss mmd  the multi-bandwidth RBF MMD of Table 1 (detached bandwidth), same samples and optimizer
 
-A run (attempt) is --n-restarts starts; the start whose answer has the lowest loss is returned, as
+A run (attempt) is --n-restarts starts; the start whose answer has the lowest score is returned, as
 for MLGD's restarts. The JSON has the layout of search_mog.py, so make_table1.py --collect scores it.
 
     python experiments/synthetic/pipeline/search_gbfeso.py --sampler runs/table1v2/x5_y5/models/diffusion/model_conditional.pt \\
@@ -72,8 +76,11 @@ def parse_args():
     g.add_argument("--noise-std", type=float, default=0.05, help="phase-0 perturbation std, decayed linearly to 0")
     g.add_argument("--phase1", choices=["always", "threshold", "never"], default="always")
     g.add_argument("--phase1-threshold", type=float, default=0.2, help="--phase1 threshold: run when best phase-0 loss > this")
-    g.add_argument("--num-samples", type=int, default=3500, help="generated samples per step")
-    g.add_argument("--n-target", type=int, default=4496, help="fixed target set size (their max_target_points)")
+    g.add_argument("--num-samples", type=int, default=3500, help="generated (and target) samples per phase-0 step")
+    g.add_argument("--num-samples-phase1", type=int, default=None, help="per phase-1 step (default --num-samples)")
+    g.add_argument("--final-n", type=int, default=None, help="samples scoring each start's answer (default the phase-1 count)")
+    g.add_argument("--fixed-target", type=int, default=0,
+                   help="N > 0: their scheme, one fixed set of N target samples per run (their 4,496) instead of fresh draws")
     g.add_argument("--no-clamp", action="store_true", help="do not clamp x to the box (their CLI clamps)")
     g = p.add_argument_group("run control")
     g.add_argument("--n-restarts", type=int, default=10, help="starts per run; the best by loss is the run's answer")
@@ -83,6 +90,8 @@ def parse_args():
     g.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     g.add_argument("--out", required=True)
     a, unknown = p.parse_known_args()
+    a.num_samples_phase1 = a.num_samples_phase1 or a.num_samples
+    a.final_n = a.final_n or a.num_samples_phase1
     if unknown:   # make_table1.py passes MLGD flags that have no meaning here
         print(f"[search_gbfeso] ignoring flags not used by GB-FESO: {' '.join(unknown)}")
     return a
@@ -90,7 +99,8 @@ def parse_args():
 
 def run_phase(sampler, cfg, loss_fn, target, x_start, steps, lr, noise_std, lo, hi):
     """Port of their run_phase: Adam on x through the sampler, optional decaying noise, clamping,
-    best iterate kept. Returns (best_x, best_loss, trace)."""
+    best iterate kept. `target(n)` returns the target samples of a step (fresh, or their fixed set);
+    cfg.n_cond is the number of generated samples. Returns (best_x, best_loss, trace)."""
     x = x_start.clone().detach()
     if lo is not None:
         x = torch.max(torch.min(x, hi), lo)
@@ -100,7 +110,7 @@ def run_phase(sampler, cfg, loss_fn, target, x_start, steps, lr, noise_std, lo, 
     for step in range(steps + 1):
         opt.zero_grad(set_to_none=True)
         generated = _draw_conditional(sampler, x, cfg)
-        loss = loss_fn(generated, target)
+        loss = loss_fn(generated, target(cfg.n_cond))
         if step < steps:
             loss.backward()
         value = float(loss.detach())
@@ -133,37 +143,48 @@ def main():
     lo, hi = (None, None) if args.no_clamp else (X.min(0).values.to(dev), X.max(0).values.to(dev))
     loss_fn = (KDEKLLoss(bandwidth=args.kde_bandwidth, kl_lambda=args.kl_lambda) if args.loss == "kl"
                else MMDLoss(kernel=RBF(n_kernels=args.rbf_kernels, mul_factor=args.rbf_mul, device=dev)))
-    cfg = SimpleNamespace(n_cond=args.num_samples, repeat_condition=True, device=dev, cond_sample_kwargs={},
-                          condition_on_slice=(sampler_type == "diffusion"), cond_output_transform=None)
+    def sampling(n):
+        return SimpleNamespace(n_cond=n, repeat_condition=True, device=dev, cond_sample_kwargs={},
+                               condition_on_slice=(sampler_type == "diffusion"), cond_output_transform=None)
+    cfg0, cfg1, cfg_f = sampling(args.num_samples), sampling(args.num_samples_phase1), sampling(args.final_n)
     print(f"[search_gbfeso] {method} | loss={args.loss}"
           + (f" h={args.kde_bandwidth} lambda={args.kl_lambda}" if args.loss == "kl" else "")
           + f" | {args.steps} steps x 2 phases (phase 1: {args.phase1}) lr={args.lr}/{args.lr_refine} noise={args.noise_std}"
-          + f" | {args.num_samples} samples/step, {args.n_target} target | box={'off' if lo is None else 'data range'}"
+          + f" | samples/step {args.num_samples} (phase 0), {args.num_samples_phase1} (phase 1), {args.final_n} (score)"
+          + f", target {'fixed ' + str(args.fixed_target) if args.fixed_target else 'fresh, same count'}"
+          + f" | box={'off' if lo is None else 'data range'}"
           + f" | R={args.n_restarts} starts, attempts={args.n_attempts}, device={dev}")
 
     attempts = []
     for a in range(args.n_attempts):
         t_att = time.time()
         torch.manual_seed(args.seed * 1000 + a * args.n_restarts)
-        with torch.no_grad():
-            target = target_gen(args.n_target, dev).float()    # one fixed target set per run, as their target frames
+        if args.fixed_target:      # their scheme: one fixed target set per run
+            with torch.no_grad():
+                fixed = target_gen(args.fixed_target, dev).float()
+            target = lambda n, f=fixed: f                                      # noqa: E731
+        else:                      # fresh target samples at every step, as many as generated (as MLGD)
+            target = lambda n: target_gen(n, dev).float()                      # noqa: E731
         runs = []
         for r in range(args.n_restarts):
             seed = args.seed * 1000 + a * args.n_restarts + r
             torch.manual_seed(seed)
             t0 = time.time()
             x0 = torch.randn(1, c, device=dev)
-            b0, l0, tr0 = run_phase(sampler, cfg, loss_fn, target, x0, args.steps, args.lr, args.noise_std, lo, hi)
+            b0, l0, tr0 = run_phase(sampler, cfg0, loss_fn, target, x0, args.steps, args.lr, args.noise_std, lo, hi)
             do_p1 = args.phase1 == "always" or (args.phase1 == "threshold" and l0 > args.phase1_threshold)
             if do_p1:
-                b1, l1, tr1 = run_phase(sampler, cfg, loss_fn, target, b0, args.steps, args.lr_refine, 0.0, lo, hi)
+                b1, l1, tr1 = run_phase(sampler, cfg1, loss_fn, target, b0, args.steps, args.lr_refine, 0.0, lo, hi)
             x_hat, loss, phase = (b1, l1, "phase1") if do_p1 and l1 < l0 else (b0, l0, "phase0")
+            with torch.no_grad():   # score on fresh samples: the selection criterion, as MLGD's final loss
+                score = float(loss_fn(_draw_conditional(sampler, x_hat, cfg_f), target(args.final_n)))
             xv = x_hat.float().view(-1)
-            runs.append({"seed": seed, "x0": x0.view(-1).tolist(), "x_hat": xv.cpu().tolist(), "final_loss": loss,
-                         "phase": phase, "phase0_best_loss": l0, "phase1_best_loss": l1 if do_p1 else None,
+            runs.append({"seed": seed, "x0": x0.view(-1).tolist(), "x_hat": xv.cpu().tolist(), "final_loss": score,
+                         "search_loss": loss, "phase": phase, "phase0_best_loss": l0,
+                         "phase1_best_loss": l1 if do_p1 else None,
                          "trace": {"phase0": tr0, "phase1": tr1 if do_p1 else None},
                          "time_s": time.time() - t0, **evaluate(xv, info)})
-            print(f"    start {r + 1}/{args.n_restarts}: loss {loss:.5f} ({phase})  {runs[-1].get('l2_gmm', float('nan')):.4f}"
+            print(f"    start {r + 1}/{args.n_restarts}: score {score:.5f}, search loss {loss:.5f} ({phase})  {runs[-1].get('l2_gmm', float('nan')):.4f}"
                   f"  ({runs[-1]['time_s']:.1f}s)", flush=True)
         best = min(runs, key=lambda q: q["final_loss"])
         att = {"attempt": a, **{k: v for k, v in best.items() if k != "trace"},
