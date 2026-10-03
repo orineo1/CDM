@@ -1,7 +1,7 @@
 # Port of orineo1/conditional-matching-paper SD_cond_SD_controlnet/notebooks/
 # eval_scribbl_interpolation.ipynb and eval_scribbl_interpolation_age.ipynb, minus the MMD,
-# the classifier and the sample rows. experiments/stable_diffusion/interpolation/
-# interpolation.ipynb is a thin notebook over these functions.
+# the classifier and the sample rows: the functions behind the interpolation figures, to call
+# from a notebook.
 
 """
 interpolation.py -- where do the portraits of one scribble fall along the target axis?

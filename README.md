@@ -111,11 +111,11 @@ Numbers follow the current version of the paper (see Citation below). Each exper
 | Figures 5–7 | MNIST, all 15 seeds per target | `bash experiments/mnist/figures/run.sh full` |
 | Table 10 | Stable Diffusion hyperparameters | `experiments/stable_diffusion/four_targets/config/<scenario>.env` |
 | Table 11 | Stable Diffusion MMD and SWD, all targets | `experiments/stable_diffusion/four_targets/run.sh eval` |
-| Figure 8 | where MLGD-F edits the scribble | scribble-difference heatmap, `cdm/models/sd/visualization.py`, from a `four_targets` run |
-| Figure 9 | gradient saliency and its alignment with the edits | not in this repository (upstream notebook `gender_saliency_eval.ipynb`; see `experiments/stable_diffusion/README.md`) |
-| Figures 10–17 | Stable Diffusion qualitative results per target (scribbles, conditional samples, age grid) | the `four_targets` full runs; interpolation figures: `experiments/stable_diffusion/interpolation/interpolation.ipynb` |
+| Figure 8 | where MLGD-F edits the scribble | `bash experiments/stable_diffusion/four_targets/run.sh saliency balanced --run_dir <run>` (`saliency/scribble_change.png`) |
+| Figure 9 | gradient saliency and its alignment with the edits | the same `run.sh saliency` (`saliency/saliency_correlation.png`) |
+| Figures 10–17 | Stable Diffusion qualitative results per target (scribbles, conditional samples, age grid) | the `four_targets` full runs; interpolation figures: the functions in `cdm/models/sd/interpolation.py` |
 | Table 12 | guidance rules | text only |
-| Table 13 | per-step time of the Stable Diffusion inner estimator | not in this repository (upstream notebook `measure_dps_step_memory.ipynb`) |
+| Table 13 | per-step time of the Stable Diffusion inner estimator | `bash experiments/stable_diffusion/step_cost/run.sh` |
 | Table 14, Figure 18 | Jacobian error of the few-step sampler | `experiments/stable_diffusion/jacobian_error/eps_g_experiment.ipynb` |
 | Table 15 | licenses | text only |
 
@@ -154,7 +154,7 @@ cdm/                          THE METHOD (Section 2 of the paper), installable: 
 experiments/                  THE EXPERIMENTS (Section 3), one directory per paper table or figure
   synthetic/                  3.1  Gaussian mixtures: pipeline/ (search_mog.py and the scripts), slurm/, configs/mog/, reference/, results/
   mnist/                      3.2  rotated digits: train/, table_mlgdf/ (search_mnist.py), figures/, checkpoints/
-  stable_diffusion/           3.3  sketch-to-portrait: four_targets/, interpolation/, jacobian_error/, its own requirements.txt
+  stable_diffusion/           3.3  sketch-to-portrait: four_targets/, step_cost/, jacobian_error/, its own requirements.txt
   peptide/                    four-bead peptide: CDM against GB-FESO (Zick & Mendels 2026); pipeline/, slurm/, results/
 tests/                        smoke, determinism, population, targeted guards (see tests/README.md)
 ```

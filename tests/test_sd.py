@@ -215,7 +215,6 @@ def test_export_results(tmp_path):
 
     r = subprocess.run([sys.executable, os.path.join(SD_EXP, "export_results.py"),
                         "--run-dir", str(outs), "--dest", str(tmp_path / "res"),
-                        "--interp-dir", str(tmp_path / "none"), "--interp-dest", str(tmp_path / "ires"),
                         "--cost-dir", str(tmp_path / "cost"), "--cost-dest", str(tmp_path / "cres")],
                        capture_output=True, text=True, cwd=REPO)
     assert r.returncode == 0, r.stdout + r.stderr

@@ -9,7 +9,6 @@ gitignored).
 | directory | paper artifact | entry point |
 |---|---|---|
 | `four_targets` | Table 3, Table 15, Figs. 7–8 (saliency) | `cdm.models.sd.run_mlgd_f` (optimisation), `cdm.models.sd.eval_all_experiments` (the N = 2,000 evaluation), `cdm.models.sd.eval_baselines`, `cdm.models.sd.saliency` |
-| `interpolation` | the gender / age interpolation figures: portraits sorted along the target axis, PCA scatter | `interpolation.ipynb` over `cdm.models.sd.interpolation` |
 | `step_cost` | the ablation (memory and run time, Turbo vs Base) and the All vs Uniform per-step time | `cdm.models.sd.step_cost` |
 | `jacobian_error` | theory appendix, Jacobian-fidelity figure and table | `eps_g_experiment.ipynb` (self-contained) |
 
@@ -135,8 +134,8 @@ code for them is in notebooks under `SD_cond_SD_controlnet/notebooks/` at the sa
 | Table 18, Fig. 20 Jacobian fidelity | `eps_g_experiment.ipynb` (copied as is into `jacobian_error/`) |
 
 Ported: the 2,000-image evaluation (`eval_all_experiments.ipynb` ->
-`cdm/models/sd/eval_all_experiments.py`, `four_targets/run.sh eval`) and the interpolation
-notebooks (`eval_scribbl_interpolation*.ipynb` -> `interpolation/`, without their MMD), the
-saliency notebook (`gender_saliency_eval.ipynb` -> `cdm/models/sd/saliency.py`,
+`cdm/models/sd/eval_all_experiments.py`, `four_targets/run.sh eval`), the functions of the
+interpolation notebooks (`eval_scribbl_interpolation*.ipynb` -> `cdm/models/sd/interpolation.py`,
+without their MMD), the saliency notebook (`gender_saliency_eval.ipynb` -> `cdm/models/sd/saliency.py`,
 `four_targets/run.sh saliency`, reduced to Figs. 7–8) and the step-memory notebook
 (`measure_dps_step_memory.ipynb` -> `step_cost/`).
