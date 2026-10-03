@@ -25,8 +25,10 @@ every loss is computed against the same number of target samples, drawn fresh at
 does). Their code instead keeps one fixed target set (4,496 frames of a simulation); --fixed-target N
 restores that. Their command-line defaults otherwise: 201 steps, lr 0.05, lr_refine 0.05, 3,500
 samples per step, KDE bandwidth 0.5, kl_lambda 1 (symmetric KL), noise 0.05, clamping on. Two of their rules have no counterpart here and are not ported: the 0.005 noise for
-starts with both eps >= 0.9 (tied to their eps units), and the corner starts; starts are
-x0 ~ N(0, I), the distribution of MLGD's x_T, and the box is the range of X in the data.
+starts with both eps >= 0.9 (tied to their eps units), and the corner starts. Each start is
+instead a random row of X from the training data (--init data): a real design, as their starts are
+valid eps values, drawn without any part of our method (--init randn: x0 ~ N(0, I), the
+distribution of MLGD's x_T). The box is the range of X in the data.
 
 --loss kl   their KDE-KL (cdm/losses/kde_kl.py, copied from their loss.py), Euclidean coordinates
 --loss mmd  the multi-bandwidth RBF MMD of Table 1 (detached bandwidth), same samples and optimizer
@@ -83,6 +85,9 @@ def parse_args():
     g.add_argument("--fixed-target", type=int, default=0,
                    help="N > 0: their scheme, one fixed set of N target samples per run (their 4,496) instead of fresh draws")
     g.add_argument("--no-clamp", action="store_true", help="do not clamp x to the box (their CLI clamps)")
+    g.add_argument("--init", choices=["data", "randn"], default="data",
+                   help="start of each search: data = a random row of X from the training data (a real design, as "
+                        "their starts are valid eps values); randn = x0 ~ N(0, I), the distribution of MLGD's x_T")
     g = p.add_argument_group("run control")
     g.add_argument("--n-restarts", type=int, default=10, help="starts per run; the best by loss is the run's answer")
     g.add_argument("--n-attempts", type=int, default=1)
@@ -153,7 +158,7 @@ def main():
           + f" | {args.steps} steps x 2 phases (phase 1: {args.phase1}) lr={args.lr}/{args.lr_refine} noise={args.noise_std}"
           + f" | samples/step {args.num_samples} (phase 0), {args.num_samples_phase1} (phase 1), {args.final_n} (score)"
           + f", target {'fixed ' + str(args.fixed_target) if args.fixed_target else 'fresh, same count'}"
-          + f" | box={'off' if lo is None else 'data range'}"
+          + f" | box={'off' if lo is None else 'data range'} | init={args.init}"
           + f" | R={args.n_restarts} starts, attempts={args.n_attempts}, device={dev}")
 
     attempts = []
@@ -171,7 +176,10 @@ def main():
             seed = args.seed * 1000 + a * args.n_restarts + r
             torch.manual_seed(seed)
             t0 = time.time()
-            x0 = torch.randn(1, c, device=dev)
+            if args.init == "data":   # one random training design per start
+                x0 = X[torch.randint(0, X.shape[0], (1,))].to(dev)
+            else:
+                x0 = torch.randn(1, c, device=dev)
             b0, l0, tr0 = run_phase(sampler, cfg0, loss_fn, target, x0, args.steps, args.lr, args.noise_std, lo, hi)
             do_p1 = args.phase1 == "always" or (args.phase1 == "threshold" and l0 > args.phase1_threshold)
             if do_p1:

@@ -228,17 +228,18 @@ and data, so the comparison with MLGD differs only in the search and the loss:
 | method | search | loss |
 |---|---|---|
 | MLGD (Table 1) | guided reverse diffusion under the prior, then refinement | MMD |
-| `GBFESO-MMD` | GB-FESO: direct Adam on x from x0 ~ N(0, I) | MMD (same kernel as Table 1) |
+| `GBFESO-MMD` | GB-FESO: direct Adam on x from a random training design | MMD (same kernel as Table 1) |
 | `GBFESO-KL` | GB-FESO | their KDE-KL (h = 0.5, symmetric, Euclidean coordinates) |
 
 GB-FESO's optimizer is theirs (command-line defaults): 201 Adam steps per phase at lr 0.05, phase-0
 noise 0.05 decaying linearly to 0, best iterate kept, x clamped to the range of X in the data. Phase 1
 (201 more steps, no noise) runs in every start for both losses (`--phase1 always`; their code runs it
-only when the phase-0 KL exceeds 0.2, a threshold with no MMD counterpart). Each run has 10 starts from
-x0 ~ N(0, I); each start's answer is scored on fresh samples and the lowest score wins, as MLGD's 10
-restarts; 5 runs per scenario. Every loss, in both methods, compares a batch of generated samples with
-the same number of target samples drawn fresh at that step (their code keeps one fixed target set,
-`--fixed-target 4496`).
+only when the phase-0 KL exceeds 0.2, a threshold with no MMD counterpart). Each run has 10 starts,
+each a random row of X from the training data: a real design, as their starts are valid eps values
+(`--init randn` starts from N(0, I) instead). Each start's answer, the better of the two phases, is
+chosen and scored on fresh samples, and the lowest score wins, as MLGD's 10 restarts; 5 runs per
+scenario. Every loss, in both methods, compares a batch of generated samples with the same number of
+target samples drawn fresh at that step (their code keeps one fixed target set, `--fixed-target 4496`).
 
 The arms differ only in the samples per step:
 
