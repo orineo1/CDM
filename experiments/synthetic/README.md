@@ -217,6 +217,40 @@ python experiments/synthetic/pipeline/summarize_runs.py --runs-dir runs/night/x1
 The analysis of why the Table 1 configuration fails here is in Section 13 of `optimization_notes.pdf`
 (paper repository).
 
+## GB-FESO competitor (Table 1 budget)
+
+GB-FESO (Zick & Mendels, arXiv:2607.06421) optimizes x directly by Adam through the differentiated
+conditional sampler, with no prior over X, using a KDE estimate of the KL.
+`pipeline/search_gbfeso.py` ports their optimizer loop (`run_feso.py`, `run_phase`) onto our samplers,
+and `cdm/losses/kde_kl.py` holds their loss, copied unchanged (MIT). It runs on the Table 1 networks
+and data, so the comparison with MLGD differs only in the search and the loss:
+
+| method | search | loss |
+|---|---|---|
+| MLGD (Table 1) | guided reverse diffusion under the prior, then refinement | MMD |
+| `GBFESO-MMD` | GB-FESO: direct Adam on x from a random training design | MMD (same kernel as Table 1) |
+| `GBFESO-KL` | GB-FESO | their KDE-KL (h = 0.5, symmetric, Euclidean coordinates) |
+
+GB-FESO's optimizer is theirs (command-line defaults): 201 Adam steps per phase at lr 0.05, phase-0
+noise 0.05 decaying linearly to 0, best iterate kept, x clamped to the range of X in the data. Phase 1
+(201 more steps, no noise) runs in every start for both losses (`--phase1 always`; their code runs it
+only when the phase-0 KL exceeds 0.2, a threshold with no MMD counterpart). Each run has 10 starts,
+each a random row of X from the training data. Each start's answer, the better of the two phases, is
+chosen and scored on fresh samples, and the lowest score wins, as MLGD's 10 restarts; 5 runs per
+scenario. The sample budget is MLGD's in Table 1: 250 conditional samples per step in phase 0 (MLGD:
+per guided step), 1,000 in phase 1 (MLGD: per refinement step), scored on 1,000; every loss compares
+the generated samples with as many target samples, drawn fresh at each step.
+
+On the cluster, reusing the Table 1 networks (`RUNS`), from the repository root, with the environment active:
+
+```bash
+RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_main OUT=results/table1_gbfeso ARGS="--methods GBFESO-KL GBFESO-MMD --extra='--num-samples 250 --num-samples-phase1 1000 --final-n 1000'" sbatch --partition=salmon --gres=gpu:1 --time=12:00:00 experiments/synthetic/slurm/slurm_table1.sh
+```
+
+The last array task writes the table; rebuild it once every task is done (`--collect` reads the JSONs only):
+`python experiments/synthetic/pipeline/make_table1.py --collect --runs-dir runs/table1v2 --tag _main --methods GBFESO-KL GBFESO-MMD --out results/table1_gbfeso`.
+The committed results are in `results/table1_gbfeso.md` (this folder), next to the Table 1 methods.
+
 ## Research diagnostics (not in the paper)
 
 All of these use the Table 1 networks and flags. The usage line is at the top of each script.
@@ -267,6 +301,7 @@ are off by default). Every run uses the library default, a **detached** RBF band
 | file | command (from the repository root) |
 |---|---|
 | `table1.{md,json,tex}` | `$MT $T1 --runs-dir runs/table1v2` (no `--tag`, no `--extra`), then `--collect`: Table 1 and the refined columns of `tab:sim_full` |
+| `table1_gbfeso.md` | the GB-FESO competitor at the Table 1 budget (section "GB-FESO competitor"), next to the Table 1 methods |
 | `checks/table1_*.json` | `check_models.py` on the nine scenarios' networks, `--n-random-x 100`: `tab:model_quality` |
 | `nonstar/arm_*.json` | the [no-star target](#no-star-target) commands above: `tab:nonstar_results` |
 | `fig1/fig1_hard{.png,_sim.json,_sweep.npz}` | `fig1_toy_example.py --setting hard --n-restarts 25 --n-cond 250 --n-mc 3 --methods MLGD MLGD-F PMLGD PMLGD-F --betas 0 2 8 16 --n-beta-samples 2000 --rerun-sim --device cuda` (25 trajectories per method, not 10) |

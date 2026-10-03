@@ -41,7 +41,8 @@ import numpy as np
 SCRIPTS = os.path.dirname(os.path.abspath(__file__))                      # the pipeline scripts
 REPO = os.path.abspath(os.path.join(SCRIPTS, "..", "..", ".."))        # repository root (cwd of the runs)
 METHODS = ["MLGD", "MLGD-F", "PMLGD", "PMLGD-F"]
-ALL_METHODS = METHODS + ["MLGD-X", "PMLGD-X"]     # -X: oracle exact conditional sampler
+ALL_METHODS = METHODS + ["MLGD-X", "PMLGD-X",    # -X: oracle exact conditional sampler
+                         "GBFESO-KL", "GBFESO-MMD"]   # the GB-FESO competitor (search_gbfeso.py), diffusion sampler
 DEFAULT_SETTINGS = ["1x1", "1x5", "1x10", "5x1", "5x5", "5x10", "10x1", "10x5", "10x10"]
 
 
@@ -156,6 +157,16 @@ def search(setting, paths, log, method, args):
     if not (args.force or args.force_search) and os.path.exists(out):
         return out
     sampler = paths["cm"] if method.endswith("-F") else ("exact" if method.endswith("-X") else paths["diffusion"])
+    if method.startswith("GBFESO"):     # the competitor: direct optimization of x, no prior (search_gbfeso.py)
+        cmd = [py, os.path.join(SCRIPTS, "search_gbfeso.py"), "--sampler", sampler, "--target", paths["data"],
+               "--loss", method.split("-")[1].lower(), "--n-restarts", str(args.budget),
+               "--n-attempts", str(args.attempts), "--seed", str(args.seed), "--out", out]
+        if args.device:
+            cmd += ["--device", args.device]
+        if args.extra:
+            cmd += args.extra.split()
+        run(cmd, args, log)
+        return out
     algo = "particles" if method.startswith("P") else "lgd"
     cmd = [py, os.path.join(SCRIPTS, "search_mog.py"), "--prior", paths["prior"], "--sampler", sampler, "--target", paths["data"],
            "--algo", algo, "--n-restarts", str(args.budget), "--n-particles", str(args.budget),
@@ -312,7 +323,8 @@ def write_tables(rows, everything, args):
             tex.append(f"\\multirow{{{sum(1 for q in rows if (q['dim_x'], q['dim_y']) == key)}}}{{*}}{{$\\dim X={r['dim_x']}$, $\\dim Y={r['dim_y']}$}}")
             last = key
         name = {"MLGD": "\\mlgd{}", "MLGD-F": "\\mlgdf{}", "PMLGD": "P\\mlgd{}", "PMLGD-F": "P\\mlgdf{}",
-                "MLGD-X": "\\mlgd{} (oracle $\\fphi$)", "PMLGD-X": "P\\mlgd{} (oracle $\\fphi$)"}[r["method"]]
+                "MLGD-X": "\\mlgd{} (oracle $\\fphi$)", "PMLGD-X": "P\\mlgd{} (oracle $\\fphi$)",
+                "GBFESO-KL": "GB-FESO (KL)", "GBFESO-MMD": "GB-FESO (\\mmd{})"}[r["method"]]
         tex.append(f" & {name} & ${r['tv_mean']:.3f} \\pm {r['tv_std']:.3f}$ & ${r['dist_mean']:.3f} \\pm {r['dist_std']:.3f}$ "
                    f"& ${r['l2rel_mean']:.3f} \\pm {r['l2rel_std']:.3f}$ & ${r['time_mean']:.0f}$ \\\\")
     open(args.out + ".tex", "w").write("\n".join(tex) + "\n")
