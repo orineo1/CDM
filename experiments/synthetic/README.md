@@ -248,6 +248,7 @@ The arms differ only in the samples per step:
 | `_main` | 250 per guided step, 1,000 per refinement step, scored on 1,000 (Table 1 as run) | 250 in phase 0, 1,000 in phase 1, scored on 1,000 | Table 1 |
 | `_1k` | 1,000 everywhere | 1,000 everywhere | appendix |
 | `_3500` | 3,500 everywhere (MLGD and MLGD-F) | 3,500 everywhere, as in their paper | appendix |
+| `_kl` | Table 1 budget (250 per step, 1,000 per refinement step, scored on 1,000) with their KDE-KL as the loss (`--loss kl`) | — | appendix |
 | `_kl3500` | 3,500 everywhere, with their KDE-KL as the loss (`--loss kl`; MLGD and MLGD-F) | — | appendix |
 
 MLGD-F at 1,000 runs with the `_1k` tag next to MLGD (`MLGD-F_1k.json`).
@@ -261,6 +262,7 @@ RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_1k OUT=results/table1_gbfeso_1k ARGS="
 RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_3500 OUT=results/table1_gbfeso_3500 ARGS="--methods GBFESO-KL GBFESO-MMD --extra='--num-samples 3500'" sbatch $S --time=24:00:00 experiments/synthetic/slurm/slurm_table1.sh
 RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_1k OUT=results/table1_mlgd_1k ARGS="--methods MLGD MLGD-F --n-cond 1000 --refine-n-cond 1000 --extra=--final-n-cond=1000" sbatch $S --time=12:00:00 experiments/synthetic/slurm/slurm_table1.sh
 RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_3500 OUT=results/table1_mlgd_3500 ARGS="--methods MLGD MLGD-F --n-cond 3500 --refine-n-cond 3500 --extra=--final-n-cond=3500" sbatch $S --time=24:00:00 experiments/synthetic/slurm/slurm_table1.sh
+RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_kl OUT=results/table1_mlgd_kl ARGS="--methods MLGD --extra='--loss kl'" sbatch $S --time=12:00:00 experiments/synthetic/slurm/slurm_table1.sh
 RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_kl3500 OUT=results/table1_mlgd_kl3500 ARGS="--methods MLGD MLGD-F --n-cond 3500 --refine-n-cond 3500 --extra='--final-n-cond=3500 --loss kl'" sbatch $S --time=24:00:00 experiments/synthetic/slurm/slurm_table1.sh
 ```
 
