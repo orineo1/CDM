@@ -1,0 +1,7 @@
+date:       2026-10-02T19:13:06+03:00
+git commit: bc2deb4
+host:       salmon-08  slurm job: 46288797
+gpu:        NVIDIA L40S | torch 2.11.0+cu128
+config:     config/balanced.env  overrides: --run_dir /sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291
+command:    python -m cdm.models.sd.saliency --run_dir /sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291 --output_dir /sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/saliency --controlnet_scale 0.5 --architect_revision 462165984030d82259a11f4367a4eed129e94a7b --sprinter_revision 71153311d3dbb46851df1931d3ca6e939de83304 --controlnet_revision 0bed4973b80c2329f76e0abf4196c51dfbf9108c --hed_revision 982e7edaec38759d914a963c48c4726685de7d96 --clip_revision 32bd64288804d66eefd0ccbe215aa642df71cc41 --wandb_project sdxl-saliency --run_dir /sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291 
+versions:    {'python': '3.11.2', 'torch': '2.11.0+cu128', 'cuda': '12.8', 'cudnn': 91900, 'gpu': 'NVIDIA L40S', 'diffusers': '0.40.0', 'transformers': '5.17.0', 'controlnet_aux': '0.0.10', 'peft': '0.21.1', 'accelerate': '1.15.0', 'numpy': '2.4.6', 'sklearn': '1.9.1', 'PIL': '12.3.0', 'huggingface_hub': '1.33.0'}

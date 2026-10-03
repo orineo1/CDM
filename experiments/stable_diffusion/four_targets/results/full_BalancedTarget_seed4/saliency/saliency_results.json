@@ -1,0 +1,113 @@
+{
+  "run_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291",
+  "source": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/scribble.png",
+  "mlgd_f": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/final_scribble_mlgd_f.png",
+  "scribble_change": {
+    "unchanged_pct": 91.37229919433594,
+    "added_pct": 3.9859771728515625,
+    "removed_pct": 4.6417236328125
+  },
+  "saliency_vs_change": {
+    "n_line_pixels": 36668,
+    "spearman_rho": 0.5313615304124764,
+    "spearman_p": 0.0,
+    "pearson_r": 0.38829511768469216,
+    "pearson_p": 0.0,
+    "bin_saliency": [
+      0.00012222674123841466,
+      0.0001466328181846966,
+      0.00016537845262687496,
+      0.00018395872929500746,
+      0.000202112818152081,
+      0.00022143383322956284,
+      0.00023937843036040917,
+      0.0002584591775626311,
+      0.00027887465137912195,
+      0.00030208151866668506,
+      0.00032916436917240923,
+      0.00036087840689236087,
+      0.0004065311743997961,
+      0.000477627534329816,
+      0.00058062247442701,
+      0.0007252004158020281,
+      0.000923864579842692,
+      0.0011829928207762726,
+      0.0015957196681398186,
+      0.0026825048154730633
+    ],
+    "bin_change": [
+      0.12082867324352264,
+      0.12196625769138336,
+      0.11073514819145203,
+      0.11161236464977264,
+      0.1226339116692543,
+      0.12240585684776306,
+      0.1254298835992813,
+      0.13878600299358368,
+      0.14001910388469696,
+      0.14248450100421906,
+      0.1585645228624344,
+      0.1776392012834549,
+      0.20637604594230652,
+      0.22842338681221008,
+      0.27275726199150085,
+      0.29862210154533386,
+      0.3169858455657959,
+      0.33507049083709717,
+      0.35913485288619995,
+      0.3829771876335144
+    ]
+  },
+  "latent_norm_vs_edit": {
+    "pearson_r": 0.03223344683647156,
+    "pearson_p": 0.03912699222564697,
+    "spearman_rho": 0.02899725154054537
+  },
+  "settings": {
+    "run_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291",
+    "output_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/saliency",
+    "n_seeds": 20,
+    "sigma": 2.5,
+    "tau": 0.1,
+    "line_threshold": 0.05,
+    "n_bins": 20,
+    "male_prompt": "a photo of a man",
+    "female_prompt": "a photo of a woman",
+    "variation_prompt": "a superrealistic professional photograph of",
+    "controlnet_scale": 0.5,
+    "seed": 0,
+    "no_deterministic": false,
+    "wandb_project": "sdxl-saliency",
+    "wandb_entity": "",
+    "no_wandb": false
+  },
+  "deterministic": true,
+  "minutes": 6.1894096493721005,
+  "model_revisions": {
+    "stabilityai/sdxl-turbo": "71153311d3dbb46851df1931d3ca6e939de83304",
+    "xinsir/controlnet-scribble-sdxl-1.0": "0bed4973b80c2329f76e0abf4196c51dfbf9108c",
+    "openai/clip-vit-large-patch14": "32bd64288804d66eefd0ccbe215aa642df71cc41"
+  },
+  "versions": {
+    "python": "3.11.2",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8",
+    "cudnn": 91900,
+    "gpu": "NVIDIA L40S",
+    "diffusers": "0.40.0",
+    "transformers": "5.17.0",
+    "controlnet_aux": "0.0.10",
+    "peft": "0.21.1",
+    "accelerate": "1.15.0",
+    "numpy": "2.4.6",
+    "sklearn": "1.9.1",
+    "PIL": "12.3.0",
+    "huggingface_hub": "1.33.0"
+  },
+  "wandb": {
+    "project": "sdxl-saliency",
+    "name": "saliency_full_BalancedTarget_seed4_zeta7.5_46275291",
+    "id": "e4zvx2cc",
+    "url": "https://wandb.ai/conditional-matching/sdxl-saliency/runs/e4zvx2cc"
+  }
+}
