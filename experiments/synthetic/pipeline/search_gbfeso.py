@@ -15,9 +15,10 @@ and evaluation, so it is scored exactly like search_mog.py's MLGD:
            kept. Their code runs it only when the best phase-0 KL exceeds 0.2; --phase1 always (our
            default) runs it in every case, so the KL and MMD arms are treated identically
            (--phase1 threshold --phase1-threshold 0.2 reproduces their rule).
-  answer   the better of the two best iterates, by its loss.
-  score    the answer is scored on --final-n fresh generated and target samples; the run returns the
-           start with the lowest score (MLGD scores and selects its restarts the same way).
+  answer   the better of the two best iterates, each scored on the same --final-n fresh generated and
+           target samples (their code compares the phases' search losses, which here can come from
+           different sample counts); the run returns the start with the lowest score (MLGD scores
+           and selects its restarts the same way).
 
 Samples: phase 0 draws --num-samples generated samples per step, phase 1 --num-samples-phase1, and
 every loss is computed against the same number of target samples, drawn fresh at each step (as MLGD
@@ -175,12 +176,18 @@ def main():
             do_p1 = args.phase1 == "always" or (args.phase1 == "threshold" and l0 > args.phase1_threshold)
             if do_p1:
                 b1, l1, tr1 = run_phase(sampler, cfg1, loss_fn, target, b0, args.steps, args.lr_refine, 0.0, lo, hi)
-            x_hat, loss, phase = (b1, l1, "phase1") if do_p1 and l1 < l0 else (b0, l0, "phase0")
-            with torch.no_grad():   # score on fresh samples: the selection criterion, as MLGD's final loss
-                score = float(loss_fn(_draw_conditional(sampler, x_hat, cfg_f), target(args.final_n)))
+            # score on fresh samples, the selection criterion (as MLGD's final loss). Both phases' answers are
+            # scored on the same --final-n samples, since their search losses can come from different sample
+            # counts (the minimum of many noisy small-batch losses is biased low).
+            with torch.no_grad():
+                score_fn = lambda xx: float(loss_fn(_draw_conditional(sampler, xx, cfg_f), target(args.final_n)))   # noqa: E731
+                s0 = score_fn(b0)
+                s1 = score_fn(b1) if do_p1 else float("inf")
+            x_hat, loss, score, phase = (b1, l1, s1, "phase1") if s1 < s0 else (b0, l0, s0, "phase0")
             xv = x_hat.float().view(-1)
             runs.append({"seed": seed, "x0": x0.view(-1).tolist(), "x_hat": xv.cpu().tolist(), "final_loss": score,
-                         "search_loss": loss, "phase": phase, "phase0_best_loss": l0,
+                         "search_loss": loss, "phase": phase, "phase0_best_loss": l0, "phase0_score": s0,
+                         "phase1_score": s1 if do_p1 else None,
                          "phase1_best_loss": l1 if do_p1 else None,
                          "trace": {"phase0": tr0, "phase1": tr1 if do_p1 else None},
                          "time_s": time.time() - t0, **evaluate(xv, info)})
