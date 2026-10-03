@@ -217,6 +217,41 @@ python experiments/synthetic/pipeline/summarize_runs.py --runs-dir runs/night/x1
 The analysis of why the Table 1 configuration fails here is in Section 13 of `optimization_notes.pdf`
 (paper repository).
 
+## GB-FESO competitor on the Table 1 grid
+
+GB-FESO (Zick & Mendels, arXiv:2607.06421) optimizes x directly by Adam through the differentiated
+conditional sampler, from fixed starts and with no prior over X, using a KDE estimate of the KL.
+`pipeline/search_gbfeso.py` ports their optimizer loop (`run_feso.py`, `run_phase`) onto our samplers,
+and `cdm/losses/kde_kl.py` holds their loss, copied unchanged (MIT). It runs on the Table 1 networks
+and data, so the comparison with MLGD differs only in the search and the loss:
+
+| method | search | loss |
+|---|---|---|
+| MLGD (Table 1) | guided reverse diffusion under the prior, then refinement | MMD |
+| `GBFESO-MMD` | GB-FESO: direct Adam on x from x0 ~ N(0, I) | MMD (same kernel as Table 1) |
+| `GBFESO-KL` | GB-FESO | their KDE-KL (h = 0.5, symmetric, Euclidean coordinates) |
+
+Their command-line defaults throughout: 201 Adam steps per phase at lr 0.05, phase-0 noise 0.05 decaying
+linearly to 0, best iterate kept, 3,500 generated samples per step against a fixed set of 4,496 target
+samples, x clamped to the range of X in the data. Phase 1 (201 more steps, no noise) runs in every
+start for both losses (`--phase1 always`); their code runs it only when the phase-0 KL exceeds 0.2,
+a threshold in KL units with no MMD counterpart (`--phase1 threshold` restores it). Each run has 10
+starts and returns the one with the lowest loss, as MLGD's 10 restarts; 5 runs per scenario.
+Per start this is about 8 times MLGD's sampler work per trajectory, so the `_1k` variant (1,000
+samples per step) is the closer-to-equal-time comparison.
+
+On the cluster, reusing the Table 1 networks (`RUNS`), from the repository root:
+
+```bash
+RUNS=runs/table1v2 TAG="" ARGS="--methods GBFESO-KL GBFESO-MMD" OUT=results/table1_gbfeso \
+    sbatch --time=24:00:00 experiments/synthetic/slurm/slurm_table1.sh
+RUNS=runs/table1v2 TAG=_1k ARGS="--methods GBFESO-KL GBFESO-MMD --extra=--num-samples=1000" OUT=results/table1_gbfeso_1k \
+    sbatch --time=12:00:00 experiments/synthetic/slurm/slurm_table1.sh
+```
+
+The tables (`results/table1_gbfeso{,_1k}.md`) have the Table 1 columns (TV, ||x_hat - x*||, relative
+L2, time); `make_table1.py --collect --methods MLGD GBFESO-KL GBFESO-MMD` puts them next to MLGD.
+
 ## Research diagnostics (not in the paper)
 
 All of these use the Table 1 networks and flags. The usage line is at the top of each script.
