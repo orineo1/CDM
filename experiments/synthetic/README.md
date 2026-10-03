@@ -301,7 +301,7 @@ are off by default). Every run uses the library default, a **detached** RBF band
 | file | command (from the repository root) |
 |---|---|
 | `table1.{md,json,tex}` | `$MT $T1 --runs-dir runs/table1v2` (no `--tag`, no `--extra`), then `--collect`: Table 1 and the refined columns of `tab:sim_full` |
-| `table1_gbfeso.md` | the GB-FESO competitor at the Table 1 budget (section "GB-FESO competitor"), next to the Table 1 methods |
+| `table1_gbfeso.{md,json,tex}` | the GB-FESO competitor at the Table 1 budget (section "GB-FESO competitor"): `.md` next to the Table 1 methods; `.json` and `.tex` from `make_table1.py --collect --tag _main --methods GBFESO-KL GBFESO-MMD` |
 | `checks/table1_*.json` | `check_models.py` on the nine scenarios' networks, `--n-random-x 100`: `tab:model_quality` |
 | `nonstar/arm_*.json` | the [no-star target](#no-star-target) commands above: `tab:nonstar_results` |
 | `fig1/fig1_hard{.png,_sim.json,_sweep.npz}` | `fig1_toy_example.py --setting hard --n-restarts 25 --n-cond 250 --n-mc 3 --methods MLGD MLGD-F PMLGD PMLGD-F --betas 0 2 8 16 --n-beta-samples 2000 --rerun-sim --device cuda` (25 trajectories per method, not 10) |
