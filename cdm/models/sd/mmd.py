@@ -65,7 +65,7 @@ def compute_witness_scores(x, y, bandwidth=None, bandwidth_scale=1.0, kernel_alp
     """Per-sample witness w(x_l) = mean_i k(x_l,x_i) - mean_j k(x_l,y_j).
 
     Used by the 'witness' back-selection rule. The paper's runs use 'uniform'
-    selection, so this is present for completeness, not for Tables 3/15.
+    selection, so this is present for completeness, not for the paper's results tables.
     """
     with torch.no_grad():
         x = _as_2d_float(x).detach()

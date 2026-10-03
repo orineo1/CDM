@@ -3,7 +3,7 @@
 #                  or:  bash experiments/stable_diffusion/four_targets/run.sh eval <scenario>
 
 """
-eval_all_experiments.py -- the paper's final evaluation (Table 3 / Table 15), N = 2,000.
+eval_all_experiments.py -- the paper's final evaluation (MMD / SWD / p(male) tables), N = 2,000.
 
 For one scenario:
     1. Build the target distribution, N_EVAL images generated from the SOURCE scribble with
@@ -164,7 +164,7 @@ def add_deltas(results):
 
 
 def results_table(results, scenario, n_eval, gender):
-    """Markdown table in the shape of the paper's Table 3 / Table 15."""
+    """Markdown table in the shape of the paper's results tables."""
     head = "| Method | MMD ↓ | ΔMMD (%) | SWD ↓ | ΔSWD (%) |" + (" p(male) | 95% CI | n_male / n_female |" if gender else "")
     sep = "|---|---|---|---|---|" + ("---|---|---|" if gender else "")
     lines = [f"# {scenario}: N = {n_eval}", "", head, sep]

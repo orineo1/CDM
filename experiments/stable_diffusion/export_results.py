@@ -7,7 +7,7 @@ Reads the run directories that `four_targets/run.sh full` writes, one per run
 from, each file once:
 
     four_targets/results/eval_table.md          every run's N = 2,000 table (MMD, SWD,
-                                                p(male) with 95% CI; Table 3 / 15)
+                                                p(male) with 95% CI)
     four_targets/results/<run>/                 <run> = the run directory's name
         metrics.json                            the run's full record: args, every step,
                                                 final MMD, time, model revisions, wandb link
@@ -20,8 +20,8 @@ from, each file once:
         eval/                                   eval_results.json (every number), run_info.txt,
                                                 preview_<method>.png and target_preview_<group>.png
                                                 (5 portraits each)
-        saliency/                               saliency_results.json, scribble_change.png (Fig. 7),
-                                                saliency_correlation.png (Fig. 8), run_info.txt
+        saliency/                               saliency_results.json, scribble_change.png,
+                                                saliency_correlation.png, run_info.txt
     step_cost/results/<GPU>_<id>/               step_cost.md (the two tables), step_cost.json,
                                                 run_info.txt
 
@@ -156,7 +156,7 @@ def export_evals(run_dir, dest):
         with open(os.path.join(dest, "eval_table.md"), "w") as fh:
             fh.write("# Final evaluation (N = 2,000), every scenario\n\n"
                      "Written by `experiments/stable_diffusion/export_results.py` from `outputs/eval_*`; the\n"
-                     "protocol of the paper's Table 3 / Table 15 (`cdm/models/sd/eval_all_experiments.py`).\n"
+                     "protocol of the paper's results tables (`cdm/models/sd/eval_all_experiments.py`).\n"
                      "Delta% is the improvement over the source scribble.\n\n")
             fh.write("\n\n".join(t.replace("# ", "## ", 1) for _, t in tables) + "\n")
         print(f"wrote {os.path.join(dest, 'eval_table.md')}")
@@ -213,7 +213,7 @@ def main():
         with open(os.path.join(args.dest, "eval_table.md"), "w") as fh:
             fh.write("# Final evaluation (N = 2,000), every run\n\n"
                      "Written by `experiments/stable_diffusion/export_results.py` from each run's `eval/`; the\n"
-                     "protocol of the paper's Table 3 / Table 15 (`cdm/models/sd/eval_all_experiments.py`).\n"
+                     "protocol of the paper's results tables (`cdm/models/sd/eval_all_experiments.py`).\n"
                      "Delta% is the improvement over the source scribble. Every number is also in\n"
                      "`<run>/eval/eval_results.json`.\n\n")
             fh.write("\n\n".join(eval_tables) + "\n")

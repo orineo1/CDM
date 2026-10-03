@@ -1,6 +1,6 @@
 # four_targets
 
-**Produces:** Table 3 (`tab:sd_results`) and Table 15 (`tab:sd_swd`) — MLGD-F against four
+**Produces:** the paper's results tables (`tab:sd_results`, `tab:sd_swd`) — MLGD-F against four
 distributional targets (balanced, skewed, gender interpolation, age interpolation),
 with the Average-prompt and SDEdit-Best baselines.
 
@@ -130,7 +130,7 @@ echo "full $jf -> baselines $jb -> eval $je   run dir: $RUN"
 
 `squeue -u $USER` shows the later two as `PENDING (Dependency)` until their turn.
 
-## Final evaluation: `run.sh eval` (Table 3 / Table 15)
+## Final evaluation: `run.sh eval`
 
 The optimisation's own numbers (the per-step MMD, the final MMD on 250 images against the
 100-image target pool) are the optimisation's signal, not the paper's measurement. The
@@ -157,14 +157,14 @@ bash run.sh eval balanced --n_eval 200 --run_dir experiments/stable_diffusion/fo
 bash run.sh eval all                                                # the four scenarios
 ```
 
-It writes `eval_results.json`, `eval_table.md` (the Table 3 / 15 rows), `embeddings.npz`
+It writes `eval_results.json`, `eval_table.md` (the rows of the results tables), `embeddings.npz`
 (target and per-method CLIP embeddings, to recompute the metrics without a GPU),
 `preview_<method>.png` and `target_preview_<group>.png` (5 images each), the MMD / SWD bars
 and the p(male) CI plot, `run_info.txt` and `pip_freeze.txt`. **The 2,000 photos per method
 are not saved.** Logged to W&B (`sdxl-eval`): the table, previews, plots and every number.
 Deterministic and pinned like the run (`--seed 42` is the notebook's).
 
-## Saliency: `run.sh saliency` (Figs. 7 and 8)
+## Saliency: `run.sh saliency`
 
 Where MLGD-F edited the scribble, and why there, for a finished gender run:
 
@@ -172,19 +172,20 @@ Where MLGD-F edited the scribble, and why there, for a finished gender run:
 bash experiments/stable_diffusion/four_targets/run.sh saliency balanced --run_dir <run>
 ```
 
-1. **Scribble change** (Fig. 7): source | MLGD-F | the signed difference, Gaussian-smoothed
+1. **Scribble change**: source | MLGD-F | the signed difference, Gaussian-smoothed
    (σ = 2.5, `--sigma`); a pixel is changed if |difference| ≥ τ = 0.1 (`--tau`). Reported:
    % unchanged / added / removed.
-2. **Gender saliency** (Fig. 8, right): |∂s/∂x| on the source scribble, s = cos(CLIP(I(x)),
+2. **Gender saliency**: |∂s/∂x| on the source scribble, s = cos(CLIP(I(x)),
    "a photo of a man") − cos(CLIP(I(x)), "a photo of a woman"), backpropagated through
    ControlNet + Sprinter → VAE decoder → CLIP, averaged over 20 seeds (`--n_seeds`).
-3. **Saliency vs change** (Fig. 8, left): on the stroke pixels, the change binned by
+3. **Saliency vs change**: on the stroke pixels, the change binned by
    saliency percentile; Spearman ρ, Pearson r.
 4. **Latent geometry**: on the 64×64 VAE latent grid, the source latent norm vs the latent
    edit magnitude; Pearson r, Spearman ρ.
 
 It writes `<run>/saliency/`: `saliency_results.json` (every number above), `scribble_change.png`
-(Fig. 7), `saliency_correlation.png` (Fig. 8), `run_info.txt`. About 10 min on an L40S;
+(source | MLGD-F | signed change), `saliency_correlation.png` (binned change vs saliency |
+the saliency map), `run_info.txt`. About 10 min on an L40S;
 W&B project `sdxl-saliency`. Gender scenarios only.
 
 ## Saved results
@@ -219,7 +220,7 @@ It writes `results/eval_table.md` (every run's N = 2,000 table) and, per run,
 | `scribble_source.png`, `source_portrait.png`, `final_scribble_mlgd_f.png` | the source scribble and portrait, the MLGD-F scribble |
 | `baselines/` | `scribble_avg_prompt.png`, `scribble_sdedit_best.png`, `avg_prompt_portrait.png`, `sdedit_search.png`, `baselines_meta.json`, `run_info.txt` |
 | `eval/` | `eval_results.json` (every number), `run_info.txt`, `preview_<method>.png` and `target_preview_<group>.png` (5 portraits each) |
-| `saliency/` | `saliency_results.json`, `scribble_change.png` (Fig. 7), `saliency_correlation.png` (Fig. 8), `run_info.txt` |
+| `saliency/` | `saliency_results.json`, `scribble_change.png`, `saliency_correlation.png`, `run_info.txt` |
 
 `<run>` is the run directory's name; to publish a run without its job id, point
 `--run-dir` at a folder of symlinks named e.g. `full_BalancedTarget_seed4`. Everything else

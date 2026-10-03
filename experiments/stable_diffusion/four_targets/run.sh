@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MLGD-F on four distributional targets (paper Table 3 / Table 15).
+# MLGD-F on four distributional targets (the paper's Stable Diffusion results).
 #
 #   bash run.sh check                              CPU, seconds, no downloads, no GPU.
 #                                                  Static integrity of the ported package +
@@ -17,12 +17,12 @@
 #                                                  5-portrait preview of every scribble, into
 #                                                  <run dir>/baselines/.
 #   bash run.sh eval  <scenario> [flags...]        GPU, ~1 h. The paper's final evaluation
-#                                                  (Table 3 / 15): N = 2,000 images per method
+#                                                  (results tables): N = 2,000 images per method
 #                                                  vs a 2,000-image target, MMD / SWD / p(male),
 #                                                  of every scribble of a run, into
 #                                                  <run dir>/eval/. No photos are saved.
 #   bash run.sh saliency <scenario> [flags...]     GPU, ~10 min. Where MLGD-F edited the scribble
-#                                                  and why there (Figs. 7 and 8): scribble change,
+#                                                  and why there: scribble change,
 #                                                  gender saliency, their correlation, the latent
 #                                                  view, into <run dir>/saliency/. Gender
 #                                                  scenarios only.
@@ -115,7 +115,7 @@ baselines_one() {   # baselines_one <scenario> [extra flags...]: sdedit_best + a
   )
 }
 
-saliency_one() {   # saliency_one <scenario> [extra flags...]: Figs. 7 and 8 of a finished run
+saliency_one() {   # saliency_one <scenario> [extra flags...]: scribble change and saliency of a finished run
   local name="$1"; shift
   local cfg="$HERE/config/${name}.env"
   [ -f "$cfg" ] || { echo "no such scenario: $name (config/$name.env)" >&2; usage; }

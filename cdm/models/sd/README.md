@@ -23,7 +23,7 @@ Source: `orineo1/conditional-matching-paper`, branch
 | `run_mlgd_f.py` | entry point: the MLGD-F optimisation (`run.sh smoke|full`) |
 | `eval_baselines.py` | entry point: the baseline scribbles, `sdedit_best` and `avg_prompt` (`run.sh baselines`) |
 | `eval_all_experiments.py` | entry point: the paper's N = 2,000 evaluation, MMD / SWD / p(male) (`run.sh eval`) |
-| `saliency.py` | entry point: where MLGD-F edited the scribble and why there: scribble change, gender saliency, their correlation, the latent view (Figs. 7 and 8; `run.sh saliency`) |
+| `saliency.py` | entry point: where MLGD-F edited the scribble and why there: scribble change, gender saliency, their correlation, the latent view (`run.sh saliency`) |
 | `step_cost.py` | entry point: memory and time of one guidance step, Turbo measured vs Base projected, All vs Uniform selection (ablation; `step_cost/run.sh`) |
 | `check_imports.py`, `check_mmd_equivalence.py` | the CPU checks (`run.sh check`, `tests/test_sd.py`) |
 

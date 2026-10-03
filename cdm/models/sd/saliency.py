@@ -4,25 +4,25 @@
 #     python -m cdm.models.sd.saliency --help
 
 """
-saliency.py -- where MLGD-F edits the scribble, and why there (paper Figs. 7 and 8).
+saliency.py -- where MLGD-F edits the scribble, and why there (the paper's scribble-edit and saliency figures).
 
 For one finished run (source scribble -> MLGD-F scribble):
 
-1. Scribble change (Fig. 7). The signed per-pixel difference (MLGD-F - source, channel mean),
+1. Scribble change. The signed per-pixel difference (MLGD-F - source, channel mean),
    Gaussian-smoothed (--sigma); a pixel is changed if |smoothed difference| >= --tau, added if
    positive, removed if negative. Reported: % unchanged / added / removed.
-2. Gender saliency (Fig. 8, right). |ds/dx| on the source scribble x, with
+2. Gender saliency. |ds/dx| on the source scribble x, with
    s(x) = cos(CLIP(I(x)), t_man) - cos(CLIP(I(x)), t_woman), backpropagated from the image
    I(x) through scribble -> ControlNet + Sprinter -> VAE decoder -> CLIP; |gradient| summed
    over channels, averaged over --n_seeds Sprinter draws, Gaussian-smoothed.
-3. Saliency vs change (Fig. 8, left). On the source's stroke pixels: the smoothed L2 change
+3. Saliency vs change. On the source's stroke pixels: the smoothed L2 change
    against the saliency, binned by saliency percentile; Spearman rho and Pearson r.
 4. Latent geometry. On the 64x64 VAE latent grid: the source latent norm against the norm of
    the latent edit (MLGD-F - source); Pearson r and Spearman rho.
 
 Writes to --output_dir (run.sh: <run>/saliency/): saliency_results.json (every number above,
-the settings, model revisions, library versions, W&B link), scribble_change.png (Fig. 7) and
-saliency_correlation.png (Fig. 8).
+the settings, model revisions, library versions, W&B link), scribble_change.png (source | MLGD-F |
+signed change) and saliency_correlation.png (binned change vs saliency | saliency map).
 """
 
 import argparse
@@ -46,7 +46,7 @@ PAPER_FIG_DPI    = 600
 
 
 # ---------------------------------------------------------------------------
-# Scribble change and the Fig. 8 correlation (numpy only)
+# Scribble change and the saliency-change correlation (numpy only)
 # ---------------------------------------------------------------------------
 
 def load_scribble(path, size=512):
@@ -69,7 +69,7 @@ def change_masks(signed, tau):
 
 
 def change_counts(signed, tau):
-    """% of pixels unchanged / added / removed (Fig. 7 caption)."""
+    """% of pixels unchanged / added / removed (reported with the scribble-change figure)."""
     changed, added, removed = change_masks(signed, tau)
     n = changed.size
     return {"unchanged_pct": 100 * float(n - changed.sum()) / n,
@@ -111,7 +111,7 @@ def latent_correlation(src_norm, edit_norm):
 # ---------------------------------------------------------------------------
 
 def plot_scribble_change(src, opt, signed, tau, path):
-    """Fig. 7: source | MLGD-F | smoothed signed change (green added, red removed)."""
+    """Source | MLGD-F | smoothed signed change (green added, red removed)."""
     changed, _, _ = change_masks(signed, tau)
     vmax = np.abs(signed[changed]).max() if changed.any() else 1.0
     fig, axes = plt.subplots(1, 3, figsize=(6.75, 2.2), gridspec_kw={"wspace": 0.04})
@@ -125,7 +125,7 @@ def plot_scribble_change(src, opt, signed, tau, path):
 
 
 def plot_saliency_correlation(saliency, corr, scribble, path, line_threshold=0.05):
-    """Fig. 8: binned change vs saliency (left), saliency on the stroke pixels (right)."""
+    """Binned change vs saliency (left), saliency on the stroke pixels (right)."""
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     masked = np.where(line_mask(scribble, line_threshold), saliency, 0.0)
     fig, axes = plt.subplots(1, 2, figsize=(6.75, 2.2), gridspec_kw={"width_ratios": [1.6, 1], "wspace": 0.15})
@@ -264,7 +264,7 @@ def main(argv=None):
         make_deterministic(args.seed)
     t0 = time.time()
 
-    # ── 1. scribble change: Fig. 7 (CPU) ─────────────────────────────────────
+    # ── 1. scribble change (CPU) ─────────────────────────────────────────────
     src, src_pil = load_scribble(src_path)
     opt, opt_pil = load_scribble(opt_path)
     change, signed = scribble_change(src, opt, args.sigma)
@@ -300,7 +300,7 @@ def main(argv=None):
     latent = latent_correlation(*latent_norms(src_pil, opt_pil, sprinter.vae, device))
     print(f"Latent norm vs edit: {latent}", flush=True)
 
-    # ── 2-3. gender saliency of the source scribble, and Fig. 8 ──────────────
+    # ── 2-3. gender saliency of the source scribble, and its correlation ─────
     g = gender_direction(clip_model, clip_processor, device, args.male_prompt, args.female_prompt)
     print(f"Gender saliency of the source scribble ({args.n_seeds} draws)...", flush=True)
     saliency = compute_saliency(src, sprinter, clip_model, clip_processor, g, device,
