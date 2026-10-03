@@ -34,8 +34,9 @@ Which algorithm (presets; any individual knob below overrides the preset)
 Inner estimator (Algorithm 2)
   --n-cond N          conditional samples per step for the loss         (250)
   --n-target M        target samples per step                       (= n_cond)
-  --loss mmd|swd|l2   MMD with a multi-bandwidth RBF kernel, sliced Wasserstein, or the
-                      pointwise squared-error baseline (paper Table 9's non-distributional arm)
+  --loss mmd|swd|l2|kl   MMD with a multi-bandwidth RBF kernel, sliced Wasserstein, the
+                      pointwise squared-error baseline (paper Table 9's non-distributional arm), or
+                      GB-FESO's KDE-KL (cdm/losses/kde_kl.py; --kde-bandwidth h, --kl-lambda)
   --rbf-kernels K --rbf-mul F   RBF mixture: K bandwidths, geometric factor F
   --swd-projections P
   --select all|uniform --n-sel k   backpropagate through all n_cond samples,
@@ -165,7 +166,9 @@ def parse_args():
     g = p.add_argument_group("inner estimator")
     g.add_argument("--n-cond", type=int, default=250)
     g.add_argument("--n-target", type=int, default=None)
-    g.add_argument("--loss", choices=["mmd", "swd", "l2"], default="mmd")
+    g.add_argument("--loss", choices=["mmd", "swd", "l2", "kl"], default="mmd")
+    g.add_argument("--kde-bandwidth", type=float, default=0.5, help="--loss kl: Gaussian KDE bandwidth (GB-FESO's 0.5)")
+    g.add_argument("--kl-lambda", type=float, default=1.0, help="--loss kl: weight of the reverse KL (GB-FESO's 1)")
     g.add_argument("--rbf-kernels", type=int, default=5)
     g.add_argument("--rbf-mul", type=float, default=2.0)
     g.add_argument("--swd-projections", type=int, default=100)
@@ -217,6 +220,10 @@ def make_loss(args):
     if args.loss == "mmd":
         return MMDLoss(kernel=RBF(n_kernels=args.rbf_kernels, mul_factor=args.rbf_mul, device=args.device,
                                   detach_bandwidth=not args.bandwidth_grad))
+    if args.loss == "kl":
+        # GB-FESO's KDE estimate of KL(target || generated) + lambda KL(generated || target), Euclidean coordinates
+        from cdm.losses.kde_kl import KDEKLLoss
+        return KDEKLLoss(bandwidth=args.kde_bandwidth, kl_lambda=args.kl_lambda)
     if args.loss == "l2":
         # pointwise squared error -- NOT a distributional loss. Table 9's baseline arm.
         from cdm.losses.functions import pointwise_squared_error
