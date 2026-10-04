@@ -18,7 +18,9 @@ and evaluation, so it is scored exactly like search_mog.py's MLGD:
   answer   the better of the two best iterates, each scored on the same --final-n fresh generated and
            target samples (their code compares the phases' search losses, which here can come from
            different sample counts); the run returns the start with the lowest score (MLGD scores
-           and selects its restarts the same way).
+           and selects its restarts the same way). With --select-top K the K lowest-scoring starts
+           are re-scored with --select-n fresh samples, averaged over --select-repeats draws, and the
+           lowest of those is returned: MLGD's selection (cdm.guidance.search.select), same code.
 
 Samples: phase 0 draws --num-samples generated samples per step, phase 1 --num-samples-phase1, and
 every loss is computed against the same number of target samples, drawn fresh at each step (as MLGD
@@ -52,7 +54,9 @@ import torch
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)   # sibling pipeline modules
 
+from cdm.guidance.config import GuidanceConfig                      # noqa: E402
 from cdm.guidance.core import _draw_conditional                     # noqa: E402
+from cdm.guidance.search import select                              # noqa: E402
 from cdm.losses.functions import MMDLoss, RBF                        # noqa: E402
 from cdm.losses.kde_kl import KDEKLLoss                              # noqa: E402
 from run_optimization import load_model                              # noqa: E402
@@ -91,6 +95,10 @@ def parse_args():
     g = p.add_argument_group("run control")
     g.add_argument("--n-restarts", type=int, default=10, help="starts per run; the best by loss is the run's answer")
     g.add_argument("--n-attempts", type=int, default=1)
+    g.add_argument("--select-top", type=int, default=0,
+                   help="re-score the K lowest-scoring starts (MLGD's selection); 0: the lowest score wins")
+    g.add_argument("--select-n", type=int, default=2000, help="--select-top: fresh samples per re-score")
+    g.add_argument("--select-repeats", type=int, default=5, help="--select-top: re-scores averaged per start")
     g.add_argument("--n-cond", type=int, default=None, help="ignored; accepted for make_table1.py")
     g.add_argument("--seed", type=int, default=42)
     g.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -159,7 +167,8 @@ def main():
           + f" | samples/step {args.num_samples} (phase 0), {args.num_samples_phase1} (phase 1), {args.final_n} (score)"
           + f", target {'fixed ' + str(args.fixed_target) if args.fixed_target else 'fresh, same count'}"
           + f" | box={'off' if lo is None else 'data range'} | init={args.init}"
-          + f" | R={args.n_restarts} starts, attempts={args.n_attempts}, device={dev}")
+          + f" | R={args.n_restarts} starts, attempts={args.n_attempts}, device={dev}"
+          + (f" | select top {args.select_top} on {args.select_n} x {args.select_repeats}" if args.select_top else ""))
 
     attempts = []
     for a in range(args.n_attempts):
@@ -201,7 +210,19 @@ def main():
                          "time_s": time.time() - t0, **evaluate(xv, info)})
             print(f"    start {r + 1}/{args.n_restarts}: score {score:.5f}, search loss {loss:.5f} ({phase})  {runs[-1].get('l2_gmm', float('nan')):.4f}"
                   f"  ({runs[-1]['time_s']:.1f}s)", flush=True)
-        best = min(runs, key=lambda q: q["final_loss"])
+        if args.select_top:   # MLGD's selection, same function: re-score the K lowest with fresh samples
+            cfg_sel = GuidanceConfig(n_cond=args.final_n, repeat_condition=True, device=dev,
+                                     condition_on_slice=(sampler_type == "diffusion"),
+                                     target_generator=lambda n, d: target(n))
+            for q in runs:
+                q["x"] = torch.tensor(q["x_hat"], device=dev).view(1, -1)
+            best = select(runs, sampler, loss_fn, cfg_sel, args.select_top, args.select_n, args.select_repeats)
+            for q in runs:
+                q.pop("x")
+            print("    selection: " + ", ".join(f"{q['final_loss']:.5f} -> {q['select_loss']:.5f}"
+                                               for q in runs if "select_loss" in q), flush=True)
+        else:
+            best = min(runs, key=lambda q: q["final_loss"])
         att = {"attempt": a, **{k: v for k, v in best.items() if k != "trace"},
                "restarts": [{k: v for k, v in q.items() if k != "trace"} for q in runs],
                "traces": [q["trace"] for q in runs], "time_s": time.time() - t_att}

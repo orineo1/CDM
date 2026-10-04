@@ -249,6 +249,9 @@ chosen and scored on fresh samples, and the lowest score wins, as MLGD's 10 rest
 scenario. The sample budget is MLGD's in Table 1: 250 conditional samples per step in phase 0 (MLGD:
 per guided step), 1,000 in phase 1 (MLGD: per refinement step), scored on 1,000; every loss compares
 the generated samples with as many target samples, drawn fresh at each step.
+`--select-top K --select-n N --select-repeats R` replaces the lowest-score rule by MLGD's selection
+(`cdm.guidance.search.select`, the same function): the K lowest-scoring starts are re-scored R times on
+N fresh samples and the lowest average is returned, as MLGD\* does with K = 5, N = 5,000, R = 5.
 
 On the cluster, reusing the Table 1 networks (`RUNS`), from the repository root, with the environment active:
 
