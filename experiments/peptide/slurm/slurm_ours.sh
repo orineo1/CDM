@@ -2,6 +2,7 @@
 # Step 3a: our method (search_peptide.py) on the targets, one array task per block of targets.
 #   SAMPLER=diff sbatch --array=0-7 experiments/peptide/slurm/slurm_ours.sh    # MLGD   (conditional diffusion)
 #   SAMPLER=cm   sbatch --array=0-7 experiments/peptide/slurm/slurm_ours.sh    # MLGD-F (consistency model)
+#   SAMPLER=gbfeso sbatch --array=0-7 experiments/peptide/slurm/slurm_ours.sh  # MLGD on GB-FESO's surrogate
 # Task k handles targets k*PER .. k*PER+PER-1. Output runs/peptide/results/<MLGD|MLGD-F>_t<id>.json
 #SBATCH --job-name=pep-ours
 #SBATCH --partition=catfish        # all methods on the same GPU type (L4) so that wall times compare
@@ -16,16 +17,18 @@ cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; SAMPLER=${SAMPLER:-diff}; PER=${PER:-5}; OUT=${OUT:-$R/results}; mkdir -p $OUT
 NAME=$([ "$SAMPLER" = cm ] && echo MLGD-F || echo MLGD)
+# SAMPLER=gbfeso: MLGD on GB-FESO's surrogate (gbfeso_sampler.py); result files <NAME><TAG>_theirs_t<id>.json
+if [ "$SAMPLER" = gbfeso ]; then SPATH=$R/models/gbfeso.pt; SUF=_theirs; else SPATH=$R/models/$SAMPLER/model_conditional.pt; SUF=; fi
 python -c "import torch; print(torch.cuda.get_device_name())"
 k=${SLURM_ARRAY_TASK_ID:-0}
 for t in $(seq $((k * PER)) $((k * PER + PER - 1))); do
   tid=$(printf %03d $t); [ -f $R/targets/target_$tid.npy ] || continue
-  [ -f $OUT/${NAME}${TAG:-}_t$tid.json ] && continue
+  [ -f $OUT/${NAME}${TAG:-}${SUF}_t$tid.json ] && continue
   python experiments/peptide/pipeline/search_peptide.py --prior $R/models/prior/model_unconditional.pt \
-    --sampler $R/models/$SAMPLER/model_conditional.pt --target $R/targets/target_$tid.npy \
+    --sampler $SPATH --target $R/targets/target_$tid.npy \
     --algo lgd --n-attempts 1 --n-cond 250 --guidance-optim adam --step-size 0.05 --guide-grad zo \
     --n-restarts ${RESTARTS:-10} --refine-steps 100 --refine-lr 0.02 --refine-n-cond 3000 --refine-keep-best \
     --select-top 5 --select-n 2000 --select-repeats 5 --seed $((42 + t)) --device cuda \
-    --out $OUT/${NAME}${TAG:-}_t$tid.json ${EXTRA:-}
+    --out $OUT/${NAME}${TAG:-}${SUF}_t$tid.json ${EXTRA:-}
 done
 echo "done $(date)"

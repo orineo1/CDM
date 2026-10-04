@@ -58,6 +58,8 @@ def load_runs(paths):
             else:    # search_peptide output: one target per file, named <method><tag>_t<id>.json
                 stem, tid = os.path.basename(f)[:-len(".json")].rsplit("_t", 1)
                 tid, b = int(tid), d["best"]
+                if stem.endswith("_theirs"):        # MLGD run on GB-FESO's surrogate (gbfeso_sampler.py)
+                    stem = stem[:-len("_theirs")] + ", their surrogate"
                 runs.append({"method": stem, "family": stem, "target_id": tid,
                              "x_hat_std": b["x_hat"], "eps_hat": (np.array(b["x_hat"]) * common.X_STD + common.X_MEAN).tolist(),
                              "budget": d.get("budget"),
@@ -69,7 +71,7 @@ def load_runs(paths):
 def cmd_collect(a):
     runs = load_runs(a.results)
     te = torch.load(a.targets_ens, weights_only=False)
-    for tid in range(te["eps"].shape[0]):
+    for tid in ([] if a.no_oracle else range(te["eps"].shape[0])):
         runs.append({"method": "oracle (eps_hat = eps*)", "family": "oracle", "target_id": tid,
                      "eps_hat": te["eps"][tid].tolist(), "time_s": 0.0})
     for r in runs:
@@ -141,7 +143,7 @@ def cmd_sampler(a):
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     te = torch.load(a.targets_ens, weights_only=False)
     design = Design.from_dict(te.get("design"))
-    basins = "their" if design.n_beads == 4 else "tuple"
+    basins = a.basins or ("their" if design.n_beads == 4 else "tuple")
     mj = json.load(open(a.meta))
     sc = common.YScaler(mj["y_mean"], mj["y_std"])
     from gbfeso import parse_ids
@@ -179,12 +181,18 @@ def cmd_sampler(a):
                                        sample_steps=40, eta=0.0, clamp_x0=False)
             Gs = frame_ds.denormalize_target(xs, clamp=False).float().cpu()
             rows.setdefault("GB-FESO surrogate (40 DDIM steps)", []).append(score_pair(T, Gs, design, basins, a.n, sc, g, dev))
-    lines = [f"Sampler accuracy at {len(ids)} held-out eps* ({design}, basins: {basins}, {a.n} draws vs the target ensemble)", "",
-             "| sampler | basin success | median basin TV | median dF err | median KDE-KL | median ED | mean ED |", "|---|---|---|---|---|---|---|"]
+    lines = [f"Surrogate accuracy at {len(ids)} held-out eps* ({design}, basins: {basins}): {a.n} draws of each sampler at eps* "
+             "vs {a.n} frames of the simulated target ensemble. Ours: conditional diffusion (MLGD's sampler) and consistency model "
+             "(MLGD-F's); theirs: GB-FESO's surrogate with 40 DDIM steps, as their optimizer draws. dF errors over the target's "
+             "active basins (> 5%), multi-basin targets only; ED = energy distance in our standardized features. "
+             "'split halves' = two disjoint random halves of the target ensemble (a lower bound of the noise).".replace("{a.n}", str(a.n)), "",
+             "| sampler | basin success | median basin TV | mean basin TV | median dF err | mean dF err (multi-basin targets) | median KDE-KL | median ED | mean ED |",
+             "|---|---|---|---|---|---|---|---|---|"]
     for name, rs in rows.items():
         df = [r["df_median_abs_error"] for r in rs if r["df_median_abs_error"] is not None]
         lines.append(f"| {name} | {100 * np.mean([r['success'] for r in rs]):.0f}% | {np.median([r['tv_basins'] for r in rs]):.3f} | "
-                     f"{np.median(df) if df else float('nan'):.3f} | {np.median([r['kl'] for r in rs]):.3f} | "
+                     f"{np.mean([r['tv_basins'] for r in rs]):.3f} | {np.median(df) if df else float('nan'):.3f} | "
+                     f"{np.mean(df) if df else float('nan'):.3f} (n={len(df)}) | {np.median([r['kl'] for r in rs]):.3f} | "
                      f"{np.median([r['ed'] for r in rs]):.4f} | {np.mean([r['ed'] for r in rs]):.4f} |")
     print("\n".join(lines))
     if a.out:
@@ -192,7 +200,14 @@ def cmd_sampler(a):
 
 
 def cmd_table(a):
-    write_table(json.load(open(os.path.join(a.out, f"per_run{a.suffix}.json"))), os.path.join(a.out, f"results_table{a.suffix}.md"))
+    path = os.path.join(a.out, f"per_run{a.suffix}.json")
+    runs = json.load(open(path))
+    if a.add:       # merge evaluated runs of new methods (same protocol) into per_run<suffix>.json
+        new = [r for f in a.add for r in json.load(open(f))]
+        keys = {(r["method"], r["target_id"]) for r in new}
+        runs = [r for r in runs if (r["method"], r["target_id"]) not in keys] + new
+        json.dump(runs, open(path, "w"), indent=0)
+    write_table(runs, os.path.join(a.out, f"results_table{a.suffix}.md"))
 
 
 def best_of_starts(runs):
@@ -294,6 +309,7 @@ def main():
     c = sub.add_parser("collect")
     c.add_argument("--results", nargs="+", required=True)
     c.add_argument("--targets-ens", required=True)
+    c.add_argument("--no-oracle", action="store_true", help="no oracle rows (evaluating extra methods only)")
     c.add_argument("--out", required=True)
     m = sub.add_parser("metrics")
     m.add_argument("--eval-eps", required=True)
@@ -306,6 +322,7 @@ def main():
     m.add_argument("--out", required=True)
     t = sub.add_parser("table", help="rewrite results_table<suffix>.md from <out>/per_run<suffix>.json")
     t.add_argument("--suffix", default="")
+    t.add_argument("--add", nargs="*", default=None, help="per_run json files of extra methods to merge in first")
     t.add_argument("--out", required=True)
     sp = sub.add_parser("sampler", help="sampler accuracy at held-out eps*")
     sp.add_argument("--prior", required=True)
@@ -315,6 +332,7 @@ def main():
     sp.add_argument("--meta", required=True)
     sp.add_argument("--target-ids", default="0-9")
     sp.add_argument("--n", type=int, default=4096)
+    sp.add_argument("--basins", choices=["their", "tuple"], default=None)
     sp.add_argument("--out", default=None)
     a = p.parse_args()
     {"collect": cmd_collect, "metrics": cmd_metrics, "table": cmd_table, "sampler": cmd_sampler}[a.cmd](a)
