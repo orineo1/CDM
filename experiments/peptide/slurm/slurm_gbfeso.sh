@@ -12,7 +12,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 . ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
-R=${R:-runs/peptide}; PER=${PER:-5}; OUT=${OUT:-$R/results}; mkdir -p $OUT
+N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; PER=${PER:-5}; OUT=${OUT:-$R/results}; mkdir -p $OUT
 python -c "import torch; print(torch.cuda.get_device_name())"
 k=${SLURM_ARRAY_TASK_ID:-0}
 python experiments/peptide/pipeline/gbfeso.py opt --ckpt $R/models/gbfeso.pt --targets-ens $R/targets_ens.pt \

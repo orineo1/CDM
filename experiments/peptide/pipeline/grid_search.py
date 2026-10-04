@@ -7,6 +7,10 @@ own make_cfg / make_loss / _final_loss), then the --select-top best points are r
     python experiments/peptide/pipeline/grid_search.py --prior runs/peptide/models/prior/model_unconditional.pt \
         --sampler runs/peptide/models/diff/model_conditional.pt --targets-dir runs/peptide/targets \
         --target-ids 0-39 --grid 30 --out runs/peptide/results/grid_0.json
+
+Random search (any number K of free eps, where a grid is infeasible): --random M scores M points drawn
+uniformly in the box [0.21, 1.55]^K (fixed per target: seed + target id) instead of the grid, with the
+same loss and reselection; the result's method is 'random-M'. K is read from <targets-dir>/../meta.json.
 """
 import argparse
 import dataclasses
@@ -34,6 +38,8 @@ def main():
     p.add_argument("--targets-dir", required=True)
     p.add_argument("--target-ids", default="0-39")
     p.add_argument("--grid", type=int, default=30)
+    p.add_argument("--random", type=int, default=0, help="score this many uniform random eps instead of the grid")
+    p.add_argument("--method-name", default=None, help="default: grid, or random-<M> with --random")
     p.add_argument("--n-cond", type=int, default=1000)
     p.add_argument("--select-top", type=int, default=5)
     p.add_argument("--select-n", type=int, default=2000)
@@ -42,12 +48,20 @@ def main():
     p.add_argument("--out", required=True)
     a = p.parse_args()
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    lin = torch.linspace(*EPS_BOX, a.grid)
-    E = torch.cartesian_prod(lin, lin)
-    X = x_to_std(E).to(dev)
-    eps_star = json.load(open(os.path.join(a.targets_dir, "..", "meta.json")))["eps_star"]
+    meta = json.load(open(os.path.join(a.targets_dir, "..", "meta.json")))
+    eps_star = meta["eps_star"]
+    K = len(eps_star[0])
+    method = a.method_name or (f"random-{a.random}" if a.random else "grid")
+    if not a.random:
+        lin = torch.linspace(*EPS_BOX, a.grid)
+        E = torch.cartesian_prod(*([lin] * K))
+        X = x_to_std(E).to(dev)
     records = []
     for tid in parse_ids(a.target_ids, len(eps_star)):
+        if a.random:
+            gr = torch.Generator().manual_seed(a.seed + 7919 * tid)
+            E = EPS_BOX[0] + (EPS_BOX[1] - EPS_BOX[0]) * torch.rand(a.random, K, generator=gr)
+            X = x_to_std(E).to(dev)
         tgt = os.path.join(a.targets_dir, f"target_{tid:03d}.npy")
         sys.argv = ["search_mog", "--prior", a.prior, "--sampler", a.sampler, "--target", tgt, "--device", dev]
         args = fx.parse_args()
@@ -72,9 +86,9 @@ def main():
         rec = {"target_id": tid, "eps_star": eps_star[tid], "eps_hat": E[best].tolist(), "surrogate_loss": min(sel),
                "time_s": dt, "n_loss_evals": int(X.shape[0] + a.select_top * a.select_repeats)}
         records.append(rec)
-        print(f"[grid] target {tid}: eps*={[round(v, 3) for v in eps_star[tid]]} eps_hat={[round(v, 3) for v in rec['eps_hat']]} "
+        print(f"[{method}] target {tid}: eps*={[round(v, 3) for v in eps_star[tid]]} eps_hat={[round(v, 3) for v in rec['eps_hat']]} "
               f"loss={rec['surrogate_loss']:.5f} ({dt:.1f}s)", flush=True)
-        json.dump({"method": "grid", "args": vars(a), "runs": records}, open(a.out, "w"))
+        json.dump({"method": method, "args": vars(a), "runs": records}, open(a.out, "w"))
 
 
 if __name__ == "__main__":

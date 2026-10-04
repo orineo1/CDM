@@ -1,4 +1,4 @@
-# Peptide benchmark: CDM vs GB-FESO on the four-bead toy chain
+# Peptide benchmark: CDM vs GB-FESO on the N-bead toy chain (their four-bead benchmark and N = 5, 6)
 
 Head-to-head comparison of our method (MLGD / MLGD-F, `search_peptide.py`, which runs the shared vector-data driver) with GB-FESO (Zick & Mendels 2026,
 "Gradient-Based Inverse Design of Free-Energy Landscapes with Diffusion Models", arXiv:2607.06421) on
@@ -10,6 +10,10 @@ GB-FESO runs from THEIR code (github GB-FESO, MIT), cloned next to this reposito
 their `utils.py` / `loss.py` score every method. Our method runs from `experiments/synthetic/pipeline/
 train_models.py` and `search_mog.py` unchanged. New code: the simulator, the data conversion, the
 GB-FESO / grid-search drivers and the evaluation.
+
+Every script takes the chain length from the ensemble files (`--n-beads` on `sim_ensembles.py`, default 4);
+N = 4 with eps1, eps2 free and eps3 = 0.5 is their benchmark and runs exactly as before (section "N beads"
+below for N > 4).
 
 ## Pipeline (cluster, from the repo root)
 
@@ -124,3 +128,77 @@ Re-simulating the same eps changes a target's dF error by a median 0.04 k_BT (up
 size as the differences between the methods' median errors, so medians do not separate the methods.
 The robust differences are in the tail: the share of targets within 0.3 k_BT, the mean dF error and the
 eps error.
+
+## N beads (N = 5, 6; 4 October 2026)
+
+**Design.** Pair (i, j) of the N-bead chain has LJ strength eps_d, d = |i - j| = 1..N-1 (`simulate.Design`).
+The search variable X is the vector of free eps_d, each in [0.21, 1.55]; the others are fixed. Defaults:
+N = 4: eps1, eps2 free, eps3 = 0.5 (their benchmark, bit-identical trajectories to the 4-bead code on the
+same seed); N >= 5: all N - 1 free (N = 5: 4 free, N = 6: 5 free). Other designs: `--free-eps 1,2
+--fixed-eps 3=0.5,4=0.5` on `sim_ensembles.py`; every later script reads the design from the ensemble file.
+Y = the N - 1 bond lengths and the N - 2 signed bond angles (2N - 3 numbers); our networks see 3N - 5
+standardized features (bond lengths, cos / sin of each angle).
+
+**Commands** (cluster, repo root; outputs in `runs/peptide_N<N>/`, tables in `results/*_N<N>.md`):
+
+| step | command |
+|---|---|
+| everything, as one dependency chain | `N=5 bash experiments/peptide/slurm/submit_all.sh` (also `N=6`) |
+| 1 data (600 eps x 2,000 frames, 40 targets x 64 replicas) | `N=5 sbatch slurm/slurm_data.sh` |
+| 2 networks | `N=5 sbatch --array=0-3 slurm/slurm_train.sh` |
+| 3a MLGD, 10 / 2 trajectories | `N=5 SAMPLER=diff sbatch --array=0-7 slurm/slurm_ours.sh`; add `RESTARTS=2 TAG=_r2` |
+| 3b MLGD-F | `N=5 SAMPLER=cm sbatch --array=0-7 slurm/slurm_ours.sh` |
+| 3c GB-FESO, 4 starts | `N=5 sbatch --array=0-7 slurm/slurm_gbfeso.sh` |
+| 3d random search | `N=5 RANDOM_M=1500 sbatch --array=0-3 slurm/slurm_grid.sh`; `N=5 PER=5 RANDOM_M=8000 sbatch --array=0-7 ...` |
+| sampler accuracy | `N=5 sbatch slurm/slurm_sampler.sh` -> `results/sampler_check_N5.md` |
+| 4 evaluation | `N=5 sbatch slurm/slurm_eval.sh` -> `results/{results_table,per_run}_N5.{md,json}` |
+| equilibration check | `N=5 sbatch slurm/slurm_equil.sh` -> `results/equilibration_N5.md` |
+| N = 4 regression check | `sbatch slurm/slurm_check_n4.sh` -> `results/check_N4.md` |
+
+(`slurm/` = `experiments/peptide/slurm/`.) The training set has the same 1.2M rows as for N = 4, spread over
+600 instead of 300 eps (denser in the 4-5-D box). Same networks, epochs and search flags as for N = 4.
+
+**Simulation protocol for N >= 5: 16M steps per replica, 1M-step burn-in, a frame every 800 steps**
+(N = 4: 4M / 50k / 200, theirs). Why: with
+their 4M-step protocol (8 eps per N, 16 replicas from the straight chain, CPU runs of `check_equilibration.py`),
+the integrated autocorrelation time of the most populated basin is <= 0.25M steps at N = 4 but 1-7M steps at
+N = 5, 6 for strongly attractive eps: single replicas stay in one basin for the whole run (their share of
+time in the top basin ranges from 0 to 1), and two halves of 8 replicas differ by a median basin TV of
+0.11 (N = 5) and 0.12 (N = 6) against 0.02 at N = 4, up to 0.30 and 0.38. Longer runs: see
+`results/equilibration_N*.md`.
+
+**GB-FESO for N > 4** (`gbfeso.py`, module docstring; their checkout is not edited). Their code assumes
+Y = 5 numbers and a 2-D eps. Our wrapper (i) replaces their GeometryFrameDataset by one with N - 1 distance
+and N - 2 angle columns (same normalization: distances min-max to [-1, 1], angles / pi); (ii) patches
+model.py so the condition is K = N - 1 eps: `prepare_eps_cond` accepts [B, K], `epsilon_features` builds
+their features generalized to K (eps_i, then eps_i + eps_j, eps_i - eps_j, eps_i eps_j over pairs, then
+eps_i^2; identical to theirs at K = 2) and the first layer of `eps_mlp` takes that many inputs; (iii) passes
+the N - 2 angle columns to their KDE-KL (`angle_indices`; their default wraps the last two); (iv) re-compiles
+their `optimize_epsilon_condition` from its source with four asserted one-line replacements (`view(1, 2)`
+-> `view(1, -1)`, a K-long gradient record, and best / initial / final eps kept with all K coordinates instead
+of (eps1, eps2)), with `_parse_optimize_eps` and `_eps_pair_tensor` accepting K coordinates; (v) switches off
+their in-loop basin metrics (2-angle boxes; only printed, they do not steer the search). Unchanged: Adam on
+raw eps (lr 5e-2), 201 steps, 3,500 samples, 40 DDIM steps, KDE-KL bandwidth 0.5 and kl_lambda 1 on the full
+geometry, decaying phase-0 perturbations (std 0.05; 0.005 when every start coordinate is >= 0.9, their
+high-high rule), phase 1 when the best KL > 0.2, clamping to the training range, best iterate returned.
+Starts: the four corners do not generalize, so all-low (0.25, ..., 0.25), all-high (1.4, ..., 1.4) and two
+uniform random starts per target (`rand1`, `rand2`, fixed per target). Rows: GB-FESO (all) = one start;
+best of 4 starts = the start with the lowest surrogate KL, time summed.
+
+**Random search** (replaces the 30 x 30 grid, infeasible in 4-5 dimensions): M eps uniform in the box per
+target, scored by the MMD of 1,000 draws of our diffusion sampler against the target, top-5 reselection
+(2,000 draws x 5) as in our search; M = 1,500 (about one GB-FESO start) and M = 8,000 (about one MLGD run).
+
+**Evaluation for N > 4** (`evaluate.py`, `common.py`). Their basins are boxes in (theta123, theta234).
+For any N: each angle is +folded, -folded, +open or -open, with |theta| < 1.55 = folded (the minimum of the
+|theta| marginal between the i-1 / i+1 contact peak at |theta| ~ 1.0 and the open peak at ~ 2.05; the same
+for N = 4, 5, 6); a conformation is the tuple of the N - 2 angle states; a basin is a class of tuples under
+the two symmetries of the potential (mirror image; reading the chain backwards), whose members have equal
+equilibrium populations: 6 basins for N = 4, 20 for N = 5, 72 for N = 6. At N = 4 these reproduce their
+boxes (A anti-diagonal = (f, F), B same-sign = (f, f), C outer = one angle open; on 8 eps the populations
+agree within 0.02, except at weak eps, where up to 29% of the frames fall outside their boxes). Success = every basin with target population > 5% has >= 0.5% at eps_hat (their rule);
+dF error = their median |dF_hat - dF| over the non-reference active basins (floor 1e-3, cap 6 k_BT).
+Basin-free score: the energy distance (ED) between 2,048 target and 2,048 re-simulated frames in our
+standardized feature space. KDE-KL as for N = 4 with all N - 2 angles wrapped. The oracle row (eps_hat =
+eps*, re-simulated) is the noise floor of every column. The table groups methods by compute (median time per
+run in units of one GB-FESO start).

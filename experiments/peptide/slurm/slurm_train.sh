@@ -1,5 +1,5 @@
 #!/bin/bash
-# Step 2: train the networks (one array task each).   sbatch --array=0-3 experiments/peptide/slurm/slurm_train.sh
+# Step 2: train the networks (one array task each).   [N=5] sbatch --array=0-3 experiments/peptide/slurm/slurm_train.sh
 #   0: GB-FESO surrogate with their train.py (their TrainConfig: 80 epochs, width 256, depth 7, 1000 steps)
 #   1: our conditional diffusion P(y | x) (MLGD)          2: our consistency model (MLGD-F)
 #   3: our prior over x (uniform box draws)
@@ -14,10 +14,11 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 . ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
-R=${R:-runs/peptide}; P=experiments/peptide/pipeline; T=experiments/synthetic/pipeline/train_models.py
+N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; P=experiments/peptide/pipeline; T=experiments/synthetic/pipeline/train_models.py
 python -c "import torch; print(torch.cuda.get_device_name())"
+[ "$N" = 4 ] && FRAMES=${FRAMES:-4000} || FRAMES=${FRAMES:-2000}
 case "${SLURM_ARRAY_TASK_ID:-0}" in
-  0) python $P/gbfeso.py train --train-ens $R/train_ens.pt --frames-per-eps 4000 --epochs ${GB_EPOCHS:-80} --out $R/models/gbfeso.pt ;;
+  0) python $P/gbfeso.py train --train-ens $R/train_ens.pt --frames-per-eps $FRAMES --epochs ${GB_EPOCHS:-80} --out $R/models/gbfeso.pt ;;
   1) python $T --data $R/data.pt --model conditional --architecture diffusion --nunits 256 --nblocks 4 \
         --epochs ${EPOCHS:-40} --batch-size 512 --seed 0 --output-dir $R/models/diff ;;
   2) python $T --data $R/data.pt --model conditional --architecture cm --nunits 256 --nblocks 4 \

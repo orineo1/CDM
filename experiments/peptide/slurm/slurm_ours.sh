@@ -14,7 +14,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 . ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
-R=${R:-runs/peptide}; SAMPLER=${SAMPLER:-diff}; PER=${PER:-5}; OUT=${OUT:-$R/results}; mkdir -p $OUT
+N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; SAMPLER=${SAMPLER:-diff}; PER=${PER:-5}; OUT=${OUT:-$R/results}; mkdir -p $OUT
 NAME=$([ "$SAMPLER" = cm ] && echo MLGD-F || echo MLGD)
 python -c "import torch; print(torch.cuda.get_device_name())"
 k=${SLURM_ARRAY_TASK_ID:-0}
