@@ -9,7 +9,7 @@ keeping the best iterate, the 5 lowest-loss restarts re-scored 5 × 5,000 (Or's 
 designs, no prior over X, their optimizer (201 + 201 Adam steps), MLGD*'s budget: 250 samples per phase-0 step,
 3,000 per phase-1 step, each start scored on 1,000, and MLGD*'s selection (the 5 lowest re-scored 5 × 5,000).
 GB-FESO (MMD) uses the Table 1 loss, so MLGD* vs GB-FESO (MMD) differs only in the search; GB-FESO (KL) is their
-method with their KDE-KL loss. The earlier `table1_gbfeso.md` ran GB-FESO on the Table 1 networks with 10 starts.
+method with their KDE-KL loss.
 Setup and commands: `../README.md`, section "GB-FESO on the retrained samplers". Written by
 `pipeline/make_table1_d256.py`.
 

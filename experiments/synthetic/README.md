@@ -261,7 +261,8 @@ RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_main OUT=results/table1_gbfeso ARGS="-
 
 The last array task writes the table; rebuild it once every task is done (`--collect` reads the JSONs only):
 `python experiments/synthetic/pipeline/make_table1.py --collect --runs-dir runs/table1v2 --tag _main --methods GBFESO-KL GBFESO-MMD --out results/table1_gbfeso`.
-The committed results are `results/table1_gbfeso.{json,tex}` (the `--collect` output) and `results/table1_gbfeso.md`, written from it and `results/table1.json` by `python experiments/synthetic/pipeline/make_table1_gbfeso.py`.
+This run on the Table 1 networks is not committed: the committed GB-FESO results are those on the retrained
+samplers, below.
 
 ### GB-FESO on the retrained samplers (against MLGD\*)
 
@@ -294,10 +295,8 @@ python experiments/synthetic/pipeline/make_table1_d256.py --runs-dir runs/gbfeso
     --data-root $OR/runs/table1v2 --out experiments/synthetic/results/table1_gbfeso_d256
 ```
 
-`results/table1_gbfeso_d256.{json,md,tex}`, in the format of `table1_gbfeso.*`: the `.json` and `.tex` as
-`make_table1.py --collect` writes them (exact TV, ‖x̂ − x*‖, relative L2, time per cell and method), the `.md` the
-TV table and every column. The earlier `table1_gbfeso.*` ran GB-FESO on the
-Table 1 networks with 10 starts.
+`results/table1_gbfeso_d256.{json,md,tex}`: the `.json` and `.tex` as `make_table1.py --collect` writes them
+(exact TV, ‖x̂ − x*‖, relative L2, time per cell and method), the `.md` the TV table and every column.
 
 ## Research diagnostics (not in the paper)
 
@@ -349,7 +348,7 @@ are off by default). Every run uses the library default, a **detached** RBF band
 | file | command (from the repository root) |
 |---|---|
 | `table1.{md,json,tex}` | `$MT $T1 --runs-dir runs/table1v2` (no `--tag`, no `--extra`), then `--collect`: Table 1 and the refined columns of `tab:sim_full` |
-| `table1_gbfeso.{md,json,tex}` | the GB-FESO competitor at the Table 1 budget (section "GB-FESO competitor"): `.md` next to the Table 1 methods; `.json` and `.tex` from `make_table1.py --collect --tag _main --methods GBFESO-KL GBFESO-MMD` |
+| `table1_gbfeso_d256.{md,json,tex}` | MLGD\* against GB-FESO (KL, MMD) on the retrained samplers (section "GB-FESO on the retrained samplers"): `make_table1_d256.py` |
 | `checks/table1_*.json` | `check_models.py` on the nine scenarios' networks, `--n-random-x 100`: `tab:model_quality` |
 | `nonstar/arm_*.json` | the [no-star target](#no-star-target) commands above: `tab:nonstar_results` |
 | `fig1/fig1_hard{.png,_sim.json,_sweep.npz}` | `fig1_toy_example.py --setting hard --n-restarts 25 --n-cond 250 --n-mc 3 --methods MLGD MLGD-F PMLGD PMLGD-F --betas 0 2 8 16 --n-beta-samples 2000 --rerun-sim --device cuda` (25 trajectories per method, not 10) |

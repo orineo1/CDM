@@ -1,7 +1,6 @@
 """
 results/table1_gbfeso_d256.{json,md,tex}: MLGD* against GB-FESO (KL, MMD) on the retrained d256 conditional
-samplers, in the format of results/table1_gbfeso.* (the .json and .tex as make_table1.py --collect writes them,
-the .md as make_table1_gbfeso.py). The runs are one result file per run (seed), as Or's runs/night/grid files:
+samplers (the .json and .tex as make_table1.py --collect writes them). The runs are one result file per run (seed), as Or's runs/night/grid files:
 <runs-dir>/<cell>/<method>_s<seed>.json.
 
   MLGDstar_s42..46.json    symlinks to Or's runs: runs/night/grid/<cell>/G_zo_s*.json; at (10, 1)
@@ -45,7 +44,7 @@ keeping the best iterate, the 5 lowest-loss restarts re-scored 5 × 5,000 (Or's 
 designs, no prior over X, their optimizer (201 + 201 Adam steps), MLGD*'s budget: 250 samples per phase-0 step,
 3,000 per phase-1 step, each start scored on 1,000, and MLGD*'s selection (the 5 lowest re-scored 5 × 5,000).
 GB-FESO (MMD) uses the Table 1 loss, so MLGD* vs GB-FESO (MMD) differs only in the search; GB-FESO (KL) is their
-method with their KDE-KL loss. The earlier `table1_gbfeso.md` ran GB-FESO on the Table 1 networks with 10 starts.
+method with their KDE-KL loss.
 Setup and commands: `../README.md`, section "GB-FESO on the retrained samplers". Written by
 `pipeline/make_table1_d256.py`.
 """
@@ -126,7 +125,7 @@ def write_tex(rows, path):
 
 
 def write_md(rows, path):
-    """make_table1_gbfeso.py's layout: TV per cell and method, then every column."""
+    """TV per cell and method, then every column."""
     get = {(r["setting"], r["method"]): r for r in rows}
     cells = [c for c in CELLS if any((c, m) in get for m in METHODS)]
     L = [HEADER, "| dim X × dim Y | " + " | ".join(LABEL[m] for m in METHODS) + " |", "|---" * (len(METHODS) + 1) + "|"]
