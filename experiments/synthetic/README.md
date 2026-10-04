@@ -179,7 +179,8 @@ done
 
 Each JSON holds the 25 `x_hat` and the time per attempt. The "% at x_bi" column is the
 fraction of `x_hat` closer to `x_bi = -2` than to `x_uni = 2`. No script computes it.
-The published table and figure came from the notebook
+`pipeline/plot_nonstar.py` draws `fig:nonstar` from these JSONs (`results/nonstar/no_star_mmd_vs_l2.png`).
+The originally published table and figure came from the notebook
 `simulations/notebooks/Exp_nonstar_mmd_target_ablation.ipynb` of
 `orineo1/conditional-matching-paper` (`main`, `fc4389d`), whose constants
 `configs/mog/nonstar_2d.txt` transcribes.
@@ -351,6 +352,7 @@ are off by default). Every run uses the library default, a **detached** RBF band
 | `table1_gbfeso_d256.{md,json,tex}` | MLGD\* against GB-FESO (KL, MMD) on the retrained samplers (section "GB-FESO on the retrained samplers"): `make_table1_d256.py` |
 | `checks/table1_*.json` | `check_models.py` on the nine scenarios' networks, `--n-random-x 100`: `tab:model_quality` |
 | `nonstar/arm_*.json` | the [no-star target](#no-star-target) commands above: `tab:nonstar_results` |
+| `nonstar/no_star_mmd_vs_l2.png` | `fig:nonstar`, from the arm JSONs: `python experiments/synthetic/pipeline/plot_nonstar.py` |
 | `fig1/fig1_hard{.png,_sim.json,_sweep.npz}` | `fig1_toy_example.py --setting hard --n-restarts 25 --n-cond 250 --n-mc 3 --methods MLGD MLGD-F PMLGD PMLGD-F --betas 0 2 8 16 --n-beta-samples 2000 --rerun-sim --device cuda` (25 trajectories per method, not 10) |
 | `smc/fig_smc_hard.{json,png}` | `fig_smc_correction.py` with the Figure 1 flags above, on the networks of `fig1/` |
 
