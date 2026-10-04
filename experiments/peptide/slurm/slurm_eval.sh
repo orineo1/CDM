@@ -17,7 +17,7 @@ N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; 
 if [ "$N" = 4 ]; then STEPS=${STEPS:-4000000}; BURN=${BURN:-50000}; STRIDE=${STRIDE:-200}
 else STEPS=${STEPS:-16000000}; BURN=${BURN:-1000000}; STRIDE=${STRIDE:-800}; fi
 SIM="--n-steps $STEPS --burn $BURN --stride $STRIDE"
-python $P/evaluate.py collect --results "$RES/*.json" --targets-ens $R/targets_ens.pt --out $EV/eval_eps.npy
+python $P/evaluate.py collect --results "$RES/*.json" --targets-ens $R/targets_ens.pt ${NO_ORACLE:+--no-oracle} --out $EV/eval_eps.npy
 python $P/sim_ensembles.py --eps-file $EV/eval_eps.npy --design-from $R/targets_ens.pt $SIM --n-rep 64 --chunk $([ "$N" = 4 ] && echo 200 || echo 100) --keep 20000 --seed 3 --out $EV/eval_ens.pt
 python $P/evaluate.py metrics --eval-eps $EV/eval_eps.npy --eval-ens $EV/eval_ens.pt --targets-ens $R/targets_ens.pt \
   ${BASINS:+--basins $BASINS} --suffix="${SUFFIX:-$([ "$N" = 4 ] || echo _N$N)}" --out ${TABLE_DIR:-experiments/peptide/results}
