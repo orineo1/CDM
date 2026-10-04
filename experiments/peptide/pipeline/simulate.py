@@ -224,8 +224,11 @@ def simulate(eps, n_rep=8, n_steps=4_000_000, stride=200, burn=50_000, device=No
         if verbose and (k + 1) % max(1, n_blocks // 10) == 0:
             torch.cuda.synchronize() if str(device).startswith("cuda") else None
             print(f"  [simulate] {(k + 1) * stride:,}/{n_steps:,} steps, {B} chains, {time.time() - t0:.0f}s", flush=True)
+    nf = len(frames)
     Y = torch.stack(frames, 0)                    # [n_frames, B, 2N - 3]
-    Y = Y.view(len(frames), E, n_rep, dy).permute(1, 2, 0, 3).reshape(E, n_rep * len(frames), dy).cpu()
+    del frames
+    Y = Y.cpu()                                   # reorder on the host: the GPU holds at most two copies
+    Y = Y.view(nf, E, n_rep, dy).permute(1, 2, 0, 3).reshape(E, n_rep * nf, dy)
     if return_temperature:
         # 2D, N beads: kinetic temperature 2 KE / (2N) per chain (Langevin breaks momentum conservation)
         T = float(torch.stack(ke).mean() * 2.0 / (2 * N))
