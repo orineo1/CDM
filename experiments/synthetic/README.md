@@ -114,7 +114,16 @@ python $P/fig_smc_correction.py --setting hard --betas 0 2 8 16 --n-particles 20
 python $P/fig1_toy_example.py --setting hard --smc-npz results/fig_smc_hard.npz   # redraw from the cache: panel (d) plain vs corrected
 ```
 
-The last command redraws `results/fig1_hard.png` (the paper's `fig1_toy_hard_smc.png`). To
+The last command redraws `results/fig1_hard.png` (the paper's `fig1_toy_hard_smc.png`).
+The paper's main-text Figure 1 is the compact version (panels a, b and the beta sweep at 0, 8, 16, larger fonts),
+redrawn from the same caches; the four-panel version above is the appendix figure:
+
+```bash
+python $P/fig1_toy_example.py --setting hard --smc-npz experiments/synthetic/reference/smc/fig_smc_hard.npz \
+    --panels abd --betas-plot 0 8 16 --figsize 11 7.5 --font-scale 1.9 --compact --out results/fig1_hard_compact.png
+```
+
+(the caches must be named after `--out`: copy `results/fig1_hard_sim.json` / `_sweep.npz` to `results/fig1_hard_compact_*`). To
 draw it from the published populations, use
 `--smc-npz experiments/synthetic/reference/smc/fig_smc_hard.npz`. `reference/smc/sweep/`
 holds the `--max-shift` / `--ess-frac` sweep that chose 0.25 / 1.0. On the cluster:

@@ -199,6 +199,15 @@ def parse_args():
     p.add_argument("--init", choices=["randn", "zeros"], default="randn",
                    help="x_T initialisation; the paper says N(0,I), the legacy code used zeros")
     p.add_argument("--betas", type=float, nargs="+", default=[0.0, 2.0, 8.0, 16.0])
+    p.add_argument("--panels", default="abcd",
+                   help="panels to draw: a joint, b loss landscape, c conditionals, d beta sweep; letters are relabeled "
+                        "consecutively (e.g. 'abd' draws a, b and the sweep as (c))")
+    p.add_argument("--betas-plot", type=float, nargs="+", default=None,
+                   help="betas shown in the sweep panel (a subset of the cached --betas); default: all, at most 4")
+    p.add_argument("--figsize", type=float, nargs=2, default=None, help="figure width and height in inches")
+    p.add_argument("--font-scale", type=float, default=1.0, help="multiplies every font size in the figure")
+    p.add_argument("--compact", action="store_true",
+                   help="short titles and labels, legends below the panels: for a small figure with large fonts")
     p.add_argument("--n-beta-samples", type=int, default=2000, help="guided trajectories per beta, run as one batch")
     p.add_argument("--quick", action="store_true", help="tiny run to check the pipeline")
     a = p.parse_args()
@@ -572,13 +581,19 @@ def load_smc(path, betas):
     return smc
 
 
-def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
+def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", betas_plot=None, figsize=None,
+                font_scale=1.0, compact=False):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import matplotlib.gridspec as gridspec
 
     betas = [float(b) for b in sim["betas"]][:4]
+    if betas_plot:
+        betas = [b for b in betas if any(abs(b - float(q)) < 1e-9 for q in betas_plot)]
+    show_cond = "c" in panels
+    plt.rcParams.update({"font.size": 10 * font_scale, "axes.labelsize": 11 * font_scale,
+                         "xtick.labelsize": 9 * font_scale, "ytick.labelsize": 9 * font_scale})
     methods = [m for m in sim.get("methods", ["MLGD", "MLGD-F"]) if m in sim]
     # one style per method, fixed across figures: wide translucent lines for the diffusion sampler,
     # thin lines on top for the consistency sampler; particle variants in blue tones
@@ -598,27 +613,30 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
     def vline(ax, m, label=None):
         st_ = STYLE[m]
         ax.axvline(res[m]["x_hat"], color=st_["color"], lw=st_["lw"], alpha=st_["alpha"], zorder=st_["z"], label=label)
-    fs_title, fs_leg = 13, 9
+    fs_title, fs_leg = 13 * font_scale, 9 * font_scale
     x_star = float(st.x_star[0])
 
     # layout "lr": left column = joint / loss landscape (same x-axis) / conditionals on y;
     #              right column = the four beta panels stacked, sharing the x-axis so basins line up
     # layout "tb": top row = joint / loss / conditionals, bottom row = 1x4 beta sweep
     if layout == "lr":
-        fig = plt.figure(figsize=(14, 12))
-        outer = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.33)
-        left = outer[0].subgridspec(2, 1, height_ratios=[2.1, 1], hspace=0.45)
-        left_top = left[0].subgridspec(2, 1, height_ratios=[1.2, 1], hspace=0.08)   # joint + loss share x
-        right = outer[1].subgridspec(4, 1, hspace=0.12)
+        fig = plt.figure(figsize=figsize or ((14, 12) if show_cond else (14, 8)))
+        outer = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.55 if compact else 0.33)
+        if show_cond:
+            left = outer[0].subgridspec(2, 1, height_ratios=[2.1, 1], hspace=0.45)
+            left_top = left[0].subgridspec(2, 1, height_ratios=[1.2, 1], hspace=0.08)   # joint + loss share x
+        else:
+            left_top = outer[0].subgridspec(2, 1, height_ratios=[1.2, 1], hspace=0.08)
+        right = outer[1].subgridspec(len(betas), 1, hspace=0.12)
         ax_joint = fig.add_subplot(left_top[0])
         ax_loss = fig.add_subplot(left_top[1], sharex=ax_joint)
-        ax_cond = fig.add_subplot(left[1])
+        ax_cond = fig.add_subplot(left[1]) if show_cond else None
         top_axes = [ax_joint, ax_loss, ax_cond]
         sweep_axes = []
-        for i in range(4):
+        for i in range(len(betas)):
             sweep_axes.append(fig.add_subplot(right[i], sharex=sweep_axes[0] if sweep_axes else None))
         sweep_ylabel = lambda i: True
-        sweep_xlabel = lambda i: i == 3
+        sweep_xlabel = lambda i: i == len(betas) - 1
     else:
         fig = plt.figure(figsize=(16, 7.5))
         outer = gridspec.GridSpec(2, 1, figure=fig, height_ratios=[1.15, 1], hspace=0.7)
@@ -629,11 +647,14 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
         sweep_ylabel = lambda i: i == 0
         sweep_xlabel = lambda i: True
     ax_joint, ax_loss, ax_cond = top_axes
-    for letter, ax_ in zip("abc", [ax_joint, ax_loss, ax_cond]):   # inside the top-left corner (empty in every panel)
+    shown = [a_ for a_ in [ax_joint, ax_loss, ax_cond] if a_ is not None]
+    for letter, ax_ in zip("abc", shown):   # inside the top-left corner (empty in every panel)
         ax_.text(0.012, 0.965, f"({letter})", transform=ax_.transAxes, fontsize=fs_title, fontweight="bold",
                  ha="left", va="top", zorder=10)
-    sweep_axes[0].text(-0.08, 1.04, "(d)", transform=sweep_axes[0].transAxes, fontsize=fs_title, fontweight="bold",
-                       ha="right", va="bottom")
+    sweep_letter = f"({'abcd'[len(shown)]})"
+    if not compact:
+        sweep_axes[0].text(-0.08, 1.04, sweep_letter, transform=sweep_axes[0].transAxes, fontsize=fs_title,
+                           fontweight="bold", ha="right", va="bottom")
 
     def lab(name, r):
         return rf"{name} $\hat{{x}}$"
@@ -650,7 +671,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
     ax.annotate(r"$x^*$", (x_star, y1), xytext=(-4, -4), textcoords="offset points", ha="right", va="top",
                 fontsize=fs_title - 1, zorder=6)
     ax.set_xlim(xlo, xhi); ax.set_ylabel("y")
-    ax.set_title(r"joint $\mathcal{P}(X, Y)$ and the recovered $\hat{x}$", fontsize=fs_title); ax.grid(alpha=0.2)
+    ax.set_title(r"joint $\mathcal{P}(X, Y)$, recovered $\hat{x}$" if compact else
+                 r"joint $\mathcal{P}(X, Y)$ and the recovered $\hat{x}$", fontsize=fs_title); ax.grid(alpha=0.2)
     if layout == "lr":
         ax.tick_params(labelbottom=False)   # x-axis numbers only once, on the loss panel below
     else:
@@ -659,6 +681,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
 
     # ---- left, middle: induced conditionals on y ------------------------------
     ax = ax_cond
+    if ax is None:
+        ax = fig.add_subplot(111); ax.set_visible(False)   # panel (c) not drawn: draw into a hidden axis
     ylo, yhi = max(st.y_range[0], -5.0), min(st.y_range[1], 5.0)
     y = torch.linspace(ylo, yhi, 600)
     G = cond_params(st, st.x_star[0])
@@ -697,7 +721,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
     ax = ax_loss
     Gd = tuple(g.detach() for g in G)
     L = l2_1d(cond_params(st, torch.as_tensor(x_grid, dtype=torch.float32)), Gd).numpy()
-    ax.plot(x_grid, L, color="0.25", lw=2, label=r"population $\mathcal{L}(x)$", zorder=2)
+    ax.plot(x_grid, L, color="0.25", lw=2, label=r"$\mathcal{L}(x)$" if compact else r"population $\mathcal{L}(x)$", zorder=2)
     if "empirical_loss" in sim:   # the sample loss the optimiser sees (MMD), mean +- sd over seeds, own scale
         ax2 = ax.twinx()
         for name, c in [("MLGD", c_mlgd), ("MLGD-F", c_mlgdf)]:
@@ -707,15 +731,18 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
             xe, v = np.array(e["x"]), np.array(e["values"])
             mu_e, sd_e = v.mean(0), v.std(0)
             ax2.plot(xe, mu_e, color=c, lw=1.2, alpha=0.9, zorder=2)   # mean over seeds
-        ax2.set_ylim(bottom=0); ax2.set_ylabel(r"sample loss $\hat{\mathcal{L}}(x)$ (MMD)", fontsize=fs_leg)
+        ax2.set_ylim(bottom=0)
+        ax2.set_ylabel(r"$\hat{\mathcal{L}}(x)$" if compact else r"sample loss $\hat{\mathcal{L}}(x)$ (MMD)", fontsize=fs_leg)
         ax2.tick_params(labelsize=fs_leg)
         n_c = sim["empirical_loss"]["MLGD"]["n_cond"]
-        ax.plot([], [], color="0.5", lw=1.2, label=rf"$\hat{{\mathcal{{L}}}}(x)$ (MMD, $n_{{\rm cond}}={n_c}$; right axis)")
+        ax.plot([], [], color="0.5", lw=1.2, label=r"sample $\hat{\mathcal{L}}(x)$ (right axis)" if compact else
+                rf"$\hat{{\mathcal{{L}}}}(x)$ (MMD, $n_{{\rm cond}}={n_c}$; right axis)")
     for m in methods:
         vline(ax, m, lab(m, res[m]))
     ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
     ax.set_xlim(xlo, xhi); ax.set_ylim(0, 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max()); ax.set_xlabel("x")
-    ax.set_ylabel(r"$\mathcal{L}(x) = \mathcal{D}\left(\mathcal{P}(Y\mid X=x),\,\mathcal{G}\right)$")
+    ax.set_ylabel(r"$\mathcal{L}(x)$" if compact else
+                  r"$\mathcal{L}(x) = \mathcal{D}\left(\mathcal{P}(Y\mid X=x),\,\mathcal{G}\right)$")
     if layout == "lr":
         ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=2, frameon=False)
     else:
@@ -735,8 +762,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
                     color="black", linewidth=1.3, label="twisted-SMC corrected", zorder=4)
             if str(float(beta)) in smc_tv:
                 tp, tc = smc_tv[str(float(beta))]
-                ax.text(0.98, 0.9, rf"TV {tp:.2f}$\to${tc:.2f}", transform=ax.transAxes, ha="right", va="top",
-                        fontsize=fs_leg)
+                ax.text(0.02 if compact else 0.98, 0.62 if compact else 0.9, rf"TV {tp:.2f}$\to${tc:.2f}",
+                        transform=ax.transAxes, ha="left" if compact else "right", va="top", fontsize=fs_leg)
         ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"$\mathcal{Q}_\beta(x)$", zorder=3)
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
         ax.axvline(x_star, color=c_true, ls="--", lw=1.8, zorder=4)
@@ -748,12 +775,13 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
         if layout == "lr":
             ax.text(0.02, 0.9, rf"$\beta = {beta:g}$", transform=ax.transAxes, fontsize=fs_title, va="top")
             if i == 0:
-                ax.set_title(r"CDMS samples for increasing guidance strength $\beta$", fontsize=fs_title)
+                ax.set_title(r"$\bf{" + sweep_letter + r"}$ CDMS samples, increasing $\beta$" if compact else
+                             r"CDMS samples for increasing guidance strength $\beta$", fontsize=fs_title)
             if not sweep_xlabel(i):
                 ax.tick_params(labelbottom=False)
         else:
             ax.set_title(rf"CDMS samples, $\beta = {beta:g}$", fontsize=fs_title)
-        if sweep_ylabel(i):
+        if sweep_ylabel(i) and (not compact or i == len(betas) // 2):
             ax.set_ylabel("density")
         if sweep_xlabel(i):
             ax.set_xlabel("x")
@@ -763,9 +791,16 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None):
             if smc:
                 keys.append("twisted-SMC corrected")
             order = [l.index(k) for k in keys]
-            ax.legend([h[j] for j in order], [l[j] for j in order], fontsize=fs_leg - 1,
-                      loc="upper right" if not smc else "upper left",
-                      bbox_to_anchor=None if not smc else (0.0, 0.78), frameon=False)
+            if compact:
+                short = {r"prior $\mathcal{P}(x)$": "prior", "guided samples": "guided",
+                         "twisted-SMC corrected": "SMC-corrected"}
+                sweep_axes[-1].legend([h[j] for j in order], [short.get(l[j], l[j]) for j in order],
+                                      fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.3), ncol=2,
+                                      frameon=False)
+            else:
+                ax.legend([h[j] for j in order], [l[j] for j in order], fontsize=fs_leg - 1,
+                          loc="upper right" if not smc else "upper left",
+                          bbox_to_anchor=None if not smc else (0.0, 0.78), frameon=False)
 
     fig.savefig(out_png, dpi=200, bbox_inches="tight")
     print(f"[figure] wrote {out_png}")
@@ -783,7 +818,9 @@ def main():
         cached = None if args.rerun_sim else load_sim(args)
         sim, sweep = cached if cached is not None else simulate(st, args)
     smc = load_smc(args.smc_npz, sorted(sweep)) if args.smc_npz else None
-    make_figure(st, sim, sweep, args.out, layout=args.layout, smc=smc)
+    make_figure(st, sim, sweep, args.out, layout=args.layout, smc=smc, panels=args.panels,
+                betas_plot=args.betas_plot, figsize=args.figsize, font_scale=args.font_scale,
+                compact=args.compact)
 
 
 if __name__ == "__main__":
