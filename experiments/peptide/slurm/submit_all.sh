@@ -3,6 +3,7 @@
 #   N=5 bash experiments/peptide/slurm/submit_all.sh            # data -> networks -> searches -> evaluation
 #   N=6 bash experiments/peptide/slurm/submit_all.sh
 #   N=5 SKIP_DATA=1 bash ...    (data exist)     N=5 SKIP_TRAIN=1 bash ...   (networks exist too)
+#   N=5 AFTER=<jobid> bash ...  (the data job waits for that job, e.g. the equilibration check, to succeed)
 # Searches (each on catfish L4s, so that wall times compare), 40 targets:
 #   MLGD (10 trajectories), MLGD_r2 (2 trajectories), MLGD-F, GB-FESO (4 starts: all-low, all-high, rand1, rand2),
 #   random-1500 and random-8000 (random search on our diffusion sampler's loss, ~ the time of one GB-FESO run /
@@ -16,7 +17,7 @@ mkdir -p logs/peptide
 sb() { sbatch --parsable --export=ALL "$@"; }
 dep() { [ -n "$1" ] && echo "--dependency=afterok:$1" || true; }
 D=""; T=""
-[ -z "${SKIP_DATA:-}" ] && D=$(sb $S/slurm_data.sh) && echo "data      $D"
+if [ -z "${SKIP_DATA:-}" ]; then D=$(sb $(dep "${AFTER:-}") $S/slurm_data.sh); echo "data      $D"; fi
 if [ -z "${SKIP_TRAIN:-}" ]; then T=$(sb $(dep "$D") --array=0-3 $S/slurm_train.sh); echo "train     $T"; fi
 W=${T:-$D}
 J1=$(SAMPLER=diff sb $(dep "$W") --array=0-7 $S/slurm_ours.sh);                     echo "MLGD      $J1"
