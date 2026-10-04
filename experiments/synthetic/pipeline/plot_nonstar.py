@@ -36,13 +36,15 @@ def main():
     y_star = float(cfg["target_means"].view(-1)[0])
     sx, sy = np.sqrt(S[:, 0, 0]), np.sqrt(S[:, 1, 1])     # diagonal covariances: Y | x keeps each component's y law
 
-    fig, ax = plt.subplots(1, 3, figsize=(15, 4.2))
+    plt.rcParams.update({"font.size": 15, "axes.labelsize": 18, "xtick.labelsize": 14, "ytick.labelsize": 14,
+                         "legend.fontsize": 13})
+    fig, ax = plt.subplots(1, 3, figsize=(15, 4.6))
     # left: the joint, 5,000 draws
     rng = np.random.default_rng(42)
     k = rng.choice(len(w), size=5000, p=w)
     xy = mu[k] + rng.standard_normal((5000, 2)) * np.stack([sx[k], sy[k]], 1)
     ax[0].scatter(xy[:, 0], xy[:, 1], s=3, alpha=0.35)
-    ax[0].set_xlabel("x"); ax[0].set_ylabel("y"); ax[0].set_title("joint $P(x, y)$")
+    ax[0].set_xlabel("$x$"); ax[0].set_ylabel("$y$")
 
     # middle: P(Y | X = x) at x_bi and x_uni (exact: component weights reweighted by the x-marginals)
     ys = np.linspace(0, 6, 1200)
@@ -54,7 +56,7 @@ def main():
     ax[1].plot(ys, cond_pdf(a.x_bi), color="#ff7f0e", label=f"$P(Y \\mid X = x_{{bi}} = {a.x_bi:g})$")
     ax[1].plot(ys, cond_pdf(a.x_uni), color="#2ca02c", label=f"$P(Y \\mid X = x_{{uni}} = {a.x_uni:g})$")
     ax[1].axvline(y_star, color="#d62728", ls="--", label=f"target $y^* = {y_star:g}$")
-    ax[1].set_xlabel("y"); ax[1].set_ylabel("density"); ax[1].legend(fontsize=9); ax[1].set_title("candidate conditionals")
+    ax[1].set_xlabel("$y$"); ax[1].set_ylabel("density"); ax[1].set_ylim(-0.05, 2.75); ax[1].legend(loc="upper left", ncol=1, frameon=False)
 
     # right: where the restarts land
     xs = {}
@@ -68,13 +70,13 @@ def main():
         if name in xs:
             v = xs[name]
             at_bi = np.mean(np.abs(v - a.x_bi) < np.abs(v - a.x_uni)) * 100
-            ax[2].hist(v, bins=bins, weights=np.full(len(v), 100 / len(v)), alpha=0.6, color=color,
-                       label=f"{label}: {at_bi:.0f}% at $x_{{bi}}$")
+            ax[2].hist(v, bins=bins, weights=np.full(len(v), 100 / len(v)), alpha=0.6, color=color)
+            print(f"[nonstar] {name} ({color}): {at_bi:.0f}% at x_bi")
     for x0, lbl in ((a.x_bi, "$x_{bi}$"), (a.x_uni, "$x_{uni}$")):
         ax[2].axvline(x0, color="k", ls=":", lw=1)
-        ax[2].text(x0, ax[2].get_ylim()[1] * 0.97, lbl, ha="center", va="top", fontsize=10)
+        ax[2].text(x0, ax[2].get_ylim()[1] * 0.98, lbl, ha="center", va="top", fontsize=16,
+                   bbox=dict(facecolor="white", edgecolor="none", pad=1))
     ax[2].set_xlabel(r"recovered $\hat x$"); ax[2].set_ylabel("% of restarts")
-    ax[2].set_title(f"recovered $\\hat x$ ({len(next(iter(xs.values())))} restarts per arm)"); ax[2].legend(fontsize=9)
     fig.tight_layout()
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     fig.savefig(a.out, dpi=170)
