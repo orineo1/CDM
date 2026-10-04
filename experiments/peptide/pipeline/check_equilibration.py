@@ -14,6 +14,10 @@ For every eps, with the frames of replica r in time order (sim_ensembles.py --no
 TV = total variation between the two population vectors; dF = the largest |dF| difference (k_BT, floor 1e-3)
 over basins with > 5% population in either half. Drift shows as early/late (or first-10%) TV well above the
 seeds TV, which measures the replica-to-replica noise at this number of replicas.
+tau = integrated autocorrelation time (in MD steps) of the indicator "in the most populated tuple basin",
+averaged over replicas (summed up to where the autocorrelation drops below 0.05; '>' = it never does within
+a run); share = that basin's share of each replica's frames, min / median / max over replicas (a spread from
+0 to 1 means replicas stay in one basin for the whole run).
 """
 import argparse
 import os
@@ -45,6 +49,27 @@ def compare(p, q):
     return tv, float(max(abs(float(fp[i] - fq[i])) for i in act))
 
 
+def tuple_class(Y):
+    st = common.angle_states(Y)
+    na = st.shape[1]
+    code = (st * (4 ** torch.arange(na - 1, -1, -1))).sum(1)
+    return common.basin_classes(na + 2)[0][code]
+
+
+def autocorr_time(c, stride):
+    """c [R, F] basin ids in time order -> (tau in steps, never-decorrelated flag, per-replica top shares)."""
+    top = torch.mode(c.flatten()).values
+    x = (c == top).float().numpy()
+    xc = x - x.mean()
+    var = max(float((xc ** 2).mean()), 1e-12)
+    F = x.shape[1]
+    f = np.fft.rfft(xc, n=2 * F, axis=1)
+    ac = np.fft.irfft(f * np.conj(f), axis=1)[:, :F].mean(0) / np.arange(F, 0, -1) / var
+    below = ac < 0.05
+    k = int(np.argmax(below)) if below.any() else F
+    return (1 + 2 * ac[1:k].sum()) * stride, not below.any(), x.mean(1)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("ens")
@@ -60,10 +85,10 @@ def main():
     kinds = ["tuple"] + (["their"] if design.n_beads == 4 else [])
     lines = [f"Equilibration check: {design}, {R} replicas x {pr['n_steps']:,} steps, burn-in {pr['burn']:,}, "
              f"{F} frames per replica", "",
-             "| eps | basins | n active (>5%) | top basins (pop.) | early/late TV | early/late max dF | seeds TV | seeds max dF | first-10% TV |",
-             "|---|---|---|---|---|---|---|---|---|"]
+             "| eps | basins | n active (>5%) | top basins (pop.) | early/late TV | early/late max dF | seeds TV | seeds max dF | first-10% TV | tau (steps) | share min/med/max |",
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
     names = common.basin_classes(design.n_beads)[1]
-    summary = {k: [] for k in ("el", "sd", "f10")}
+    summary = {k: [] for k in ("el", "sd", "f10", "tau")}
     for e in range(Y.shape[0]):
         Z = Y[e].view(R, F, -1)
         for kind in kinds:
@@ -76,12 +101,19 @@ def main():
                 summary["el"].append(el[0]); summary["sd"].append(sd[0]); summary["f10"].append(f10[0])
             nm = names if kind == "tuple" else ["A", "B", "C", "out"]
             top = torch.argsort(pa, descending=True)[:3].tolist()
+            if kind == "tuple":
+                tau, never, share = autocorr_time(tuple_class(Z.reshape(-1, Z.shape[-1])).view(R, F), pr["stride"])
+                summary["tau"].append(tau)
+                tcol = f" {'>' if never else ''}{tau:,.0f} | {share.min():.2f}/{np.median(share):.2f}/{share.max():.2f} |"
+            else:
+                tcol = " | |"
             lines.append(f"| {[round(float(v), 2) for v in d['eps'][e]]} | {kind} | {int((pa > 0.05).sum())} | "
                          + ", ".join(f"{nm[i]} {float(pa[i]):.2f}" for i in top)
-                         + f" | {el[0]:.3f} | {el[1]:.2f} | {sd[0]:.3f} | {sd[1]:.2f} | {f10[0]:.3f} |")
+                         + f" | {el[0]:.3f} | {el[1]:.2f} | {sd[0]:.3f} | {sd[1]:.2f} | {f10[0]:.3f} |" + tcol)
     lines += ["", f"tuple basins, median over eps: early/late TV {np.median(summary['el']):.3f}, seeds TV "
               f"{np.median(summary['sd']):.3f}, first-10% TV {np.median(summary['f10']):.3f}; max: "
-              f"{max(summary['el']):.3f}, {max(summary['sd']):.3f}, {max(summary['f10']):.3f}"]
+              f"{max(summary['el']):.3f}, {max(summary['sd']):.3f}, {max(summary['f10']):.3f}; tau median "
+              f"{np.median(summary['tau']):,.0f}, max {max(summary['tau']):,.0f} steps (run {pr['n_steps']:,})"]
     print("\n".join(lines))
     if a.out:
         open(a.out, "w").write("\n".join(lines) + "\n")
