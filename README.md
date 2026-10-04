@@ -113,7 +113,7 @@ Numbers follow the current version of the paper (see Citation below). Each exper
 | Table 11 | Stable Diffusion MMD and SWD, all targets | `experiments/stable_diffusion/four_targets/run.sh eval` |
 | Figure 8 | where MLGD-F edits the scribble | `bash experiments/stable_diffusion/four_targets/run.sh saliency balanced --run_dir <run>` (`saliency/scribble_change.png`) |
 | Figure 9 | gradient saliency and its alignment with the edits | the same `run.sh saliency` (`saliency/saliency_correlation.png`) |
-| Figures 10–17 | Stable Diffusion qualitative results per target (scribbles, conditional samples, age grid) | the `four_targets` full runs; interpolation figures: the functions in `cdm/models/sd/interpolation.py` |
+| Figures 10–17 | Stable Diffusion qualitative results per target (scribbles, conditional samples, age grid) | the `four_targets` full runs; interpolation figures: `experiments/stable_diffusion/interpolation/interpolation.ipynb` |
 | Table 12 | guidance rules | text only |
 | Table 13 | per-step time of the Stable Diffusion inner estimator | `bash experiments/stable_diffusion/step_cost/run.sh` |
 | Table 14, Figure 18 | Jacobian error of the few-step sampler | `experiments/stable_diffusion/jacobian_error/eps_g_experiment.ipynb` |

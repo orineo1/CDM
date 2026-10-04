@@ -9,6 +9,7 @@ gitignored).
 | directory | paper artifact | entry point |
 |---|---|---|
 | `four_targets` | the main results table (MMD, p(male)), the MMD / SWD table, the scribble-edit and saliency figures | `cdm.models.sd.run_mlgd_f` (optimisation), `cdm.models.sd.eval_all_experiments` (the N = 2,000 evaluation), `cdm.models.sd.eval_baselines`, `cdm.models.sd.saliency` |
+| `interpolation` | the gender and age interpolation figures (sorted grid, PCA scatter) | `interpolation.ipynb` -> `cdm.models.sd.interpolation` |
 | `step_cost` | the ablation (memory and run time, Turbo vs Base) and the All vs Uniform per-step time | `cdm.models.sd.step_cost` |
 | `jacobian_error` | theory appendix, Jacobian-fidelity figure and table | `eps_g_experiment.ipynb` (self-contained) |
 
@@ -97,7 +98,7 @@ dependent jobs.
 **6. Keep the results.** When the runs and evaluations are done:
 
 ```bash
-python experiments/stable_diffusion/export_results.py                # outputs/full_* (with baselines/, eval/), interpolation -> results/
+python experiments/stable_diffusion/export_results.py                # outputs/full_* (with baselines/, eval/) -> results/
 ```
 
 ## Requirements
@@ -135,7 +136,7 @@ code for them is in notebooks under `SD_cond_SD_controlnet/notebooks/` at the sa
 
 Ported: the 2,000-image evaluation (`eval_all_experiments.ipynb` ->
 `cdm/models/sd/eval_all_experiments.py`, `four_targets/run.sh eval`), the functions of the
-interpolation notebooks (`eval_scribbl_interpolation*.ipynb` -> `cdm/models/sd/interpolation.py`,
-without their MMD), the saliency notebook (`gender_saliency_eval.ipynb` -> `cdm/models/sd/saliency.py`,
+interpolation notebooks (`eval_scribbl_interpolation*.ipynb` -> `cdm/models/sd/interpolation.py`
+and `interpolation/interpolation.ipynb`, without their MMD), the saliency notebook (`gender_saliency_eval.ipynb` -> `cdm/models/sd/saliency.py`,
 `four_targets/run.sh saliency`, reduced to what the paper reports) and the step-memory notebook
 (`measure_dps_step_memory.ipynb` -> `step_cost/`).
