@@ -294,8 +294,9 @@ python experiments/synthetic/pipeline/make_table1_d256.py --runs-dir runs/gbfeso
     --data-root $OR/runs/table1v2 --out experiments/synthetic/results/table1_gbfeso_d256
 ```
 
-`results/table1_gbfeso_d256.{json,md,tex}`: exact TV per run (as `make_table1.py --collect`), mean ± std per
-cell and method, and the rows for the paper's table (`.tex`). The earlier `table1_gbfeso.*` ran GB-FESO on the
+`results/table1_gbfeso_d256.{json,md,tex}`, in the format of `table1_gbfeso.*`: the `.json` and `.tex` as
+`make_table1.py --collect` writes them (exact TV, ‖x̂ − x*‖, relative L2, time per cell and method), the `.md` the
+TV table and every column. The earlier `table1_gbfeso.*` ran GB-FESO on the
 Table 1 networks with 10 starts.
 
 ## Research diagnostics (not in the paper)
