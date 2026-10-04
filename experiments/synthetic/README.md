@@ -263,6 +263,41 @@ The last array task writes the table; rebuild it once every task is done (`--col
 `python experiments/synthetic/pipeline/make_table1.py --collect --runs-dir runs/table1v2 --tag _main --methods GBFESO-KL GBFESO-MMD --out results/table1_gbfeso`.
 The committed results are `results/table1_gbfeso.{json,tex}` (the `--collect` output) and `results/table1_gbfeso.md`, written from it and `results/table1.json` by `python experiments/synthetic/pipeline/make_table1_gbfeso.py`.
 
+### GB-FESO on the retrained samplers (against MLGD\*)
+
+MLGD\* runs on retrained conditional samplers (diffusion, 256 units, 4 blocks; on the cluster
+`runs/night/grid/<cell>/d256/`, and `runs/night/x10_y1/models/d256/` for (10, 1)) with the Table 1 data.
+GB-FESO is rerun on the same samplers and data, at MLGD\*'s budget, so the two differ only in the
+search: 30 starts per run, 5 runs (seeds 42–46, one result file each), 250 samples per phase-0 step,
+3,000 per phase-1 step (MLGD\*: per refinement step), each start scored on 1,000, and MLGD\*'s selection
+(the 5 lowest re-scored 5 × 5,000). GB-FESO uses no prior over X. One array task per cell, loss and seed
+(9 × 2 × 5 = 90, about 50 min each on an L40S), from the repository root:
+
+```bash
+OR=/sci/labs/orzuk/orzuk/github/CDM     # samplers and data
+sbatch --array=0-89%20 --job-name=gbfeso_d256 --partition=salmon --gres=gpu:1 --cpus-per-task=4 --mem=16G --time=03:00:00 \
+  --output=logs/gbfeso_d256_%A_%a.out --wrap='i=$SLURM_ARRAY_TASK_ID; OR='$OR'; \
+cell=$(echo x1_y1 x1_y5 x1_y10 x5_y1 x5_y5 x5_y10 x10_y1 x10_y5 x10_y10 | cut -d" " -f$((i/10+1))); \
+loss=$(echo kl mmd | cut -d" " -f$((i/5%2+1))); seed=$((42+i%5)); L=$(echo $loss | tr a-z A-Z); \
+if [ $cell = x10_y1 ]; then S=$OR/runs/night/x10_y1/models/d256/model_conditional.pt; else S=$OR/runs/night/grid/$cell/d256/model_conditional.pt; fi; \
+D=runs/gbfeso_d256/$cell; mkdir -p $D; PYTHONPATH=$PWD python experiments/synthetic/pipeline/search_gbfeso.py \
+  --sampler $S --target $OR/runs/table1v2/$cell/data.pt --loss $loss --n-restarts 30 --n-attempts 1 --seed $seed \
+  --num-samples 250 --num-samples-phase1 3000 --final-n 1000 --select-top 5 --select-n 5000 --select-repeats 5 \
+  --device cuda --out $D/GBFESO-${L}_s$seed.json'
+```
+
+Then link MLGD\*'s runs next to them (`MLGDstar_s<seed>.json` -> `runs/night/grid/<cell>/G_zo_s<seed>.json`;
+at (10, 1) `runs/night/x10_y1/E6_sel5000_n3000_s<seed>.json`, the same recipe) and write the table:
+
+```bash
+python experiments/synthetic/pipeline/make_table1_d256.py --runs-dir runs/gbfeso_d256 \
+    --data-root $OR/runs/table1v2 --out experiments/synthetic/results/table1_gbfeso_d256
+```
+
+`results/table1_gbfeso_d256.{json,md,tex}`: exact TV per run (as `make_table1.py --collect`), mean ± std per
+cell and method, and the rows for the paper's table (`.tex`). The earlier `table1_gbfeso.*` ran GB-FESO on the
+Table 1 networks with 10 starts.
+
 ## Research diagnostics (not in the paper)
 
 All of these use the Table 1 networks and flags. The usage line is at the top of each script.
