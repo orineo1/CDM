@@ -15,7 +15,7 @@
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 [ -f experiments/synthetic/pipeline/make_table1.py ] || { echo "run sbatch from the repo root"; exit 1; }
-VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
+VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv$(grep -q "^13" /etc/debian_version 2>/dev/null && echo _deb13)}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 RUNS=${RUNS:-runs/screen}

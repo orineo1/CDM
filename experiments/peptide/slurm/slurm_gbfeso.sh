@@ -10,7 +10,7 @@
 #SBATCH --output=logs/peptide/%x_%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
+. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv$(grep -q "^13" /etc/debian_version 2>/dev/null && echo _deb13)}/bin/activate
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; PER=${PER:-5}; OUT=${OUT:-$R/results}; mkdir -p $OUT
 python -c "import torch; print(torch.cuda.get_device_name())"

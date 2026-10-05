@@ -11,7 +11,7 @@
 #SBATCH --output=logs/%x_%j.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
+VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv$(grep -q "^13" /etc/debian_version 2>/dev/null && echo _deb13)}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 MODEL=conditional; A=$ARCH

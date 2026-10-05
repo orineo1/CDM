@@ -12,7 +12,7 @@
 #SBATCH --output=logs/peptide/%x_%j.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
+. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv$(grep -q "^13" /etc/debian_version 2>/dev/null && echo _deb13)}/bin/activate
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; P=experiments/peptide/pipeline; mkdir -p $R
 if [ "$N" = 4 ]; then N_EPS=${N_EPS:-300}; FRAMES=${FRAMES:-4000}; else N_EPS=${N_EPS:-600}; FRAMES=${FRAMES:-2000}; fi
