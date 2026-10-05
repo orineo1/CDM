@@ -17,4 +17,5 @@ bash experiments/stable_diffusion/step_cost/run.sh help                # every f
 A configuration that runs out of memory is recorded as OOM. Fast (non-deterministic) kernels are the default;
 `--deterministic` uses the optimization runs' kernels. Output: `outputs/<GPU>_<id>/` (`step_cost.md`,
 `step_cost.json`, `run_info.txt`); `../export_results.py` copies it into `results/`. The committed run is
-`results/L40S/` (NVIDIA L40S).
+`results/L40S/` (NVIDIA L40S). The run time of a full optimization run needs no step_cost run: each run records it
+in its `metrics.json` (`../four_targets/README.md`, Run time).
