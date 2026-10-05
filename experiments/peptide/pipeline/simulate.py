@@ -74,6 +74,8 @@ class Design:
     def from_dict(cls, d):
         if d is None:
             return cls(4)
+        if d.get("kind") == "residue":
+            return ResidueDesign(d["n_beads"], d["sizes_only"], d["eps_fixed"])
         return cls(d["n_beads"], d["free"], {int(k): v for k, v in d["fixed"].items()})
 
     @classmethod
@@ -102,6 +104,42 @@ class Design:
         return torch.cat(cols, dim=1)
 
 
+class ResidueDesign(Design):
+    """Residue design: bead i has a size sigma_i and a stickiness eps_i (a coarse-grained residue type), and every
+    pair (i, j) interacts by LJ with the Lorentz-Berthelot rules sigma_ij = (sigma_i + sigma_j) / 2,
+    eps_ij = sqrt(eps_i eps_j), cutoff 4 sigma_ij; bonds as in `Design`. X = (sigma_1, eps_1, ..., sigma_N, eps_N)
+    (dim 2N); with sizes_only, X = (sigma_1, ..., sigma_N) and every eps_i = eps_fixed."""
+
+    def __init__(self, n_beads=4, sizes_only=False, eps_fixed=0.5):
+        n = int(n_beads)
+        assert n >= 3
+        self.n_beads, self.sizes_only, self.eps_fixed = n, bool(sizes_only), float(eps_fixed)
+        self.free, self.fixed = (), {}
+
+    @property
+    def dim_x(self):
+        return self.n_beads if self.sizes_only else 2 * self.n_beads
+
+    def to_dict(self):
+        return {"kind": "residue", "n_beads": self.n_beads, "sizes_only": self.sizes_only, "eps_fixed": self.eps_fixed}
+
+    def __repr__(self):
+        return f"ResidueDesign(N={self.n_beads}, sizes_only={self.sizes_only})"
+
+    def _per_bead(self, x):
+        if self.sizes_only:
+            return x, torch.full_like(x, self.eps_fixed)
+        return x[:, 0::2], x[:, 1::2]
+
+    def pair_eps(self, x):
+        _, e = self._per_bead(x)
+        return torch.stack([torch.sqrt(e[:, i] * e[:, j]) for i, j, _ in self.pairs()], 1)
+
+    def pair_sigma(self, x):
+        s, _ = self._per_bead(x)
+        return torch.stack([0.5 * (s[:, i] + s[:, j]) for i, j, _ in self.pairs()], 1)
+
+
 # the 4-bead constants of the original code (kept for imports)
 PI = (0, 1, 2, 0, 1, 0)
 PJ = (1, 2, 3, 2, 3, 3)
@@ -127,13 +165,18 @@ def pair_eps(eps, design=None):
     return (design or Design(4)).pair_eps(eps)
 
 
-def conservative_force(x, peps, A, bmask):
-    """x [B, N, 2], peps [B, P] -> force [B, N, 2]. A = _incidence(device): bead j of pair k gets +f_k."""
+def conservative_force(x, peps, A, bmask, psig=None):
+    """x [B, N, 2], peps [B, P] -> force [B, N, 2]. A = _incidence(device): bead j of pair k gets +f_k.
+    psig [B, P]: LJ sigma of each pair (ResidueDesign), cutoff RCUT * sigma; None: sigma = 1 for all pairs."""
     d = torch.einsum("pk,bpd->bkd", A, x)               # [B, P, 2], vector i -> j  (x_j - x_i)
     r2 = (d * d).sum(-1)
-    inv2 = SIGMA ** 2 / r2
+    if psig is None:
+        inv2 = SIGMA ** 2 / r2
+        inside = (r2 < RCUT ** 2).to(x.dtype)
+    else:
+        inv2 = psig * psig / r2
+        inside = (inv2 > 1.0 / RCUT ** 2).to(x.dtype)  # r < RCUT * sigma
     inv6 = inv2 ** 3
-    inside = (r2 < RCUT ** 2).to(x.dtype)
     # -dU/dr / r for LJ: 24 eps (2 s^12/r^14 - s^6/r^8)
     f_lj = 24.0 * peps * (2.0 * inv6 * inv6 - inv6) / r2 * inside
     r = torch.sqrt(r2)
@@ -178,9 +221,11 @@ def simulate(eps, n_rep=8, n_steps=4_000_000, stride=200, burn=50_000, device=No
     E = eps.shape[0]
     B = E * n_rep
     peps = design.pair_eps(eps.to(device)).repeat_interleave(n_rep, dim=0)       # chain b = e * n_rep + r
+    psig = (design.pair_sigma(eps.to(device)).repeat_interleave(n_rep, dim=0)
+            if hasattr(design, "pair_sigma") else None)
     A, bmask = _incidence(device, design), _bond_mask(design).to(device)
     x, v = initial_state(B, device, n_beads=N)
-    F = conservative_force(x, peps, A, bmask)
+    F = conservative_force(x, peps, A, bmask, psig)
     noise_sd = math.sqrt(2.0 * GAMMA * TEMP / DT)
     state = {"x": x, "v": v, "F": F, "ke": torch.zeros(B, device=device)}
 
@@ -188,7 +233,7 @@ def simulate(eps, n_rep=8, n_steps=4_000_000, stride=200, burn=50_000, device=No
         s = state
         v_half = s["v"] + 0.5 * DT * s["F"]
         x_new = s["x"] + DT * v_half
-        Fc = conservative_force(x_new, peps, A, bmask)
+        Fc = conservative_force(x_new, peps, A, bmask, psig)
         Fn = Fc - GAMMA * v_half + noise_sd * torch.randn_like(v_half)
         v_new = v_half + 0.5 * DT * Fn
         s["x"].copy_(x_new)
