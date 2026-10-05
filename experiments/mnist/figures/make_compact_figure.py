@@ -52,6 +52,8 @@ def main():
     p.add_argument("--device", default="cpu")
     p.add_argument("--ckpt-dir", default=os.path.join(os.path.dirname(HERE), "checkpoints"))
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--rows-are-targets", action="store_true",
+                   help="one row per target (digits, then the dial) instead of one column per target")
     a = p.parse_args()
     random.seed(a.seed); np.random.seed(a.seed); torch.manual_seed(a.seed)
 
@@ -59,19 +61,30 @@ def main():
     var = target_variances()
     model = load_cond_model(device=a.device, local_dir=a.ckpt_dir)
     k = a.top_k
-    cell = a.width / 3
-    fig = plt.figure(figsize=(a.width, cell * (k + 1) + 0.25))
-    gs = fig.add_gridspec(k + 1, 3, hspace=0.06, wspace=0.06, left=0.01, right=0.99, top=0.95, bottom=0.05,
-                          height_ratios=[1] * k + [1.15])
+    T = a.rows_are_targets
+    if T:       # rows: targets; columns: k digits and the dial; target names as row labels
+        lab = 0.06
+        cell = a.width * (1 - lab - 0.01) / (k + 1.1)
+        fig = plt.figure(figsize=(a.width, 3 * cell + 0.08))
+        gs = fig.add_gridspec(3, k + 1, hspace=0.05, wspace=0.05, left=lab, right=0.99, top=0.985, bottom=0.015,
+                              width_ratios=[1] * k + [1.1])
+    else:
+        cell = a.width / 3
+        fig = plt.figure(figsize=(a.width, cell * (k + 1) + 0.25))
+        gs = fig.add_gridspec(k + 1, 3, hspace=0.06, wspace=0.06, left=0.01, right=0.99, top=0.95, bottom=0.05,
+                              height_ratios=[1] * k + [1.15])
     for c, name in enumerate(TARGETS):
         imgs, swd = d[f"{name}_images"], d[f"{name}_swd"]
         order = np.argsort(swd)[:k]
         for r, idx in enumerate(order):
-            ax = fig.add_subplot(gs[r, c])
+            ax = fig.add_subplot(gs[c, r] if T else gs[r, c])
             ax.imshow((np.clip(imgs[idx], -1, 1) + 1) / 2, cmap="gray")       # per-image range, as make_figures.py
             ax.set_xticks([]); ax.set_yticks([])
             if r == 0:
-                ax.set_title(name, fontsize=a.font + 1, pad=3)
+                if T:
+                    ax.set_ylabel(name, fontsize=a.font + 1, labelpad=3)
+                else:
+                    ax.set_title(name, fontsize=a.font + 1, pad=3)
         tgt = make_target(name, unimodal_var=var.get("unimodal", 515.0), bimodal_var=var.get("bimodal", 300.0))
         x_range, pdf = tgt.density_curve()
         with torch.no_grad():
@@ -82,7 +95,7 @@ def main():
         counts, _ = np.histogram(ang_rad, bins=edges, density=True)
         tx = np.deg2rad(np.append(x_range, x_range[0]))
         ty = np.append(pdf, pdf[0]) * (360.0 / (2 * np.pi))
-        ax = fig.add_subplot(gs[k, c], projection="polar")
+        ax = fig.add_subplot(gs[c, k] if T else gs[k, c], projection="polar")
         ax.bar(0.5 * (edges[:-1] + edges[1:]), counts, width=edges[1] - edges[0], alpha=0.55,
                color="skyblue", edgecolor="black", linewidth=0.3, zorder=2)
         ax.fill(tx, ty, color="orange", alpha=0.35, zorder=3)
@@ -90,12 +103,13 @@ def main():
         ax.set_theta_zero_location("N"); ax.set_theta_direction(-1)
         ax.set_yticks([]); ax.set_yticklabels([])
         ax.set_xticks(np.deg2rad([0, 90, 180, 270]))
-        ax.set_xticklabels(["0", "", "180", ""], fontsize=a.font - 1)   # 90 / 270 would collide with the next dial
+        # 90 / 270 would collide with the next dial; with rows per target every label would (orientation in the caption)
+        ax.set_xticklabels(["", "", "", ""] if T else ["0", "", "180", ""], fontsize=a.font - 1)
         ax.tick_params(axis="x", pad=0)
         ax.set_ylim(0, max(counts.max(), ty.max()) * 1.05)
         ax.grid(linewidth=0.3)
         b = ax.get_position()                       # shrink the dial so its angle labels fit in the cell
-        s_ = 0.8
+        s_ = 0.92 if T else 0.8
         ax.set_position([b.x0 + b.width * (1 - s_) / 2, b.y0 + b.height * (1 - s_) / 2, b.width * s_, b.height * s_])
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     fig.savefig(a.out, dpi=a.dpi)
