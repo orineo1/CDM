@@ -29,6 +29,13 @@ def add_search_args(parser):
                         "clean estimate (2 dim(x) + 1 loss values per step, or 2M + 1 with --zo-dirs M)")
     g.add_argument("--zo-eps", type=float, default=0.05, help="zeroth-order finite-difference step")
     g.add_argument("--zo-dirs", type=int, default=0, help="0: all coordinate directions; M > 0: M random directions")
+    g.add_argument("--zo-dirs-mode", choices=["auto", "coord", "gauss", "orth", "tangent"], default="auto",
+                   help="zeroth-order directions: auto (coordinates, or --zo-dirs Gaussian ones), coord, gauss, "
+                        "orth (--zo-dirs random orthonormal directions, rescaled to be unbiased), tangent (--zo-dirs "
+                        "orthonormal directions in the range of the Tweedie Jacobian of the prior)")
+    g.add_argument("--zo-from-t", type=int, default=None,
+                   help="zeroth-order guidance only at reverse steps t <= this (backpropagation at the noisier steps)")
+    g.add_argument("--zo-jvp-delta", type=float, default=1e-3, help="tangent: relative finite-difference step of the Tweedie map")
     g.add_argument("--refine-steps", type=int, default=0, help="refinement steps on the sample loss after guidance")
     g.add_argument("--refine-lr", type=float, default=0.02)
     g.add_argument("--refine-n-cond", type=int, default=None, help="conditional samples per refinement step")
@@ -49,6 +56,7 @@ def add_search_args(parser):
 def search_overrides(args):
     """The `GuidanceConfig` fields set by the shared search flags."""
     return dict(guide_grad=args.guide_grad, zo_eps=args.zo_eps, zo_dirs=args.zo_dirs,
+                zo_dirs_mode=args.zo_dirs_mode, zo_from_t=args.zo_from_t, zo_jvp_delta=args.zo_jvp_delta,
                 refine_steps=args.refine_steps, refine_lr=args.refine_lr, refine_n_cond=args.refine_n_cond,
                 refine_optim=args.refine_optim, refine_lambda=args.refine_lambda, refine_grad=args.refine_grad,
                 refine_keep_best=args.refine_keep_best)

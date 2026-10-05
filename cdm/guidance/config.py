@@ -254,6 +254,14 @@ class GuidanceConfig:
     refine_grad: str = "pathwise"
     zo_eps: float = 0.05                 # finite-difference step (whitened units)
     zo_dirs: int = 0                     # 0: all coordinate directions (2 d loss evaluations); M > 0: M random Gaussian directions
+    # directions of the zeroth-order differences: "auto" (the original rule: coordinates if zo_dirs == 0,
+    # else zo_dirs Gaussian directions averaged), "coord", "gauss", "orth" (zo_dirs random orthonormal
+    # directions, rescaled by d / zo_dirs: unbiased), "tangent" (zo_dirs orthonormal directions spanning
+    # the range of the Tweedie Jacobian d x0_hat / d x_t, found by a randomized range finder; the pullback
+    # through that Jacobian discards the rest, so they suffice when the prior has low-dimensional structure)
+    zo_dirs_mode: str = "auto"
+    zo_from_t: Optional[int] = None      # zeroth-order guidance only at reverse steps t <= zo_from_t (pathwise before)
+    zo_jvp_delta: float = 1e-3           # tangent: relative step of the central differences of the Tweedie map
     guide_grad: str = "pathwise"         # inner-loss gradient in guided steps: "pathwise" (autograd through the sampler) or "zo"
     refine_keep_best: bool = False       # return the refinement iterate with the lowest loss estimate, not the last one
 

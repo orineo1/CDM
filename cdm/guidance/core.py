@@ -113,12 +113,15 @@ def _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best, 
             scale = r_t ** 2 if cfg.perturb_square else r_t
             x0_sample = pred_x0 + scale * torch.randn_like(pred_x0)
 
-        if getattr(cfg, "guide_grad", "pathwise") == "zo":
+        if getattr(cfg, "guide_grad", "pathwise") == "zo" and (
+                getattr(cfg, "zo_from_t", None) is None or int(t) <= cfg.zo_from_t):
             # Zeroth-order gradient of the sample loss at x0_sample (common random numbers), pulled
             # back to x_t through the Tweedie Jacobian by a linear surrogate whose value is the loss
             # and whose gradient with respect to x0_sample is the ZO estimate.
             seed = int(torch.randint(0, 2**31 - 1, (1,)).item())
-            l0, g0 = _zo_grad(model_cond, loss_function, cfg, cfg, x0_sample.detach(), cfg.n_cond, seed)
+            tangent = (lambda V: _tweedie_jvp(model_uncond, x_t.detach(), t, i, cfg, V))
+            dirs = _zo_dirs(cfg, x0_sample.numel(), seed, x0_sample.device, x0_sample.dtype, tangent)
+            l0, g0 = _zo_grad(model_cond, loss_function, cfg, cfg, x0_sample.detach(), cfg.n_cond, seed, dirs)
             loss_val = l0.to(x0_sample.dtype) + (g0.detach() * (x0_sample - x0_sample.detach())).sum()
         else:
             pred_samples = _draw_conditional(model_cond, x0_sample, cfg)
@@ -202,15 +205,70 @@ class _SharedNoise:
         return False
 
 
-def _zo_grad(model_cond, loss_function, cfg, view, x, n_ref, seed):
+def _tweedie_jvp(model_uncond, x_t, t, i, cfg, V):
+    """J v for the rows v of V [M, d], J = d x0_hat / d x_t the Jacobian of the prior's Tweedie estimate
+    at x_t: central differences of the Tweedie map, all 2M states in one batched call (the DDIM step's
+    own random numbers, if any, do not touch the global stream)."""
+    d = x_t.numel()
+    delta = cfg.zo_jvp_delta * max(1.0, float(x_t.norm()) / math.sqrt(d))
+    Vx = V.to(x_t.device, x_t.dtype).view(V.shape[0], *x_t.shape[1:])
+    X = torch.cat([x_t + delta * Vx, x_t - delta * Vx], 0)
+    with torch.no_grad(), torch.random.fork_rng(devices=[x_t.device] if x_t.is_cuda else []):
+        _, x0 = _ddim_step(model_uncond, X, t, i, cfg)
+    M = V.shape[0]
+    return ((x0[:M] - x0[M:]) / (2 * delta)).reshape(M, d)
+
+
+def _orthonormal_rows(G):
+    """[M, d] -> M orthonormal rows spanning the rows of G (QR, signs fixed so that random G gives
+    uniformly random frames)."""
+    Q, R = torch.linalg.qr(G.T)
+    sgn = torch.sign(torch.diagonal(R))
+    sgn[sgn == 0] = 1.0
+    return (Q * sgn).T
+
+
+def _zo_dirs(cfg, d, seed, device, dtype, tangent=None):
+    """Directions and scale of the zeroth-order gradient: (U [M, d], scale), g = scale * sum_k D_k u_k with
+    D_k the central difference along u_k. None: the original rule (`_zo_grad` picks coordinates or
+    Gaussian directions itself). `tangent(V)` returns J V for the tangent directions; without it (the
+    refinement, at a clean x) tangent falls back to orth."""
+    mode = getattr(cfg, "zo_dirs_mode", "auto")
+    if mode == "auto":
+        return None
+    M = min(cfg.zo_dirs or d, d) if mode in ("orth", "tangent") else (cfg.zo_dirs or d)
+    gen = torch.Generator(device="cpu").manual_seed(seed + 1)
+    if mode == "coord":
+        return torch.eye(d, device=device, dtype=dtype), 1.0
+    if mode == "gauss":
+        return torch.randn(M, d, generator=gen).to(device, dtype), 1.0 / M
+    if mode == "tangent" and tangent is not None:
+        W = tangent(torch.randn(M, d, generator=gen))
+        return _orthonormal_rows(W.float()).to(device, dtype), 1.0
+    if mode == "tangent" and not _ZO_WARNED.get("tangent"):
+        print("[zo] tangent directions need the Tweedie map; random orthonormal directions here (refinement)", flush=True)
+        _ZO_WARNED["tangent"] = True
+    assert mode in ("orth", "tangent"), f"unknown zo_dirs_mode {mode}"
+    U = _orthonormal_rows(torch.randn(M, d, generator=gen))
+    return U.to(device, dtype), d / M
+
+
+_ZO_WARNED = {}
+
+
+def _zo_grad(model_cond, loss_function, cfg, view, x, n_ref, seed, dirs=None):
     """Zeroth-order gradient of the sample loss at x: central differences along coordinate (or random)
     directions with common random numbers. All 1 + 2M evaluation points go through the sampler in one
     batched call with the same noise tiled across them, so the sampling noise largely cancels in each
-    difference and the cost is close to one large forward pass. Returns (loss at x, gradient)."""
+    difference and the cost is close to one large forward pass. `dirs` = (U, scale) from `_zo_dirs`
+    (None: coordinates, or zo_dirs Gaussian directions). Returns (loss at x, gradient)."""
     flat = x.detach().view(-1)
     d = flat.numel()
     eps = cfg.zo_eps
-    if cfg.zo_dirs and cfg.zo_dirs > 0:
+    scale = None
+    if dirs is not None:
+        U, scale = dirs
+    elif cfg.zo_dirs and cfg.zo_dirs > 0:
         gen = torch.Generator(device="cpu").manual_seed(seed + 1)
         U = torch.randn(cfg.zo_dirs, d, generator=gen).to(flat.device, flat.dtype)
     else:
@@ -235,7 +293,9 @@ def _zo_grad(model_cond, loss_function, cfg, view, x, n_ref, seed):
     M = U.shape[0]
     diffs = (losses[1:1 + M] - losses[1 + M:]) / (2 * eps)                             # (M,)
     g = (diffs.view(-1, 1) * U).sum(0)
-    if cfg.zo_dirs and cfg.zo_dirs > 0:
+    if scale is not None:
+        g = g * scale
+    elif cfg.zo_dirs and cfg.zo_dirs > 0:
         g = g / M
     return losses[0], g.to(x.dtype).view_as(x)
 
@@ -256,8 +316,9 @@ def refine(model_uncond, model_cond, loss_function, cfg, x0):
     for k in range(cfg.refine_steps):
         opt.zero_grad()
         if getattr(cfg, "refine_grad", "pathwise") == "zo":
-            loss_val, grad = _zo_grad(model_cond, loss_function, cfg, view, x.detach(), n_ref,
-                                      seed=(cfg.seed or 0) * 100003 + k)
+            sd = (cfg.seed or 0) * 100003 + k
+            loss_val, grad = _zo_grad(model_cond, loss_function, cfg, view, x.detach(), n_ref, seed=sd,
+                                      dirs=_zo_dirs(cfg, x.numel(), sd, x.device, x.dtype))
         else:
             pred_samples = _draw_conditional(model_cond, x, view)
             target_samples = cfg.target_generator(n_ref, cfg.device)

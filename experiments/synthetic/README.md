@@ -28,6 +28,11 @@ with `--select-top K` the K smallest re-scored with `--select-n` fresh condition
 exist). The gradient in the guided steps is backpropagation through the conditional sampler
 (`--guide-grad pathwise`, default) or zeroth-order central differences of the loss
 (`--guide-grad zo`; 2 dim(x) + 1 loss values per step, so for low-dimensional designs). The
+directions of the differences are set by `--zo-dirs-mode`: `coord` (the default `auto` with
+`--zo-dirs 0`), `orth` (`--zo-dirs M` random orthonormal directions, rescaled to be unbiased),
+`tangent` (M orthonormal directions spanning the range of the prior's Tweedie Jacobian, found by a
+randomized range finder; for high-dimensional designs on a low-dimensional data manifold) or `gauss`;
+`--zo-from-t T` uses zeroth-order guidance only at reverse steps t <= T (backpropagation before). The
 driver of each experiment (`search_<dataset>.py`) only loads that dataset's models and target and
 builds its per-trajectory configuration; the search flags are the same in every driver.
 
