@@ -180,8 +180,8 @@ reproduces the paper's numbers (see `tests/README.md`).
 
 Every SLURM script (`experiments/*/slurm/*.sh`) takes its Python environment from `cluster_env.sh`
 in the repository root: set `CDM_ENV` there to `old` (`CDM_venv`, Debian 12), `new`
-(`CDM_venv_deb13`, Debian 13) or a path to another venv, or leave `auto`, which picks the one matching
-the node's Debian version. `CDM_ENV=new sbatch ...` sets it for one job.
+(`CDM_venv_deb13`, Debian 13) or a path to another venv, or leave `auto`, which uses the old one when its Python loads numpy and torch on the node and the new
+one otherwise.
 `experiments/synthetic/slurm/cluster_setup.txt` explains the environment (modules, venv, CUDA
 torch). `experiments/synthetic/slurm/slurm_fig1.sh` is a ready SLURM job for the Figure 1 runs
 (`sbatch experiments/synthetic/slurm/slurm_fig1.sh hard`, `N_RESTARTS=50` to change the restart
