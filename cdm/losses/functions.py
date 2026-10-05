@@ -12,7 +12,7 @@ class RBF(nn.Module):
         self.bandwidth_multipliers = (mul_factor ** (torch.arange(n_kernels, device=device) - n_kernels // 2))
         self.bandwidth = bandwidth
         # the data-dependent bandwidth is a constant of the kernel, not a function to differentiate:
-        # with detach_bandwidth=False (legacy behaviour) the gradient also flows through it
+        # with detach_bandwidth=False (as in the Table 1 runs) the gradient also flows through it
         self.detach_bandwidth = detach_bandwidth
 
     def get_bandwidth(self, L2_distances):
@@ -33,13 +33,9 @@ class RBF(nn.Module):
 # ---------------------------------------------------------------------------
 # The MMD estimator itself.
 #
-# `_TARGET_CACHE`, `_target_stats` and `compute_mmd` below are PORTED VERBATIM from
-# the repository that produced the paper's Stable Diffusion tables:
-#   repo: conditional-matching-paper
-#   path: SD_cond_SD_controlnet/src/metrics.py  (compute_mmd and its target cache)
-# Same maths, same median-heuristic bandwidth, same cache_target path, same guards,
-# same sqrt(|mmd_sq| + 1e-8) return value. Do not "improve" it: the point of the port
-# is that this repo and the paper compute the same number.
+# `_TARGET_CACHE`, `_target_stats` and `compute_mmd` below are the MMD that produced
+# the paper's Stable Diffusion tables: median-heuristic bandwidth, optional target
+# cache, sqrt(|mmd_sq| + 1e-8) return value. Changing it changes the reported numbers.
 # ---------------------------------------------------------------------------
 
 _TARGET_CACHE = {}
@@ -293,11 +289,9 @@ def compute_swd(
 # ---------------------------------------------------------------------------
 # Pointwise (non-distributional) baseline loss.
 #
-# Added for the no-star experiment (experiments/synthetic/README.md, paper
-# tab:nonstar_results), whose two "pointwise" arms need a squared-error objective
-# rather than a distributional one. Upstream this is
-# conditional-matching-paper simulations/src/Optimization.py::_step_loss, branch
-# loss == "L2": ((target_samples - mog_samples) ** 2).mean() -- an unpaired,
+# Added for the no-star experiment (experiments/synthetic/README.md), whose two
+# "pointwise" arms need a squared-error objective rather than a distributional one:
+# ((target_samples - mog_samples) ** 2).mean(), an unpaired,
 # per-row squared distance between two independently drawn batches. It is exactly
 # the paper's pointwise (y - y*)^2 when the target is degenerate (every row equal,
 # i.e. sigma_t -> 0), which is the only setting the paper uses it in; for a

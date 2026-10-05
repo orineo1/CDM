@@ -4,7 +4,7 @@
 
 PREREQUISITES
   - SSH access to the cluster
-  - The repo copied/cloned to your home directory
+  - The repository copied to your home directory
 
 --------------------------------------------------------------------------------
 1. SSH into the cluster
@@ -13,10 +13,10 @@ PREREQUISITES
   ssh youruser@cluster.university.edu
 
 --------------------------------------------------------------------------------
-2. Clone the repo
+2. Copy the repository to the cluster
 --------------------------------------------------------------------------------
 
-  git clone https://github.com/orineo1/CDM.git ~/CDM
+  e.g. unzip the downloaded repository into ~/CDM, then
   cd ~/CDM
 
 --------------------------------------------------------------------------------
@@ -83,7 +83,7 @@ PREREQUISITES
 
   ---- cut here ----
   #!/bin/bash
-  #SBATCH --job-name=globalcond
+  #SBATCH --job-name=cdm
   #SBATCH --partition=gpu
   #SBATCH --gres=gpu:1
   #SBATCH --cpus-per-task=4
@@ -93,7 +93,7 @@ PREREQUISITES
 
   module load python/3.10
   module load cuda/12.1
-  source /sci/labs/orzuk/orzuk/venvs/CDM_venv/bin/activate
+  source ~/CDM/CDM_venv/bin/activate
   cd ~/CDM
 
   PYTHONPATH=$PWD python experiments/synthetic/pipeline/fig1_toy_example.py --setting hard --device cuda
@@ -120,7 +120,7 @@ PREREQUISITES
 
   ---- cut here ----
   #!/bin/bash
-  #PBS -N globalcond
+  #PBS -N cdm
   #PBS -q gpu
   #PBS -l select=1:ncpus=4:mem=16gb:ngpus=1
   #PBS -l walltime=02:00:00
@@ -129,7 +129,7 @@ PREREQUISITES
 
   module load python/3.10
   module load cuda/12.1
-  source /sci/labs/orzuk/orzuk/venvs/CDM_venv/bin/activate
+  source ~/CDM/CDM_venv/bin/activate
   cd ~/CDM
 
   PYTHONPATH=$PWD python experiments/synthetic/pipeline/fig1_toy_example.py --setting hard --device cuda

@@ -12,17 +12,16 @@ Outputs a .pt file containing:
   - x_star:            the true optimal conditioning value (if known)
   - condition_on:      number of X dimensions
 
-Usage:
-  python generate_data.py --n-samples 10000 --output data/mog2d.pt
-  python generate_data.py --params-file experiments/synthetic/configs/mog/mog_2d_full.txt --n-samples 50000 --output data/mog2d_50k.pt
-  python generate_data.py --random-mog --dim 10 --n-components 4 --n-samples 10000 --output data/mog10d.pt
+Usage (from the repository root):
+  python experiments/synthetic/pipeline/generate_data.py --params-file experiments/synthetic/configs/mog/mog_2d_full.txt \
+      --n-samples 50000 --output runs/mog2d/data.pt
+  python experiments/synthetic/pipeline/generate_data.py --random-mog --dim 10 --n-components 4 --n-samples 10000 \
+      --output runs/mog10d/data.pt
 """
 
 import argparse
 import os
 import sys
-
-# Add parent directory to path so we can import repo-level modules
 
 import torch
 from cdm.utils import dist as dist_utils

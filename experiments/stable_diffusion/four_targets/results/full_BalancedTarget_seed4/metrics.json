@@ -1,6 +1,6 @@
 {
   "args": {
-    "output_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291",
+    "output_dir": "experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291",
     "lora_path": null,
     "architect_unet_path": null,
     "wandb_project": "sdxl-mlgdf-balanced",
@@ -1338,10 +1338,10 @@
   },
   "wandb": {
     "project": "sdxl-mlgdf-balanced",
-    "entity": "conditional-matching",
+    "entity": "",
     "name": "full_BalancedTarget_seed4_zeta7.5_46275291",
     "id": "xwsjwdy3",
-    "url": "https://wandb.ai/conditional-matching/sdxl-mlgdf-balanced/runs/xwsjwdy3"
+    "url": ""
   },
   "optimization_time_sec": 17302.3033618927,
   "npy": {

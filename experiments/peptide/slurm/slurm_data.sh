@@ -4,7 +4,6 @@
 # N beads: N=5 sbatch ... (all N - 1 eps_d free; FREE=1,2 FIXED=3=0.5,4=0.5 for another design); runs/peptide_N<N>.
 # N = 4 defaults: 300 eps x 4000 frames; N >= 5: 600 eps x 2000 frames (the same 1.2M rows, denser in the 4-5-D box).
 #SBATCH --job-name=pep-data
-#SBATCH --partition=salmon,catfish
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
@@ -12,7 +11,7 @@
 #SBATCH --output=logs/peptide/%x_%j.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
+VENV=${VENV:-.venv}; [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; P=experiments/peptide/pipeline; mkdir -p $R
 if [ "$N" = 4 ]; then N_EPS=${N_EPS:-300}; FRAMES=${FRAMES:-4000}; else N_EPS=${N_EPS:-600}; FRAMES=${FRAMES:-2000}; fi

@@ -1,6 +1,6 @@
 {
   "args": {
-    "output_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633",
+    "output_dir": "experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633",
     "lora_path": null,
     "architect_unet_path": null,
     "wandb_project": "sdxl-mlgdf-gender_interpolation",
@@ -1340,10 +1340,10 @@
   },
   "wandb": {
     "project": "sdxl-mlgdf-gender_interpolation",
-    "entity": "conditional-matching",
+    "entity": "",
     "name": "full_GenderInterpolation_seed8_zeta7.5_46284633",
     "id": "iwqf89qh",
-    "url": "https://wandb.ai/conditional-matching/sdxl-mlgdf-gender_interpolation/runs/iwqf89qh"
+    "url": ""
   },
   "optimization_time_sec": 17032.266829013824,
   "npy": {

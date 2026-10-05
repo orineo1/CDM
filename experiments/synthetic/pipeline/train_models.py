@@ -8,17 +8,15 @@ Reads the .pt file produced by generate_data.py and trains:
 
 Saves model checkpoints to --output-dir.
 
-Usage:
-  python train_models.py --data data/mog2d.pt --model both --output-dir models/run1
-  python train_models.py --data data/mog2d.pt --model conditional --architecture cm --epochs 10 --batch-size 512 --output-dir models/run1
-  python train_models.py --data data/mog2d.pt --model unconditional --architecture diffusion --epochs 5 --output-dir models/run1
+Usage (from the repository root):
+  python experiments/synthetic/pipeline/train_models.py --data runs/mog2d/data.pt --model both --output-dir runs/mog2d/models
+  python experiments/synthetic/pipeline/train_models.py --data runs/mog2d/data.pt --model conditional --architecture cm \
+      --epochs 10 --batch-size 512 --output-dir runs/mog2d/models
 """
 
 import argparse
 import os
 import sys
-
-# Add parent directory to path so we can import repo-level modules
 
 import torch
 import torch.nn as nn
@@ -155,7 +153,7 @@ def train_conditional(X_train_full, args, nfeatures, condition_on, device):
 
 def _n_blocks(net):
     """Number of residual blocks of a GenericNN, robust to the attribute name
-    (pre-refactor `blocks`, post-refactor `res_blocks`)."""
+    (`blocks` or `res_blocks`)."""
     import torch.nn as nn
     for attr in ("blocks", "res_blocks"):
         if hasattr(net, attr):

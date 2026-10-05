@@ -1,4 +1,3 @@
-# Copied from orineo1/conditional-matching-paper @ cb8bc91, SD_cond_SD_controlnet/src/generation.py
 # SD-specific: SDXL + ControlNet-Scribble forward passes and the guided DDIM step.
 # MMD comes from cdm.models.sd.metrics -> cdm.models.sd.mmd -> shared cdm.losses.functions.MMDLoss.
 

@@ -1,7 +1,7 @@
 # Final evaluation (N = 2,000), every run
 
 Written by `experiments/stable_diffusion/export_results.py` from each run's `eval/`; the
-protocol of the paper's Table 3 / Table 15 (`cdm/models/sd/eval_all_experiments.py`).
+protocol of the paper's results tables (`cdm/models/sd/eval_all_experiments.py`).
 Delta% is the improvement over the source scribble.
 
 ## full_BalancedTarget_seed4: N = 2000

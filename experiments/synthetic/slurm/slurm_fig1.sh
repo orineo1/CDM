@@ -10,13 +10,9 @@
 # checkpoints/toy/<setting>/), runs N_RESTARTS trajectories of each of the four methods,
 # the batched beta-sweep, and writes results/fig1_<setting>.png plus the
 # simulation cache (_sim.json, _sweep.npz) next to it. Copy results/ back
-# to redraw locally without recomputing (scp through the jump host fails;
-# stream the files instead):
-#   for f in fig1_hard.png fig1_hard_sim.json fig1_hard_sweep.npz; do
-#     ssh huji-work "cat /sci/labs/orzuk/orzuk/github/CDM/results/$f" > results/$f; done
+# to redraw locally without recomputing.
 #
 #SBATCH --job-name=cdm-fig1
-#SBATCH --partition=catfish        # override: sbatch --partition=<name> experiments/synthetic/slurm/slurm_fig1.sh
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
@@ -30,7 +26,7 @@ cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 [ -f experiments/synthetic/pipeline/fig1_toy_example.py ] || { echo "run sbatch from the repo root"; exit 1; }
 mkdir -p logs results
 # environment: a venv with CUDA torch (no modules needed when the torch wheel bundles CUDA)
-VENV=${VENV:-/sci/labs/orzuk/ori_m/venvs/cdm}
+VENV=${VENV:-.venv}
 if [ -f "$VENV/bin/activate" ]; then source "$VENV/bin/activate"; fi
 
 N_RESTARTS=${N_RESTARTS:-10}   # Figure 1: ten restarts (or particles) per method

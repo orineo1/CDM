@@ -1,18 +1,15 @@
 """
 cdm/models/sd/mmd.py -- the SD experiment's MMD, which IS the shared one.
 
-`compute_mmd` in `cdm.losses.functions` is the port of the function that produced the
-paper's SD tables (conditional-matching-paper SD_cond_SD_controlnet/src/metrics.py).
+`compute_mmd` in `cdm.losses.functions` is the function that produced the
+paper's SD tables.
 SD's kernel -- a single median-heuristic bandwidth raised to a generalised exponent
 `alpha`, k(a,b) = exp(-(||a-b||^2 / 2bw^2)^alpha) -- is that function's own kernel, so
 there is nothing SD-specific left to build here: `sd_mmd` is a thin alias that keeps the
-name the ported pipeline code uses.
+name the pipeline code uses.
 
 What remains in this file is the bandwidth helper and the witness scores, which the
 pipeline imports separately.
-
-Upstream equivalent: SD_cond_SD_controlnet/src/metrics.py at
-orineo1/conditional-matching-paper @ cb8bc91.
 """
 
 import numpy as np
@@ -44,7 +41,7 @@ def sd_mmd(x, y, bandwidth=None, bandwidth_scale=1.0, kernel_alpha=1.0, cache_ta
     """The shared `cdm.losses.functions.compute_mmd`, under the name the SD code uses.
 
     Gradients flow through `x`; `y` (the target) is detached inside `compute_mmd`.
-    Returns what upstream returns: sqrt(|MMD^2| + 1e-8).
+    Returns sqrt(|MMD^2| + 1e-8).
     """
     return _shared_compute_mmd(x, y, bandwidth=bandwidth, bandwidth_scale=bandwidth_scale,
                                kernel_alpha=kernel_alpha, cache_target=cache_target)
@@ -53,7 +50,7 @@ def sd_mmd(x, y, bandwidth=None, bandwidth_scale=1.0, kernel_alpha=1.0, cache_ta
 def mmd_report(mmd_value):
     """Pass-through, kept so the pipeline's `mmd_report(compute_mmd(...))` calls still read.
 
-    `compute_mmd` already returns the square-rooted value that upstream reports, so there
+    `compute_mmd` already returns the square-rooted value that the paper reports, so there
     is nothing left for this to do. Tensors and floats both come back as a tensor.
     """
     if not torch.is_tensor(mmd_value):

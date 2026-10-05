@@ -1,5 +1,3 @@
-# Copied from orineo1/conditional-matching-paper @ cb8bc91 (branch claude/sd-shared-controlnet-hvt-uniform),
-# path SD_cond_SD_controlnet/image_utils.py
 # SD-specific: the Stable Diffusion pipeline itself. Nothing here duplicates a shared package.
 
 """

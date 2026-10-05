@@ -2,7 +2,6 @@
 # Accuracy of the trained surrogates at the 40 held-out eps* (ours: diffusion, consistency model; GB-FESO's surrogate)
 # against the simulated target ensembles.   N=5 sbatch experiments/peptide/slurm/slurm_sampler.sh -> results/surrogate_accuracy_N5.md
 #SBATCH --job-name=pep-sampler
-#SBATCH --partition=salmon,catfish
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -10,7 +9,7 @@
 #SBATCH --output=logs/peptide/%x_%j.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
+VENV=${VENV:-.venv}; [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; P=experiments/peptide/pipeline
 python $P/evaluate.py sampler --prior $R/models/prior/model_unconditional.pt \

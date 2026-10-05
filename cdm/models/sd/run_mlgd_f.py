@@ -1,10 +1,7 @@
-# Copied from orineo1/conditional-matching-paper @ cb8bc91, SD_cond_SD_controlnet/scripts/run_mlgd_f.py
 # Entry point. Run as:  python -m cdm.models.sd.run_mlgd_f --help
 
 """
 run_mlgd_f.py — MLGD-F pipeline entry point.
-
-Cluster-ready script version of main.ipynb (scribble_cond_loss branch).
 
 Pipeline:
     1. Load Architect + Sprinter + CLIP.
@@ -42,10 +39,6 @@ import torch
 import torchvision.transforms as T
 import torchvision.transforms.functional as TF
 from sklearn.decomposition import PCA
-
-# Make src/ importable when called from the repo root
-# Upstream inserted ../src on sys.path here so its bare sibling imports would
-# resolve. Not needed: this is a package now and the imports are absolute.
 
 from cdm.models.sd.clip_utils import CLIP_MODEL_ID, encode_images_clip, load_clip_model
 from cdm.models.sd.generation import (

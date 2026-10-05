@@ -23,16 +23,11 @@ def angles_to_circular(angles_deg):
 def mog_pdf_circular(x, means, variances, weights=None):
     """MoG density on the circle, in degrees.
 
-    Promoted from mnistExpThesisFinal.ipynb cell 24.
-
     IMPORTANT: this is NOT the same function as `utils.dist.mog_pdf`, which
     computes the ordinary (linear) Gaussian mixture density. This version
     wraps the difference to the shortest signed angle,
         diff = (x - mean + 180) % 360 - 180,
-    so that 359 deg and 1 deg are close. In the notebook, cell 24 redefined
-    `mog_pdf` *after* importing dist_utils, silently shadowing the linear
-    version; promoting them under one name would change the MNIST objective.
-    Both are kept, under distinct names.
+    so that 359 deg and 1 deg are close. Both are kept, under distinct names.
     """
     components = len(means)
     if weights is None:

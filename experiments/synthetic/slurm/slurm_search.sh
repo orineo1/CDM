@@ -5,7 +5,6 @@
 #   EXTRA="--n-restarts 30 --guide-grad zo --refine-keep-best --refine-steps 100 --refine-n-cond 3000 --select-top 5" \
 #   sbatch --array=0-4 --job-name=best --export=ALL experiments/synthetic/slurm/slurm_search.sh
 # Summarize: python experiments/synthetic/pipeline/summarize_runs.py --runs-dir runs/night/x10_y1 --data runs/table1v2/x10_y1/data.pt
-#SBATCH --partition=salmon
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -13,7 +12,7 @@
 #SBATCH --output=logs/%x_%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
+VENV=${VENV:-.venv}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 D=${D:-runs/table1v2/x10_y1}

@@ -1,20 +1,15 @@
 """
-Step 3: Run optimization to find x_hat, then evaluate.
+A minimal x_hat search on trained checkpoints, and `load_model`, the checkpoint loader the
+other pipeline scripts import. The search used in the paper is `search_mog.py`.
 
-Loads trained models (from train_models.py) and distribution metadata
-(from generate_data.py), runs the optimization, and reports results.
-
-Usage:
-  python run_optimization.py --data data/mog2d.pt --model-dir models/run1 --method LGD_CM
-  python run_optimization.py --data data/mog2d.pt --model-dir models/run1 --method LGD --n-attempts 10 --optim-samples 500
+Usage (from the repository root):
+  python experiments/synthetic/pipeline/run_optimization.py --data runs/mog2d/data.pt --model-dir runs/mog2d/models --method LGD_CM
 """
 
 import argparse
 import os
 import sys
 import time
-
-# Add parent directory to path so we can import repo-level modules
 
 import torch
 from cdm.utils import dist as dist_utils

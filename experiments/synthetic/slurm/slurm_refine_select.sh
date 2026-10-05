@@ -6,7 +6,6 @@
 #   c = zeroth-order refinement + reselection
 #   sbatch --array=0-5 experiments/synthetic/slurm/slurm_refine_select.sh
 #SBATCH --job-name=cdm-refsel
-#SBATCH --partition=salmon
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -14,7 +13,7 @@
 #SBATCH --output=logs/refsel_%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
+VENV=${VENV:-.venv}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 D=${D:-runs/table1v2/x10_y1}

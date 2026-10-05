@@ -1,5 +1,4 @@
-# Port of orineo1/conditional-matching-paper SD_cond_SD_controlnet/notebooks/gender_saliency_eval.ipynb,
-# reduced to what the paper reports. Run as:
+# The scribble-edit and gradient-saliency analysis the paper reports. Run as:
 #     bash experiments/stable_diffusion/four_targets/run.sh saliency <scenario> --run_dir <run>
 #     python -m cdm.models.sd.saliency --help
 
@@ -232,7 +231,7 @@ def parse_args(argv=None):
     p.add_argument("--female_prompt", type=str, default=FEMALE_PROMPT)
     p.add_argument("--variation_prompt", type=str, default=VARIATION_PROMPT)
     p.add_argument("--controlnet_scale", type=float, default=0.5)
-    p.add_argument("--seed", type=int, default=0, help="first torch seed of the saliency draws (notebook: 0)")
+    p.add_argument("--seed", type=int, default=0, help="first torch seed of the saliency draws (paper: 0)")
     p.add_argument("--no_deterministic", action="store_true")
     for m in ("architect", "sprinter", "controlnet", "hed", "clip"):
         p.add_argument(f"--{m}_revision", type=str, default=None)

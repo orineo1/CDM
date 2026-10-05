@@ -1,13 +1,8 @@
 #!/usr/bin/env python
-"""Train the conditional iCT angle sampler f_phi = P(Y|X) (Table 12).
+"""Train the conditional iCT angle sampler f_phi = P(Y|X).
 
 Three stages: the dataset-construction classifier, the rotation-augmented
 search set, then the iCT model itself.
-
-Ported from `MNIST/train/train_conditional.py` of
-`orineo1/conditional-matching-paper` (branch `main`, MNIST tree at 7c856e2);
-the bare `sys.path`-into-src imports are replaced by `cdm.models.mnist` imports and
-the hard-coded output paths are flags.
 """
 
 import argparse

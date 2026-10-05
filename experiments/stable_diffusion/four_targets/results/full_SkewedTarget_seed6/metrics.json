@@ -1,6 +1,6 @@
 {
   "args": {
-    "output_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_SkewedTarget_seed6_zeta7.5_46284612",
+    "output_dir": "experiments/stable_diffusion/four_targets/outputs/full_SkewedTarget_seed6_zeta7.5_46284612",
     "lora_path": null,
     "architect_unet_path": null,
     "wandb_project": "sdxl-mlgdf-skewed",
@@ -1338,10 +1338,10 @@
   },
   "wandb": {
     "project": "sdxl-mlgdf-skewed",
-    "entity": "conditional-matching",
+    "entity": "",
     "name": "full_SkewedTarget_seed6_zeta7.5_46284612",
     "id": "m1x5are4",
-    "url": "https://wandb.ai/conditional-matching/sdxl-mlgdf-skewed/runs/m1x5are4"
+    "url": ""
   },
   "optimization_time_sec": 17076.33396077156,
   "npy": {

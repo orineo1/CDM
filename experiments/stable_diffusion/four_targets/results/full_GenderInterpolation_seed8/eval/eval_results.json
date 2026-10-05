@@ -26,10 +26,10 @@
   ],
   "target_n": 2000,
   "scribbles": {
-    "source": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/scribble.png",
-    "avg_prompt": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/baselines/scribble_avg_prompt.png",
-    "sdedit_best": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/baselines/scribble_sdedit_best.png",
-    "mlgd_f": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/final_scribble_mlgd_f.png"
+    "source": "experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/scribble.png",
+    "avg_prompt": "experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/baselines/scribble_avg_prompt.png",
+    "sdedit_best": "experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/baselines/scribble_sdedit_best.png",
+    "mlgd_f": "experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/final_scribble_mlgd_f.png"
   },
   "results": {
     "source": {
@@ -117,9 +117,9 @@
   "total_minutes": 47.40886838436127,
   "wandb": {
     "project": "sdxl-eval-gender_interpolation",
-    "entity": "conditional-matching",
+    "entity": "",
     "name": "eval_full_GenderInterpolation_seed8_zeta7.5_46284633",
     "id": "i917k81u",
-    "url": "https://wandb.ai/conditional-matching/sdxl-eval-gender_interpolation/runs/i917k81u"
+    "url": ""
   }
 }

@@ -3,9 +3,7 @@ cdm/models/sd/hed.py -- HED scribble extraction.
 
 SD-specific. The scribble that is optimised, and every baseline scribble, is an HED
 edge map in scribble mode from `lllyasviel/Annotators` (the `controlnet_aux`
-HEDdetector). Upstream calls this inline in scripts/eval_baselines.py and
-scripts/run_mlgd_f.py @ cb8bc91; it is factored out here so both entry points and the
-saliency analysis share one definition.
+HEDdetector), shared by both entry points and the saliency analysis.
 """
 
 import numpy as np

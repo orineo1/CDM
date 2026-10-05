@@ -1,5 +1,5 @@
 """
-Figure fig:nonstar (no-star target): the joint P(x, y), the two candidate conditionals against the
+The no-star figure: the joint P(x, y), the two candidate conditionals against the
 point target y* = 4, and where each guidance arm's 25 restarts land. Reads the scenario constants
 (configs/mog/nonstar_2d.txt) and the arm JSONs (results/nonstar/arm_*.json). Run from the repository root:
 

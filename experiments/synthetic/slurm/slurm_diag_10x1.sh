@@ -6,7 +6,6 @@
 #   sbatch --array=0-2 experiments/synthetic/slurm/slurm_diag_10x1.sh
 #   then: sbatch --dependency=afterok:<id> --wrap "... diag_trajectories.py ..." (see README of the run)
 #SBATCH --job-name=cdm-diag
-#SBATCH --partition=salmon
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -14,7 +13,7 @@
 #SBATCH --output=logs/diag_%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
+VENV=${VENV:-.venv}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 D=${D:-runs/table1v2/x10_y1}

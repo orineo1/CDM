@@ -1,10 +1,9 @@
 """
-Static integrity check for the ported SDXL package. Needs NO third-party SD
+Static integrity check for the SDXL package. Needs NO third-party SD
 dependency and no GPU, so it is runnable anywhere.
 
-It verifies the thing the port could plausibly have broken: that rewiring upstream's
-bare sibling imports (`from metrics import ...`) onto the package (`from cdm.models.sd.metrics
-import ...`) still resolves. Every module is parsed with `ast`; for each
+It verifies that every intra-package import (`from cdm.models.sd.metrics import ...`)
+resolves. Every module is parsed with `ast`; for each
 `from cdm.models.sd.X import a, b` we confirm `cdm/models/sd/X.py` exists and defines `a` and `b` at
 top level, and that no bare sibling import (`from image_utils import ...`) is left.
 Also byte-compiles every file.
@@ -57,7 +56,7 @@ def main():
                     if a.name not in exported[target]:
                         errors.append(f"{stem}.py -> cdm.models.sd.{target} does not define '{a.name}'")
 
-        # upstream's bare sibling imports (`from metrics import ...`) only work with the
+        # bare sibling imports (`from metrics import ...`) only work with the
         # package directory on sys.path, which it is not when run as `python -m`
         for node in ast.walk(tree):
             mods = ([node.module] if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module

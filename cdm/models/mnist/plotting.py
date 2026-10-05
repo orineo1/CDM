@@ -1,15 +1,8 @@
 """Figure code for the MNIST rotated-digits experiment.
 
-Ported from `MNIST/visualize.py` of `orineo1/conditional-matching-paper`
-(branch `main`, MNIST tree at 7c856e2): the per-seed image rows, the top-k
-image panel, and the cartesian + polar histograms of P(Y | X = x_hat) against
-the target density.
-
-The source module imported `mog_pdf`, `classify_generated_images`,
-`sliced_wasserstein_distance` and `set_seed` from `run_mlgdf.py`, making the
-figure code depend on the runner. That import is gone: the classifier call
-comes from `cdm.models.mnist.classifier`, the angle helpers from `cdm.losses.circular`,
-and nothing here computes a distance.
+The per-seed image rows, the top-k image panel, and the cartesian + polar
+histograms of P(Y | X = x_hat) against the target density. The classifier comes
+from `cdm.models.mnist.classifier`, the angle helpers from `cdm.losses.circular`.
 """
 
 import math
@@ -93,7 +86,7 @@ def plot_all_seeds_grid(payload, plots_dir, ncols=5, dpi=100):
     """All seeds of one target in a single grid, titled 'Seed i | Loss x | label'.
 
     The label is the digit the run's classifier assigned (`predicted_labels` in the
-    run record, the same labels Table 2 counts); "None" when it was below the
+    run record, the same labels the MNIST table counts); "None" when it was below the
     threshold. Records without labels get titles without the label field.
     """
     results, loss_log, seed_log = payload["results"], payload["loss_log"], payload["seed_log"]

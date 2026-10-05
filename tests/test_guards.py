@@ -1,15 +1,10 @@
-"""Regression guards for the reorganisation items. Tier 0.5, CPU, seconds.
+"""Narrow regression guards. CPU, seconds.
 
-These are deliberately NOT general coverage. Each test pins one defect that the
-reorg fixed, and each was demonstrated to FAIL on the pre-fix tree:
-
-  * ``test_consistency_model_builds_from_utils_nn``  -- Item 4. Fails against
-    ``git show 6abf831:models/samplers/consistency.py``, where two locally
-    redefined classes shadowed the ``utils.nn`` import and ``ConsistencyModel``
-    silently built the wrong (smaller) network.
-  * ``test_no_imported_name_is_redefined``           -- Items 1 and 6. The AST
-    sweep that found the Item 4 bug, promoted from ``checks/ast_shadow_sweep.py``
-    so the bug class cannot come back. 2 intersections pre-Item-4, 0 now.
+  * ``test_consistency_model_builds_from_utils_nn``: a locally redefined class must not
+    shadow the ``cdm.utils.nn`` import, or ``ConsistencyModel`` silently builds the wrong
+    (smaller) network.
+  * ``test_no_imported_name_is_redefined``: an AST sweep of the repository for any module
+    that imports a name and then redefines it at top level (the same bug class).
 """
 
 import ast
@@ -21,15 +16,11 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 # --------------------------------------------------------------------------
-# Item 4: ConsistencyModel must build its network from utils.nn
+# ConsistencyModel must build its network from utils.nn
 # --------------------------------------------------------------------------
 
 def test_consistency_model_builds_from_utils_nn():
-    """The network is resolved at runtime, so ask the object, not the source.
-
-    Pre-Item-4 this returned "models.samplers.consistency" (the shadowing local
-    class) instead of "cdm.utils.nn".
-    """
+    """The network is resolved at runtime, so ask the object, not the source."""
     from cdm.models.samplers.consistency import ConsistencyModel
 
     model = ConsistencyModel(nfeatures=1, condition_on=1, nunits=8, depth=2)
@@ -37,16 +28,15 @@ def test_consistency_model_builds_from_utils_nn():
         f"ConsistencyModel.net is {type(model.net).__module__}."
         f"{type(model.net).__name__}; expected the cdm.utils.nn class. A local "
         f"redefinition in cdm/models/samplers/consistency.py is shadowing the import "
-        f"again -- see Item 4."
+        f"again."
     )
 
 
 def test_ict_model_keeps_its_own_network():
     """The iCT variant deliberately uses the private iCT-specific network.
 
-    The Item 4 fix renamed the shadowing classes rather than deleting them, so
-    this pins that ConsistencyModeliCT still gets its own, and the rename did
-    not quietly repoint it at cdm.utils.nn.
+    This pins that ConsistencyModeliCT still gets its own network, not the
+    cdm.utils.nn one.
     """
     from cdm.models.samplers import consistency
     model = consistency.ConsistencyModeliCT(nfeatures=1, condition_on=1,
@@ -55,7 +45,7 @@ def test_ict_model_keeps_its_own_network():
 
 
 # --------------------------------------------------------------------------
-# Items 1 + 6: no module may import a name and then redefine it
+# No module may import a name and then redefine it
 # --------------------------------------------------------------------------
 
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", ".venv", "venv",
@@ -67,7 +57,7 @@ def _shadowing_intersections(root):
 
     Python resolves module globals at call time, so a top-level definition wins
     over an import of the same name *regardless of order in the file* -- which
-    is exactly how the Item 4 bug hid in plain sight.
+    is how such a bug hides in plain sight.
     """
     out = []
     for dirpath, dirnames, filenames in os.walk(root):

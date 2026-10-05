@@ -35,7 +35,7 @@ Inner estimator (Algorithm 2)
   --n-cond N          conditional samples per step for the loss         (250)
   --n-target M        target samples per step                       (= n_cond)
   --loss mmd|swd|l2   MMD with a multi-bandwidth RBF kernel, sliced Wasserstein, or the
-                      pointwise squared-error baseline (paper Table 9's non-distributional arm)
+                      pointwise squared-error baseline (the no-star experiment's pointwise arm)
   --rbf-kernels K --rbf-mul F   RBF mixture: K bandwidths, geometric factor F
   --swd-projections P
   --select all|uniform --n-sel k   backpropagate through all n_cond samples,
@@ -171,7 +171,7 @@ def parse_args():
     g.add_argument("--swd-projections", type=int, default=100)
     g.add_argument("--select", choices=["all", "uniform"], default="all")
     g.add_argument("--bandwidth-grad", action="store_true",
-                   help="legacy: let the gradient flow through the data-dependent RBF bandwidth (default: detached)")
+                   help="let the gradient flow through the data-dependent RBF bandwidth, as in the Table 1 runs (default: detached)")
     g.add_argument("--n-cond-schedule", choices=["constant", "linear"], default="constant",
                    help="linear: conditional samples ramp from --n-cond-min at the first reverse step to --n-cond at the last")
     g.add_argument("--n-cond-min", type=int, default=50)
@@ -218,7 +218,7 @@ def make_loss(args):
         return MMDLoss(kernel=RBF(n_kernels=args.rbf_kernels, mul_factor=args.rbf_mul, device=args.device,
                                   detach_bandwidth=not args.bandwidth_grad))
     if args.loss == "l2":
-        # pointwise squared error -- NOT a distributional loss. Table 9's baseline arm.
+        # pointwise squared error -- NOT a distributional loss. The no-star experiment's baseline arm.
         from cdm.losses.functions import pointwise_squared_error
         return pointwise_squared_error
     # differentiable sliced Wasserstein (torch sort); for dim(Y) = 1 it is the exact W1 whose gradient

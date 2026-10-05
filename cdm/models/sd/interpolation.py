@@ -1,6 +1,4 @@
-# Port of orineo1/conditional-matching-paper SD_cond_SD_controlnet/notebooks/
-# eval_scribbl_interpolation.ipynb and eval_scribbl_interpolation_age.ipynb, minus the MMD,
-# the classifier and the sample rows: the functions behind the interpolation figures, to call
+# The functions behind the gender and age interpolation figures, to call
 # from experiments/stable_diffusion/interpolation/interpolation.ipynb.
 
 """

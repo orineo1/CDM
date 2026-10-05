@@ -1,6 +1,6 @@
 {
   "args": {
-    "output_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_AgeInterpolation_seed2_zeta7.5_46276541",
+    "output_dir": "experiments/stable_diffusion/four_targets/outputs/full_AgeInterpolation_seed2_zeta7.5_46276541",
     "lora_path": null,
     "architect_unet_path": null,
     "wandb_project": "sdxl-mlgdf-age_interpolation",
@@ -1335,10 +1335,10 @@
   },
   "wandb": {
     "project": "sdxl-mlgdf-age_interpolation",
-    "entity": "conditional-matching",
+    "entity": "",
     "name": "full_AgeInterpolation_seed2_zeta7.5_46276541",
     "id": "z80c1vrw",
-    "url": "https://wandb.ai/conditional-matching/sdxl-mlgdf-age_interpolation/runs/z80c1vrw"
+    "url": ""
   },
   "optimization_time_sec": 20526.743530750275,
   "npy": {

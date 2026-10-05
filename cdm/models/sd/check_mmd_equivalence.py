@@ -1,7 +1,7 @@
 """
 Proves `cdm.models.sd.mmd.sd_mmd` (the shared `cdm.losses.functions.compute_mmd`) is numerically
-identical to the formula in conditional-matching-paper
-SD_cond_SD_controlnet/src/metrics.py @ cb8bc91. CPU-only, no model downloads, seconds.
+identical to a direct transcription of the MMD formula behind the paper's Stable Diffusion
+tables. CPU-only, no model downloads, seconds.
 
     python -m cdm.models.sd.check_mmd_equivalence
 """
@@ -10,7 +10,7 @@ from cdm.models.sd.mmd import sd_mmd, estimate_bandwidth
 
 
 def upstream_compute_mmd(x, y, bandwidth=None, bandwidth_scale=1.0, kernel_alpha=1.0):
-    """Verbatim transcription of upstream metrics.py:compute_mmd @ cb8bc91."""
+    """Direct transcription of the reference MMD formula (U-statistic, median-heuristic bandwidth)."""
     dev = x.device
     x = x.float().to(dev)
     y = y.float().to(dev).detach()
@@ -46,8 +46,8 @@ def main():
         # NOTE both-NaN counts as agreement. Non-integer alpha makes BOTH the shared
         # path and upstream return NaN: floating point leaves the squared-distance
         # diagonal very slightly negative, and a negative base to a fractional power
-        # is NaN. That is an upstream fragility faithfully preserved here, not a port
-        # bug. Every published SD run uses alpha = 1.0, where it cannot arise.
+        # is NaN. That is a property of the formula, not a bug of the shared
+        # implementation. Every published SD run uses alpha = 1.0, where it cannot arise.
         same = (math.isnan(a) and math.isnan(b)) or abs(a - b) < 1e-6
         ok &= same
         print(f"  n={n:<4} m={m:<4} alpha={alpha}  shared={a:+.8f}  upstream={b:+.8f}  "

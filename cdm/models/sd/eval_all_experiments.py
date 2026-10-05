@@ -1,4 +1,3 @@
-# Port of orineo1/conditional-matching-paper SD_cond_SD_controlnet/notebooks/eval_all_experiments.ipynb
 # Entry point. Run as:  python -m cdm.models.sd.eval_all_experiments --help
 #                  or:  bash experiments/stable_diffusion/four_targets/run.sh eval <scenario>
 
@@ -13,7 +12,7 @@ For one scenario:
        compute MMD and SWD against the target, plus p(male) with a binomial 95% CI in the
        gender scenarios. Delta% = improvement over the source scribble.
 
-Same protocol, seeds and prompts as the notebook, so its numbers are reproducible; runs
+Same protocol, seeds and prompts as the paper, so its numbers are reproducible; runs
 under the deterministic settings and the pinned model revisions of run_mlgd_f.
 
 Saved to --output_dir: eval_results.json, eval_table.md, embeddings.npz (target + every
@@ -79,7 +78,7 @@ def parse_args(argv=None):
                    help="extra scribbles, or overrides of the ones found in --run_dir")
     p.add_argument("--output_dir", type=str, required=True)
     p.add_argument("--n_eval", type=int, default=2000, help="target size and images per method")
-    p.add_argument("--seed", type=int, default=42, help="the notebook's seed")
+    p.add_argument("--seed", type=int, default=42, help="the paper's seed")
     p.add_argument("--no_deterministic", action="store_true")
     p.add_argument("--controlnet_scale", type=float, default=0.5)
     p.add_argument("--eval_prompt", type=str, default=NEUTRAL_PROMPT)
@@ -88,7 +87,7 @@ def parse_args(argv=None):
     p.add_argument("--target_prompts", type=str, nargs="+", default=None, metavar="NAME:PROMPT:N",
                    help="gender mode: group specs as in run_mlgd_f; N sets the fraction N/sum")
     p.add_argument("--age_min", type=int, default=40)
-    p.add_argument("--age_max", type=int, default=79, help="inclusive, as in the notebook")
+    p.add_argument("--age_max", type=int, default=79, help="inclusive")
     p.add_argument("--age_step", type=int, default=1)
     p.add_argument("--age_gender", type=str, default="man")
 
@@ -218,7 +217,7 @@ def ci_plot(results, target_frac, title, path):
 # ---------------------------------------------------------------------------
 
 def gen_images(sprinter, scribble, prompt, n, cn_scale, seed):
-    """n Sprinter portraits of `scribble`, own generator (the notebook's gen_images)."""
+    """n Sprinter portraits of `scribble`, own generator."""
     gen = torch.Generator(device=sprinter.device).manual_seed(seed)
     imgs, _ = generate_and_store_cs(sprinter, prompt, scribble, n, batch_size=2,
                                     cn_scale=cn_scale, generator=gen)
@@ -329,12 +328,12 @@ def main(argv=None):
         embeddings[f"method_{name}"] = embs.cpu().numpy()
         with torch.no_grad():
             mmd = compute_mmd(embs, target_clip).item()          # already sqrt(|MMD^2| + eps)
-            # SWD: the notebook's adaptive estimator (projections added until it moves by
-            # < 1e-3). The notebook drew the projections from the unseeded global RNG, so its
+            # SWD: the adaptive estimator (projections added until it moves by
+            # < 1e-3). The paper's evaluation drew the projections from the unseeded global RNG, so its
             # SWD differed run to run; here they come from a generator seeded with --seed.
             swd = compute_swd(embs, target_clip, seed=args.seed).item()
         r = {"mmd": mmd, "swd": swd, "n": args.n_eval}
-        if gender:   # the notebook's classifier, unchanged: CLIP zero-shot man vs woman
+        if gender:   # the paper's classifier: CLIP zero-shot man vs woman
             sr, _ = compute_clip_softmax(imgs, clip_model, clip_processor, MAN_PROMPT, WOMAN_PROMPT, device)
             n_male = sum(1 for x in sr if x["label"] == "male")
             p, lo, hi = binomial_ci(n_male, args.n_eval)

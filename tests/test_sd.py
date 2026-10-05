@@ -1,7 +1,7 @@
-"""Tier 0.5: the Stable Diffusion experiment's CPU-checkable parts.
+"""The Stable Diffusion experiment's CPU-checkable parts.
 
 No GPU, no model download, seconds. What it establishes:
-  - the ported package's imports resolve and every module byte-compiles, and its MMD is
+  - the package's imports resolve and every module byte-compiles, and its MMD is
     the shared compute_mmd (the two checks `run.sh check` runs);
   - the N = 2,000 evaluation's bookkeeping (scribble discovery in both layouts, the
     binomial CI and delta% against values from the paper's own eval_all_results.json,

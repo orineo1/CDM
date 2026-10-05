@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# MNIST figures: Figure 5 (top-5 digits + polar histograms) and Figures 6-8
-# (all 15 seeds per target).
+# MNIST figures: the top-5 digits + polar histograms, and all 15 seeds per target
+# (appendix).
 #
 #   bash run.sh smoke   CPU, ~1 min. Renders every panel from whatever run
 #                       records the smoke tier of ../table_mlgdf left behind.

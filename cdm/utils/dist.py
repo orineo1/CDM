@@ -902,8 +902,7 @@ def gmm_l2_distance(mu_p, Sigma_p, w_p, mu_q, Sigma_q, w_q):
 
     ||p - q||^2 = <p,p> - 2<p,q> + <q,q>, with every Gaussian-Gaussian
     inner product in closed form: <N(m1,S1), N(m2,S2)> = N(m1; m2, S1+S2).
-    Ported from conditional-matching-paper/simulations/src/dist_utils.py; this
-    is the evaluation metric of the paper's synthetic experiments (App. B.2).
+    This is the evaluation metric of the paper's synthetic experiments.
     """
     def inner(mu1, S1, w1, mu2, S2, w2):
         total = 0.0

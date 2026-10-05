@@ -8,12 +8,6 @@ and the per-trajectory `GuidanceConfig`, and records what comes back. With the d
 
     python search_mnist.py --target unimodal --steps 130 --n-cond 1500 \
         --n-mc 3 --step-size-mode double --n-seeds 15
-
-Ported from `MNIST/run_mlgdf.py` of `orineo1/conditional-matching-paper`
-(branch `main`, MNIST tree at 7c856e2). What the source file carried privately
-and this one does not: the optimisation loop, a second copy of the classifier
-and its training loop, a sliced-Wasserstein implementation, a circular MoG
-density and sampler, and the W&B logging.
 """
 
 import argparse
@@ -58,11 +52,11 @@ def parse_args():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--target", choices=["uniform", "bimodal", "unimodal"], required=True)
     p.add_argument("--steps", type=int, required=True,
-                   help="DDIM steps over the reverse process (Table 13 'T')")
+                   help="DDIM steps over the reverse process (the hyperparameter table's 'T')")
     p.add_argument("--n-cond", type=int, required=True,
-                   help="angle samples drawn from f_phi per candidate (Table 13 'n_cond')")
+                   help="angle samples drawn from f_phi per candidate (the hyperparameter table's 'n_cond')")
     p.add_argument("--n-mc", type=int, required=True,
-                   help="Tweedie perturbations per reverse step (Table 13 'n_MC')")
+                   help="Tweedie perturbations per reverse step (the hyperparameter table's 'n_MC')")
     p.add_argument("--step-size-mode", default="original",
                    help="zeta_t rule: original | double | half | dps | no_linear | ...")
     p.add_argument("--n-seeds", type=int, default=15)

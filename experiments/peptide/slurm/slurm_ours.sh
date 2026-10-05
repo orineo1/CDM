@@ -5,7 +5,7 @@
 #   SAMPLER=gbfeso sbatch --array=0-7 experiments/peptide/slurm/slurm_ours.sh  # MLGD on GB-FESO's surrogate
 # Task k handles targets k*PER .. k*PER+PER-1. Output runs/peptide/results/<MLGD|MLGD-F>_t<id>.json
 #SBATCH --job-name=pep-ours
-#SBATCH --partition=catfish        # all methods on the same GPU type (L4) so that wall times compare
+# run all methods on the same GPU type (the paper: NVIDIA L4) so that wall times compare
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -13,7 +13,7 @@
 #SBATCH --output=logs/peptide/%x_%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
+VENV=${VENV:-.venv}; [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; SAMPLER=${SAMPLER:-diff}; PER=${PER:-5}; OUT=${OUT:-$R/results}; mkdir -p $OUT
 NAME=$([ "$SAMPLER" = cm ] && echo MLGD-F || echo MLGD)

@@ -1,7 +1,7 @@
 {
-  "run_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291",
-  "source": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/scribble.png",
-  "mlgd_f": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/final_scribble_mlgd_f.png",
+  "run_dir": "experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291",
+  "source": "experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/scribble.png",
+  "mlgd_f": "experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/final_scribble_mlgd_f.png",
   "scribble_change": {
     "unchanged_pct": 91.37229919433594,
     "added_pct": 3.9859771728515625,
@@ -64,8 +64,8 @@
     "spearman_rho": 0.02899725154054537
   },
   "settings": {
-    "run_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291",
-    "output_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/saliency",
+    "run_dir": "experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291",
+    "output_dir": "experiments/stable_diffusion/four_targets/outputs/full_BalancedTarget_seed4_zeta7.5_46275291/saliency",
     "n_seeds": 20,
     "sigma": 2.5,
     "tau": 0.1,
@@ -108,6 +108,6 @@
     "project": "sdxl-saliency",
     "name": "saliency_full_BalancedTarget_seed4_zeta7.5_46275291",
     "id": "e4zvx2cc",
-    "url": "https://wandb.ai/conditional-matching/sdxl-saliency/runs/e4zvx2cc"
+    "url": ""
   }
 }

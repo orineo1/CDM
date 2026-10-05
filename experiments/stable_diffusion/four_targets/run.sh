@@ -2,7 +2,7 @@
 # MLGD-F on four distributional targets (the paper's Stable Diffusion results).
 #
 #   bash run.sh check                              CPU, seconds, no downloads, no GPU.
-#                                                  Static integrity of the ported package +
+#                                                  Static integrity of the package +
 #                                                  proof that the SD MMD is the shared compute_mmd.
 #   bash run.sh smoke <scenario> [flags...]        GPU. 6 guided steps, 6 variations. Proves the
 #                                                  pipeline runs end to end; reproduces NO
@@ -30,8 +30,7 @@
 # Every run gets its own directory, outputs/<tier>_<Scenario>_seed<S>_<id>/, where <id> is
 # the SLURM job id (a timestamp outside SLURM; RUN_TAG=... sets it). baselines and eval
 # take the run directory with --run_dir, default: the newest finished full run of the
-# scenario. To chain full -> baselines -> eval, submit them with sbatch --dependency=afterok
-# (README, "Running the whole pipeline").
+# scenario. To chain full -> baselines -> eval, submit them with sbatch --dependency=afterok.
 #   bash run.sh help                               every flag run_mlgd_f accepts.
 #
 # <scenario>: balanced | skewed | gender_interpolation | age_interpolation | all
@@ -45,7 +44,7 @@
 # On SLURM, submit this file with --wrap from the repo root (sbatch passes the active
 # venv and exported variables such as HF_HOME to the job):
 #   mkdir -p logs
-#   sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=12:00:00 \
+#   sbatch --partition=<gpu partition> --gres=gpu:1 --cpus-per-task=8 --mem=64G --time=12:00:00 \
 #          --output=logs/sd-%j.out --wrap "bash experiments/stable_diffusion/four_targets/run.sh full balanced"
 #   sbatch ... --array=0-3 --output=logs/sd-%A_%a.out --wrap "bash experiments/stable_diffusion/four_targets/run.sh full all"
 # Under an array, `all` runs only scenario SLURM_ARRAY_TASK_ID (0 balanced, 1 skewed,

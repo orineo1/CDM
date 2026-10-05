@@ -3,7 +3,7 @@
 #   sbatch --array=0-3 experiments/peptide/slurm/slurm_grid.sh       # task k: targets k*PER .. k*PER+PER-1
 #   N=5 RANDOM_M=1500 sbatch --array=0-3 ...: random search, 1500 uniform eps per target (any number of free eps)
 #SBATCH --job-name=pep-grid
-#SBATCH --partition=catfish        # all methods on the same GPU type (L4) so that wall times compare
+# run all methods on the same GPU type (the paper: NVIDIA L4) so that wall times compare
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -11,7 +11,7 @@
 #SBATCH --output=logs/peptide/%x_%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
+VENV=${VENV:-.venv}; [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; PER=${PER:-10}; OUT=${OUT:-$R/results}; mkdir -p $OUT
 k=${SLURM_ARRAY_TASK_ID:-0}

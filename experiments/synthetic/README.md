@@ -1,68 +1,34 @@
-# `experiments/synthetic/` — Gaussian-mixture simulations
+# Synthetic experiments (Gaussian mixtures)
 
-The synthetic experiments of the paper are one setup. A Gaussian mixture `P(X, Y)` with
-known parameters defines a target `G(Y) = P(Y | X = x*)`. Each algorithm searches for an
-`x_hat` whose conditional `P(Y | X = x_hat)` matches `G`, and is scored against the exact
-mixture. The algorithms are MLGD (conditional-diffusion sampler), MLGD-F (consistency
-sampler), their particle versions PMLGD and PMLGD-F, and the oracles `exact` (the analytic
-conditional as sampler) and `exactloss` (closed-form MMD).
+A Gaussian mixture `P(X, Y)` with known parameters defines a target `G(Y) = P(Y | X = x*)`, so every recovered
+`x_hat` is scored exactly: TV and L2 between `P(Y | X = x_hat)` and `G`. Methods: MLGD (conditional-diffusion
+sampler), MLGD-F (consistency sampler), their particle versions PMLGD and PMLGD-F, and the oracles `exact` (the
+analytic conditional as sampler) and `exactloss` (closed-form MMD).
+
+Run everything from the repository root after `pip install -e .`. Outputs go to `runs/`, `results/` and
+`checkpoints/` (git-ignored). Every script has `--help`.
 
 | path | contents |
 |---|---|
-| `pipeline/` | the Python entry points (below); every script has `--help` |
-| `slurm/` | SLURM job scripts for the HUJI cluster, and `cluster_setup.txt` |
-| `configs/mog/` | fixed mixture parameter files (`generate_data.py --params-file`) |
-| `reference/` | outputs of the runs behind the paper, imported from `orineo1/GlobalConditional` (this repository before it was renamed `orineo1/CDM`) |
+| `pipeline/` | `generate_data.py` (mixture, target), `train_models.py` (prior, conditional samplers), `search_mog.py` (the search), `check_models.py` (networks vs. the exact mixture), `make_table1.py` (the grid end to end), `fig1_toy_example.py`, `fig_smc_correction.py` (toy example), `search_gbfeso.py`, `make_table1_d256.py` (GB-FESO), `plot_nonstar.py`, diagnostics |
+| `slurm/` | SLURM jobs (add `--partition=<gpu partition>` to `sbatch`) and `cluster_setup.txt` |
+| `configs/mog/` | fixed mixture parameters (`generate_data.py --params-file`) |
+| `reference/` | outputs of the runs behind the paper |
 
-Run everything from the repository root after `pip install -e .` (or with
-`PYTHONPATH=$PWD`). Outputs go to `runs/`, `results/` and `checkpoints/` at the repository root, which are
-git-ignored.
-
-## The search (shared by all experiments)
-
-Every experiment runs the same algorithm, `cdm.guidance.search.search`: R independent guided
-trajectories (`--n-restarts`), each optionally refined after guidance (`--refine-steps`,
-`--refine-n-cond`, `--refine-keep-best`), then selection of one design: the smallest final loss, or
-with `--select-top K` the K smallest re-scored with `--select-n` fresh conditional samples
-(`--select-repeats`, and `--select-samplers` to average over several trained samplers where they
-exist). The gradient in the guided steps is backpropagation through the conditional sampler
-(`--guide-grad pathwise`, default) or zeroth-order central differences of the loss
-(`--guide-grad zo`; 2 dim(x) + 1 loss values per step, so for low-dimensional designs). The
-driver of each experiment (`search_<dataset>.py`) only loads that dataset's models and target and
-builds its per-trajectory configuration; the search flags are the same in every driver.
-
-## `pipeline/`
-
-| script | role |
-|---|---|
-| `generate_data.py` | draw `P(X, Y)` (random mixture `--random-mog --standardize`, or `--params-file`), define `G`, save `data.pt` |
-| `train_models.py` | train the prior `P(X)` (unconditional diffusion) and a conditional sampler `P(Y \| X)` (`--architecture diffusion` or `cm`) |
-| `search_mog.py` | the method: prior + conditional sampler + target → `x_hat` (restarts or particles, guidance, refinement, oracles) |
-| `run_optimization.py` | older step 3 of the pipeline; also holds `load_model`, the checkpoint loader the other scripts import |
-| `check_models.py` | trained networks against the analytic mixture (score error, prior SWD, sampler error at `x*` and over `x`) |
-| `make_table1.py` | the grid driver: per scenario runs `generate_data`, `train_models`, `check_models`, `search_mog`, then collects the tables |
-| `fig1_toy_example.py` | Figure 1: the 1-D toy (`--setting hard`), its networks, the four methods and the β-sweep |
-| `fig_smc_correction.py` | twisted-SMC correction of the β-sweep (Figure 1(d)) |
-| `refine_endpoints.py`, `diag_trajectories.py`, `diag_xT_vs_noise.py`, `diag_sampler_at_xstar.py` | diagnostics of the (10, 1) cell (research, not in the paper) |
-
-## Smoke test (CPU, about 15 minutes)
+Smoke test (CPU, about 15 min; checks that the code runs, reproduces no number):
 
 ```bash
-python experiments/synthetic/pipeline/make_table1.py --settings 1x1 \
-    --n-samples 500 --epochs 30 --batch-size 256 --nunits 16 --nblocks 1 \
-    --budget 2 --attempts 1 --n-cond 16 --refine-steps 2 --refine-n-cond 32 \
-    --guidance-optim adam --step-size 0.05 --skip-check --device cpu \
-    --runs-dir runs/smoke --out results/smoke_table1
-python experiments/synthetic/pipeline/fig1_toy_example.py --quick --setting hard --device cpu \
-    --ckpt-dir checkpoints/smoke --out results/smoke_fig1_hard.png
+python experiments/synthetic/pipeline/make_table1.py --settings 1x1 --n-samples 500 --epochs 30 --batch-size 256 \
+    --nunits 16 --nblocks 1 --budget 2 --attempts 1 --n-cond 16 --refine-steps 2 --refine-n-cond 32 \
+    --guidance-optim adam --step-size 0.05 --skip-check --device cpu --runs-dir runs/smoke --out results/smoke_table1
 ```
 
-This checks that the code runs. It does not reproduce any number.
+## Gaussian-mixture grid
 
-## Reproducing the paper
-
-The grid commands share the Table 1 search flags and the runs directory. A flag given again
-after `$T1` overrides it (argparse keeps the last value).
+`make_table1.py` runs, per scenario `(dim X, dim Y)` in {1, 5, 10}², data generation, training of the prior and
+the two conditional samplers (MLP 3 × 128, 10,000 batches of 1,024 fresh draws), `check_models.py` and the search,
+then writes the tables. Steps whose outputs exist are skipped, so the variants below reuse the networks. On a
+cluster, `slurm/slurm_table1.sh` runs one scenario per array task (`TAG`, `RUNS`, `ARGS`, `OUT` from the environment).
 
 ```bash
 MT="python experiments/synthetic/pipeline/make_table1.py"
@@ -70,65 +36,25 @@ T1="--budget 10 --attempts 5 --n-cond 250 --guidance-optim adam --step-size 0.05
     --refine-steps 100 --refine-lr 0.02 --refine-n-cond 1000 --seed 42 --device cuda --runs-dir runs/table1v2"
 ```
 
-The data and training settings are the `make_table1.py` defaults: 4 components, 20,000
-samples, networks MLP 3 × 128 trained for 10,000 fresh batches of 1,024, and resampling
-`exp(-5 · loss)` when ESS < N/2. Every step whose output exists is skipped, so the variants
-below reuse the Table 1 networks and differ only in `--tag`. On the cluster,
-`slurm/slurm_table1.sh` runs one scenario per array task with the same flags and takes
-`TAG`, `RUNS`, `ARGS` and `OUT` from the environment (`TAG=_detach ARGS="" sbatch ...`).
+The main runs predate the detached RBF bandwidth, now the default; `--extra=--bandwidth-grad` restores it.
 
-Table 1 ran before the RBF bandwidth was detached from the gradient, which is now the
-library default. `--extra=--bandwidth-grad` restores the old behavior. Write it with `=`,
-because argparse rejects a separate value that starts with `-`.
-
-| paper result | command(s) | reference |
+| result in the paper | command | reference |
 |---|---|---|
-| **Table 1** `tab:sim_main`: TV per scenario × method | `$MT $T1 --tag _adam_refine --extra=--bandwidth-grad --out results/table1_adam_refine` → `_compact.tex` | — |
-| **`tab:sim_full`**, refined columns (‖x̂ − x*‖, relative L²) | same run → `results/table1_adam_refine.tex`; per-run values, basin hits and resamplings in `.json` / `_appendix.md` | — |
-| `tab:sim_full`, ablation *plain* (no refinement) | `$MT $T1 --refine-steps 0 --tag _adam --extra=--bandwidth-grad --out results/table1_adam` | — |
-| `tab:sim_full`, ablation *annealed* | `$MT $T1 --methods PMLGD PMLGD-F --resample-schedule linear --refine-steps 0 --tag _adam_anneal --extra=--bandwidth-grad --out results/table1_adam_anneal` | — |
-| `tab:sim_full`, ablation *oracle f_φ*; the (10, 1) "exact conditional" value | `$MT $T1 --methods MLGD-X PMLGD-X --refine-steps 0 --tag _adam_oracle --extra=--bandwidth-grad --out results/table1_adam_oracle` | — |
-| **`tab:model_quality`**: network accuracy | the Table 1 run (it writes `runs/table1v2/<scenario>/check.json`) → `results/table1_adam_refine_models.tex`. Stand-alone: `python experiments/synthetic/pipeline/check_models.py --prior <d>/models/uncond/model_unconditional.pt --sampler <d>/models/diffusion/model_conditional.pt <d>/models/cm/model_conditional.pt --data <d>/data.pt --out <d>/check` | `reference/checks/table1_*.json` (4 of 9 cells) |
-| App. "Kernel bandwidth": detached rerun | `$MT $T1 --tag _detach --out results/table1_detach` | `reference/table1_detach.md` |
-| App. "Kernel bandwidth": `n_cond` ramp 50→250 + cosine step decay | `$MT $T1 --methods MLGD MLGD-F --tag _v3 --extra "--n-cond-schedule linear --n-cond-min 50 --step-decay 0.1" --out results/table1_v3` | `reference/table1_v3_ncond_ramp.md` |
-| App. "Kernel bandwidth": sliced Wasserstein at (5, 1); App. "(10, 1) cell": SWD there | `$MT $T1 --settings 5x1 10x1 --methods MLGD MLGD-F --tag _adam_swd_refine --extra "--loss swd" --out results/table1_swd` | `reference/table1_swd_5x1.md` |
-| App. "Sampler training": 50,000 batches | `$MT $T1 --runs-dir runs/table1v2_long --epochs 50000 --settings 5x5 5x10 10x5 10x10 --methods MLGD MLGD-F --tag _long --out results/table1_long` | `reference/table1_long.md`, `reference/checks/long_*.json` |
-| App. "Sampler training": 256 hidden units | `$MT $T1 --runs-dir runs/table1v2_wide --nunits 256 --settings 5x5 5x10 10x5 10x10 --methods MLGD MLGD-F --tag _wide --out results/table1_wide` | `reference/table1_wide.md`, `reference/checks/wide_*.json` |
-| App. "(10, 1) cell": 100 restarts per run | `$MT $T1 --settings 10x1 --methods MLGD MLGD-F MLGD-X --budget 100 --attempts 3 --tag _r100 --out results/table1_10x1_r100` | `reference/table1_10x1_r100.md` |
-| App. "(10, 1) cell": conditional sampler retrained for 50,000 batches | see [below](#10-1-with-a-retrained-conditional-sampler) | — |
-| App. "Guidance step rule": constant ζ′ vs Adam push | see [below](#guidance-step-rule-sweep) | — |
-| **Figure 1** `fig:sim_2d` (toy, panels a–d) | see [below](#figure-1) | `reference/smc/` |
-| App. toy "Models": network check of the toy | `python experiments/synthetic/pipeline/check_models.py --setting hard` (after Figure 1 has trained the networks) | — |
-| **`tab:nonstar_results`**, `fig:nonstar` (no-star target) | see [below](#no-star-target) | — |
+| main table (MLGD, MLGD-F), particle variants, appendix table (‖x̂ − x*‖, relative L²) | `$MT $T1 --tag _adam_refine --extra=--bandwidth-grad --out results/table1_adam_refine` | — |
+| ablation: no refinement | `$MT $T1 --refine-steps 0 --tag _adam --extra=--bandwidth-grad --out results/table1_adam` | — |
+| ablation: annealed resampling | `$MT $T1 --methods PMLGD PMLGD-F --resample-schedule linear --refine-steps 0 --tag _adam_anneal --extra=--bandwidth-grad --out results/table1_adam_anneal` | — |
+| ablation: oracle sampler (the exact conditional) | `$MT $T1 --methods MLGD-X PMLGD-X --refine-steps 0 --tag _adam_oracle --extra=--bandwidth-grad --out results/table1_adam_oracle` | — |
+| accuracy of the trained networks | written by the main run (`runs/table1v2/<scenario>/check.json`, `results/table1_adam_refine_models.tex`) | `reference/checks/table1_*.json` |
+| kernel bandwidth: detached | `$MT $T1 --tag _detach --out results/table1_detach` | `reference/table1_detach.md` |
+| kernel bandwidth: `n_cond` ramp 50 → 250, step decay | `$MT $T1 --methods MLGD MLGD-F --tag _v3 --extra "--n-cond-schedule linear --n-cond-min 50 --step-decay 0.1" --out results/table1_v3` | `reference/table1_v3_ncond_ramp.md` |
+| sliced Wasserstein loss at (5, 1) and (10, 1) | `$MT $T1 --settings 5x1 10x1 --methods MLGD MLGD-F --tag _adam_swd_refine --extra "--loss swd" --out results/table1_swd` | `reference/table1_swd_5x1.md` |
+| sampler training: 50,000 batches | `$MT $T1 --runs-dir runs/table1v2_long --epochs 50000 --settings 5x5 5x10 10x5 10x10 --methods MLGD MLGD-F --tag _long --out results/table1_long` | `reference/table1_long.md`, `reference/checks/long_*.json` |
+| sampler training: 256 hidden units | `$MT $T1 --runs-dir runs/table1v2_wide --nunits 256 --settings 5x5 5x10 10x5 10x10 --methods MLGD MLGD-F --tag _wide --out results/table1_wide` | `reference/table1_wide.md`, `reference/checks/wide_*.json` |
+| the (10, 1) cell: 100 restarts | `$MT $T1 --settings 10x1 --methods MLGD MLGD-F MLGD-X --budget 100 --attempts 3 --tag _r100 --out results/table1_10x1_r100` | `reference/table1_10x1_r100.md` |
 
-### Figure 1
+The appendix table combines `results/table1_adam_refine.tex` with the TV columns of the three ablations.
 
-```bash
-P=experiments/synthetic/pipeline
-python $P/fig1_toy_example.py --setting hard --device cuda     # trains the three toy networks (checkpoints/toy/hard/),
-                                                               # runs MLGD, MLGD-F, PMLGD, PMLGD-F (10 trajectories each)
-                                                               # and the beta-sweep; writes results/fig1_hard{.png,_sim.json,_sweep.npz}
-python $P/fig_smc_correction.py --setting hard --betas 0 2 8 16 --n-particles 2000 --n-repeats 10 \
-    --max-shift 0.25 --ess-frac 1.0 --bins 80 --device cuda   # results/fig_smc_hard.{png,json,npz}
-python $P/fig1_toy_example.py --setting hard --smc-npz results/fig_smc_hard.npz   # redraw from the cache: panel (d) plain vs corrected
-```
-
-The last command redraws `results/fig1_hard.png` (the paper's `fig1_toy_hard_smc.png`).
-The paper's main-text Figure 1 is the compact version (panels a, b and the beta sweep, larger fonts),
-redrawn from the same caches; the four-panel version above is the appendix figure:
-
-```bash
-python $P/fig1_toy_example.py --setting hard --smc-npz experiments/synthetic/reference/smc/fig_smc_hard.npz \
-    --panels abd --figsize 11 8.5 --font-scale 1.9 --compact --out results/fig1_hard_compact.png
-```
-
-(the caches must be named after `--out`: copy `results/fig1_hard_sim.json` / `_sweep.npz` to `results/fig1_hard_compact_*`). To
-draw it from the published populations, use
-`--smc-npz experiments/synthetic/reference/smc/fig_smc_hard.npz`. `reference/smc/sweep/`
-holds the `--max-shift` / `--ess-frac` sweep that chose 0.25 / 1.0. On the cluster:
-`sbatch experiments/synthetic/slurm/slurm_fig1.sh hard`.
-
-### (10, 1) with a retrained conditional sampler
+**(10, 1) with a conditional sampler trained for 50,000 batches:**
 
 ```bash
 D=runs/table1v2/x10_y1; P=experiments/synthetic/pipeline
@@ -139,12 +65,7 @@ python $P/search_mog.py --prior $D/models/uncond/model_unconditional.pt --sample
     --refine-steps 100 --refine-lr 0.02 --refine-n-cond 1000 --seed 42 --device cuda --out $D/MLGD_50k.json
 ```
 
-In the cluster copy of `runs/table1v2/x10_y1/`, `models/diffusion/` holds the 50k network and
-`models/diffusion_10k/` the Table 1 network. The diagnostic job scripts use the second one.
-
-### Guidance step rule sweep
-
-MLGD-F, three runs per cell, constant ζ′ (`sgd`) against the Adam-form push:
+**Guidance step rule** (MLGD-F, three runs per cell, constant step against the Adam-form push):
 
 ```bash
 for cell in 1x1 1x10 5x5 10x10; do
@@ -155,10 +76,68 @@ for cell in 1x1 1x10 5x5 10x10; do
 done
 ```
 
-The refinement setting of this sweep was not recorded. It ran before refinement was adopted,
-hence `--refine-steps 0`.
+The numbers in "How to read TV" (the TV of `x* + δu` for random directions `u`, and of a random prior draw)
+have no script. The trained networks are on Hugging Face:
+[`simulations/checkpoints`](https://huggingface.co/anon-submission-cdm/cdm-inverse-design/tree/main/simulations/checkpoints).
 
-### No-star target
+## MLGD\* and GB-FESO
+
+MLGD\* (the MLGD\* column of the main table) runs on a wider conditional sampler (diffusion, 256 units, 4 blocks,
+trained on fresh draws) with zeroth-order guidance, 30 restarts, refinement with 3,000 samples that keeps its
+best iterate, and the 5 lowest-loss restarts re-scored 5 × 5,000. Per cell `C` (e.g. `x10_y1`), five seeds:
+
+```bash
+S=experiments/synthetic/slurm; C=x10_y1; R=runs/mlgd_star/$C
+DATA=runs/table1v2/$C/data.pt ARCH=diffusion BATCHES=100000 UNITS=256 BLOCKS=4 OUTD=$R/d256 \
+  sbatch --job-name=tr_$C --export=ALL $S/slurm_train_sampler.sh
+D=runs/table1v2/$C OUTDIR=$R NAME=MLGDstar SAMPLER=$R/d256/model_conditional.pt \
+  EXTRA="--n-restarts 30 --guide-grad zo --refine-keep-best --refine-steps 100 --refine-n-cond 3000 \
+         --select-top 5 --select-n 5000 --select-repeats 5" \
+  sbatch --array=0-4 --job-name=mlgd_star --export=ALL $S/slurm_search.sh       # -> $R/MLGDstar_s42..46.json
+```
+
+GB-FESO (Zick & Mendels, arXiv:2607.06421) optimizes `x` directly by Adam through the conditional sampler, with no
+prior over `X`. `pipeline/search_gbfeso.py` runs their optimizer loop on our samplers; `cdm/losses/kde_kl.py` is
+their loss. It runs on MLGD\*'s samplers, data and budget (30 starts, 250 / 3,000 samples per phase-0 / phase-1
+step, the same re-scoring), with their KDE-KL and with our MMD, seeds 42–46:
+
+```bash
+for loss in kl mmd; do L=$(echo $loss | tr a-z A-Z); for seed in 42 43 44 45 46; do
+  python experiments/synthetic/pipeline/search_gbfeso.py --sampler $R/d256/model_conditional.pt \
+    --target runs/table1v2/$C/data.pt --loss $loss --n-restarts 30 --n-attempts 1 --seed $seed \
+    --num-samples 250 --num-samples-phase1 3000 --final-n 1000 --select-top 5 --select-n 5000 --select-repeats 5 \
+    --device cuda --out runs/gbfeso_d256/$C/GBFESO-${L}_s$seed.json
+done; done
+cp $R/MLGDstar_s*.json runs/gbfeso_d256/$C/
+python experiments/synthetic/pipeline/make_table1_d256.py --runs-dir runs/gbfeso_d256 --data-root runs/table1v2 \
+    --out results/table1_gbfeso_d256        # the GB-FESO table and the MLGD* / GB-FESO (KL) columns
+```
+
+Reference: `reference/table1_gbfeso_d256.{json,md,tex}`.
+
+## Toy example
+
+```bash
+P=experiments/synthetic/pipeline
+python $P/fig1_toy_example.py --setting hard --device cuda    # trains the three toy networks, runs the four methods
+                                                              # and the beta-sweep: results/fig1_hard{.png,_sim.json,_sweep.npz}
+python $P/fig_smc_correction.py --setting hard --betas 0 2 8 16 --n-particles 2000 --n-repeats 10 \
+    --max-shift 0.25 --ess-frac 1.0 --bins 80 --device cuda  # twisted-SMC correction: results/fig_smc_hard.{png,json,npz}
+python $P/fig1_toy_example.py --setting hard --smc-npz results/fig_smc_hard.npz   # the appendix figure (all panels)
+```
+
+The main-text figure is the compact version, redrawn from the same caches (copy `results/fig1_hard_sim.json` and
+`_sweep.npz` to `results/fig1_hard_compact_*` first):
+
+```bash
+python $P/fig1_toy_example.py --setting hard --smc-npz experiments/synthetic/reference/smc/fig_smc_hard.npz \
+    --panels abd --figsize 11 8.5 --font-scale 1.9 --compact --out results/fig1_hard_compact.png
+```
+
+`reference/smc/` holds the published SMC populations and the `--max-shift` / `--ess-frac` sweep that chose 0.25 /
+1.0. Network check of the toy: `python $P/check_models.py --setting hard`. Cluster: `sbatch slurm/slurm_fig1.sh hard`.
+
+## No-star target
 
 ```bash
 D=runs/nonstar; P=experiments/synthetic/pipeline
@@ -174,162 +153,35 @@ for arm in "mmd 250" "l2 250" "l2 1"; do set -- $arm
       --guidance-optim adam --step-size 0.05 --refine-steps 0 --loss $1 --n-cond $2 \
       --seed 42 --device cuda --out $D/arm_$1_n$2.json
 done
+python $P/plot_nonstar.py --runs $D     # the figure: results/nonstar/no_star_mmd_vs_l2.png
 ```
 
-Each JSON holds the 25 `x_hat` and the time per attempt. The "% at x_bi" column is the
-fraction of `x_hat` closer to `x_bi = -2` than to `x_uni = 2`. No script computes it.
-`pipeline/plot_nonstar.py --runs $D` draws `fig:nonstar` from these JSONs (`results/nonstar/no_star_mmd_vs_l2.png`).
-The originally published table and figure came from the notebook
-`simulations/notebooks/Exp_nonstar_mmd_target_ablation.ipynb` of
-`orineo1/conditional-matching-paper` (`main`, `fc4389d`), whose constants
-`configs/mog/nonstar_2d.txt` transcribes.
+Each JSON holds the 25 `x_hat` and the time per attempt; "% at x_bi" is the fraction closer to `x_bi = -2` than to
+`x_uni = 2`.
 
-### Paper numbers without a script
+## Diagnostics (not in the paper)
 
-- App. "How to read TV": the TV of `x* + δu` for random unit directions `u` and
-  δ ∈ {0.01, 0.03, 0.1, 0.3}.
-- The same paragraph: the TV of a random draw from the prior (≈ 0.7 at (1, 1), ≈ 1.0 at
-  (10, 10)).
-- The combined `tab:sim_full` body (`aistats2027/tables/sim_appendix_rows.tex` in the paper
-  repository) was assembled by hand. Its sources are `table1_adam_refine.tex` and the TV
-  columns of `_adam`, `_adam_anneal` and `_adam_oracle`.
+All use the main-table networks and flags; the usage line is at the top of each script.
 
-### Trained networks
-
-The Table 1 networks (`runs/table1v2/<scenario>/models/`) are on Hugging Face under
-`simulations/checkpoints`. The paper links them as `\hfsim`.
-
-## Improved search at (10, 1) (research, after the AISTATS submission)
-
-Table 1 reaches TV 0.49 at (10, 1). Three changes bring it to a mean of 0.08 over five seeds (0.11 at
-worst, about 25 min per run on an L40S):
-
-1. A more accurate conditional sampler: diffusion, 256 units, 4 blocks, 100k batches of fresh draws.
-   Its TV to `G` at `x*` is 0.07, against 0.46 for the Table 1 network (`check_sampler_accuracy.py`).
-2. Zeroth-order guidance (`--guide-grad zo`): central differences of the sample loss with common
-   random numbers, pulled back to `x_t` through the Tweedie estimate. It recovers the mixture-weight
-   part of the gradient that backpropagation through the sampler misses.
-3. Refinement with 3,000 conditional samples that returns its best iterate (`--refine-keep-best`),
-   after 30 guided trajectories, then reselection of the 5 lowest-loss ones.
-
-```bash
-S=experiments/synthetic/slurm
-ARCH=diffusion BATCHES=100000 UNITS=256 BLOCKS=4 OUTD=runs/night/x10_y1/models/d256 \
-  sbatch --job-name=tr_d256 --export=ALL $S/slurm_train_sampler.sh
-NAME=D3_ref100_n3000 SAMPLER=runs/night/x10_y1/models/d256/model_conditional.pt \
-  EXTRA="--n-restarts 30 --guide-grad zo --refine-keep-best --refine-steps 100 --refine-n-cond 3000 \
-         --select-top 5 --select-n 2000 --select-repeats 5" \
-  sbatch --array=0-4 --job-name=D3 --export=ALL $S/slurm_search.sh
-python experiments/synthetic/pipeline/summarize_runs.py --runs-dir runs/night/x10_y1 --data runs/table1v2/x10_y1/data.pt
-```
-
-The analysis of why the Table 1 configuration fails here is in Section 13 of `optimization_notes.pdf`
-(paper repository).
-
-## GB-FESO competitor (Table 1 budget)
-
-GB-FESO (Zick & Mendels, arXiv:2607.06421) optimizes x directly by Adam through the differentiated
-conditional sampler, with no prior over X, using a KDE estimate of the KL.
-`pipeline/search_gbfeso.py` ports their optimizer loop (`run_feso.py`, `run_phase`) onto our samplers,
-and `cdm/losses/kde_kl.py` holds their loss, copied unchanged (MIT). It runs on the Table 1 networks
-and data, so the comparison with MLGD differs only in the search and the loss:
-
-| method | search | loss |
-|---|---|---|
-| MLGD (Table 1) | guided reverse diffusion under the prior, then refinement | MMD |
-| `GBFESO-MMD` | GB-FESO: direct Adam on x from a random training design | MMD (same kernel as Table 1) |
-| `GBFESO-KL` | GB-FESO | their KDE-KL (h = 0.5, symmetric, Euclidean coordinates) |
-
-GB-FESO's optimizer is theirs (command-line defaults): 201 Adam steps per phase at lr 0.05, phase-0
-noise 0.05 decaying linearly to 0, best iterate kept, x clamped to the range of X in the data. Phase 1
-(201 more steps, no noise) runs in every start for both losses (`--phase1 always`; their code runs it
-only when the phase-0 KL exceeds 0.2, a threshold with no MMD counterpart). Each run has 10 starts,
-each a random row of X from the training data. Each start's answer, the better of the two phases, is
-chosen and scored on fresh samples, and the lowest score wins, as MLGD's 10 restarts; 5 runs per
-scenario. The sample budget is MLGD's in Table 1: 250 conditional samples per step in phase 0 (MLGD:
-per guided step), 1,000 in phase 1 (MLGD: per refinement step), scored on 1,000; every loss compares
-the generated samples with as many target samples, drawn fresh at each step.
-`--select-top K --select-n N --select-repeats R` replaces the lowest-score rule by MLGD's selection
-(`cdm.guidance.search.select`, the same function): the K lowest-scoring starts are re-scored R times on
-N fresh samples and the lowest average is returned, as MLGD\* does with K = 5, N = 5,000, R = 5.
-
-On the cluster, reusing the Table 1 networks (`RUNS`), from the repository root, with the environment active:
-
-```bash
-RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_main OUT=results/table1_gbfeso ARGS="--methods GBFESO-KL GBFESO-MMD --extra='--num-samples 250 --num-samples-phase1 1000 --final-n 1000'" sbatch --partition=salmon --gres=gpu:1 --time=12:00:00 experiments/synthetic/slurm/slurm_table1.sh
-```
-
-The last array task writes the table; rebuild it once every task is done (`--collect` reads the JSONs only):
-`python experiments/synthetic/pipeline/make_table1.py --collect --runs-dir runs/table1v2 --tag _main --methods GBFESO-KL GBFESO-MMD --out results/table1_gbfeso`.
-
-### GB-FESO on the retrained samplers (against MLGD\*)
-
-MLGD\* runs on retrained conditional samplers (diffusion, 256 units, 4 blocks; on the cluster
-`runs/night/grid/<cell>/d256/`, and `runs/night/x10_y1/models/d256/` for (10, 1)) with the Table 1 data.
-GB-FESO is rerun on the same samplers and data, at MLGD\*'s budget, so the two differ only in the
-search: 30 starts per run, 5 runs (seeds 42–46, one result file each), 250 samples per phase-0 step,
-3,000 per phase-1 step (MLGD\*: per refinement step), each start scored on 1,000, and MLGD\*'s selection
-(the 5 lowest re-scored 5 × 5,000). GB-FESO uses no prior over X. One array task per cell, loss and seed
-(9 × 2 × 5 = 90, about 50 min each on an L40S), from the repository root:
-
-```bash
-OR=/sci/labs/orzuk/orzuk/github/CDM     # samplers and data
-sbatch --array=0-89%20 --job-name=gbfeso_d256 --partition=salmon --gres=gpu:1 --cpus-per-task=4 --mem=16G --time=03:00:00 \
-  --output=logs/gbfeso_d256_%A_%a.out --wrap='i=$SLURM_ARRAY_TASK_ID; OR='$OR'; \
-cell=$(echo x1_y1 x1_y5 x1_y10 x5_y1 x5_y5 x5_y10 x10_y1 x10_y5 x10_y10 | cut -d" " -f$((i/10+1))); \
-loss=$(echo kl mmd | cut -d" " -f$((i/5%2+1))); seed=$((42+i%5)); L=$(echo $loss | tr a-z A-Z); \
-if [ $cell = x10_y1 ]; then S=$OR/runs/night/x10_y1/models/d256/model_conditional.pt; else S=$OR/runs/night/grid/$cell/d256/model_conditional.pt; fi; \
-D=runs/gbfeso_d256/$cell; mkdir -p $D; PYTHONPATH=$PWD python experiments/synthetic/pipeline/search_gbfeso.py \
-  --sampler $S --target $OR/runs/table1v2/$cell/data.pt --loss $loss --n-restarts 30 --n-attempts 1 --seed $seed \
-  --num-samples 250 --num-samples-phase1 3000 --final-n 1000 --select-top 5 --select-n 5000 --select-repeats 5 \
-  --device cuda --out $D/GBFESO-${L}_s$seed.json'
-```
-
-Then link MLGD\*'s runs next to them (`MLGDstar_s<seed>.json` -> `runs/night/grid/<cell>/G_zo_s<seed>.json`;
-at (10, 1) `runs/night/x10_y1/E6_sel5000_n3000_s<seed>.json`, the same recipe) and write the table:
-
-```bash
-python experiments/synthetic/pipeline/make_table1_d256.py --runs-dir runs/gbfeso_d256 \
-    --data-root $OR/runs/table1v2 --out results/table1_gbfeso_d256
-```
-
-`results/table1_gbfeso_d256.{json,md,tex}`: the `.json` and `.tex` as `make_table1.py --collect` writes them
-(exact TV, ‖x̂ − x*‖, relative L2, time per cell and method), the `.md` the TV table and every column.
-The paper's run (`tab:sim_gbfeso`, and the MLGD\* and GB-FESO (KL) columns of `tab:sim_main`) is in
-`reference/table1_gbfeso_d256.{json,md,tex}`.
-
-## Research diagnostics (not in the paper)
-
-All of these use the Table 1 networks and flags. The usage line is at the top of each script.
-
-| job | what it runs |
+| script | what it runs |
 |---|---|
-| `slurm/slurm_screen.sh` | `search_mog --init screen` (screened start) on the grid, tags `_screen_refine` / `_screen_guided` |
-| `slurm/slurm_zoguide.sh` | zeroth-order guidance `--guide-grad zo`: the (10, 1) exact-sampler test and the grid, tag `_zoguide` |
-| `slurm/slurm_diag_10x1.sh` | (10, 1) with the `exact` and `exactloss` oracles, 10 and 100 trajectories |
-| `slurm/slurm_refine_select.sh` | `refine_endpoints.py`: pathwise or zeroth-order refinement and reselection of the Table 1 end points at (10, 1) |
-| `slurm/slurm_xt_vs_noise.sh` | `diag_xT_vs_noise.py`: the start `x_T` against the guidance noise at (10, 1) |
-| `pipeline/diag_trajectories.py` | per-trajectory TV and best-of-k statistics from result JSONs |
-| `pipeline/diag_sampler_at_xstar.py` | a trained sampler at `x*`: TV to `G`, and the loss at `x*` against the loss at the end points |
-| `pipeline/summarize_runs.py` | per-variant summary of `<variant>_s<seed>.json` result files |
-| `pipeline/check_sampler_accuracy.py` | TV of trained samplers to the exact conditional at `x*` and at random `x` (dim Y = 1) |
-| `slurm/slurm_search.sh`, `slurm/slurm_train_sampler.sh` | one search variant over seeds; train one network on fresh mixture draws |
+| `slurm/slurm_screen.sh` | `search_mog --init screen` (screened start) on the grid |
+| `slurm/slurm_zoguide.sh` | zeroth-order guidance on the grid, and at (10, 1) with the exact sampler |
+| `slurm/slurm_diag_10x1.sh` | (10, 1) with the `exact` and `exactloss` oracles |
+| `slurm/slurm_refine_select.sh` | `refine_endpoints.py`: refinement and re-selection of saved end points at (10, 1) |
+| `slurm/slurm_xt_vs_noise.sh` | `diag_xT_vs_noise.py`: start `x_T` against guidance noise at (10, 1) |
+| `pipeline/diag_trajectories.py`, `diag_sampler_at_xstar.py`, `check_sampler_accuracy.py`, `summarize_runs.py` | per-trajectory statistics, sampler accuracy at `x*`, run summaries |
+
+`slurm_refine_select.sh` and `slurm_xt_vs_noise.sh` expect the main-table conditional sampler at
+`runs/table1v2/x10_y1/models/diffusion_10k/`.
 
 ## `reference/`
 
-Imported from `orineo1/GlobalConditional` `master` `9ddf570` (`results/`), except
-`smc/fig_smc_hard.npz` (`1a5edcd`) and `table1_gbfeso_d256.*` (this repository, `da7e031`). Tables use the `make_table1.py` Markdown format.
-
 | file | run |
 |---|---|
-| `table1_detach.md` | detached-bandwidth rerun of the grid |
-| `table1_v3_ncond_ramp.md` | `n_cond` ramp + cosine step decay |
-| `table1_swd_5x1.md` | sliced-Wasserstein loss at (5, 1) |
-| `table1_long.md`, `table1_wide.md` | retrained networks, 50,000 batches / 256 units |
+| `table1_detach.md`, `table1_v3_ncond_ramp.md`, `table1_swd_5x1.md` | kernel-bandwidth variants |
+| `table1_long.md`, `table1_wide.md`, `checks/{long,wide}_*.json` | retrained networks (50,000 batches / 256 units) |
 | `table1_10x1_r100.md` | (10, 1) with 100 restarts |
-| `table1_gbfeso_d256.{json,md,tex}` | MLGD\* against GB-FESO (KL, MMD) on the retrained samplers: `tab:sim_gbfeso` and the MLGD\* / GB-FESO (KL) columns of `tab:sim_main` (section "GB-FESO on the retrained samplers") |
-| `checks/table1_*.json`, `checks/{long,wide}_*.json` | `check_models.py` output of the Table 1 / long / wide networks (the four large cells) |
-| `smc/fig_smc_hard.{json,npz}` | twisted-SMC populations and TVs of Figure 1(d), published configuration |
-| `smc/fig_smc_hard_cpu.json` | an earlier CPU run of 2,000 particles, from before the script recorded `--n-repeats` and `--max-shift` |
-| `smc/sweep/ms*_ess*.json` | the `--max-shift` / `--ess-frac` sweep |
-
+| `table1_gbfeso_d256.{json,md,tex}` | MLGD\* against GB-FESO (KL, MMD) |
+| `checks/table1_*.json` | network accuracy of the main-table networks (the four large cells) |
+| `smc/fig_smc_hard.{json,npz}`, `smc/sweep/` | twisted-SMC populations of the toy example, and the parameter sweep |

@@ -1,8 +1,9 @@
 """
 Shared helpers of the peptide experiment.
 
-* Imports Zick & Mendels' GB-FESO code (github.com/.../GB-FESO, MIT), cloned next to this repository
-  (`<parent of CDM>/GB-FESO`, or $GBFESO_DIR). Their modules import two names that their dataset.py no
+* Imports Zick & Mendels' GB-FESO code (MIT), cloned next to this repository:
+  `git clone https://github.com/MendelsResearchGroup/Gradient-Based-Free-Energy-Surface-Optimization ../GB-FESO`
+  (the code is then in `../GB-FESO/GB-FESO`; $GBFESO_DIR overrides). Their modules import two names that their dataset.py no
   longer defines (`LammpsTrajectoryAngleDataset`, `AngleFrameDataset`, renamed to *Geometry*); we alias them
   so that train.py, run_feso.py and plotters.py import unchanged.
 * The Y representation of OUR networks: for N beads, 3N - 5 features (the N - 1 bond lengths, then

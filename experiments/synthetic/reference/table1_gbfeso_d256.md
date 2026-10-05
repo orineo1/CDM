@@ -1,16 +1,14 @@
 # Table 1 (MLGD*) with the GB-FESO competitor, on the retrained samplers
 
 TV(P(Y | x̂), G), mean ± std over 5 runs (seeds 42–46, 30 trajectories each); lower is better; **bold**: the best in
-the row. All three methods use the same retrained conditional sampler per cell (diffusion, 256 units, 4 blocks:
-`runs/night/grid/<cell>/d256`, at (10, 1) `runs/night/x10_y1/models/d256`) and the Table 1 data and target G
-(`runs/table1v2/<cell>/data.pt`). MLGD*: zeroth-order guidance, 30 restarts, refinement 100 steps × 3,000 samples
-keeping the best iterate, the 5 lowest-loss restarts re-scored 5 × 5,000 (Or's `G_zo` runs; at (10, 1)
-`E6_sel5000_n3000`, the same recipe). GB-FESO (Zick & Mendels, arXiv:2607.06421): 30 starts from random training
-designs, no prior over X, their optimizer (201 + 201 Adam steps), MLGD*'s budget: 250 samples per phase-0 step,
+the row. All three methods use the same retrained conditional sampler per cell (diffusion, 256 units, 4 blocks)
+and the Table 1 data and target G (`runs/table1v2/<cell>/data.pt`). MLGD*: zeroth-order guidance, 30 restarts,
+refinement 100 steps × 3,000 samples keeping the best iterate, the 5 lowest-loss restarts re-scored 5 × 5,000.
+GB-FESO (Zick & Mendels, arXiv:2607.06421): 30 starts from random training designs, no prior over X, their optimizer (201 + 201 Adam steps), MLGD*'s budget: 250 samples per phase-0 step,
 3,000 per phase-1 step, each start scored on 1,000, and MLGD*'s selection (the 5 lowest re-scored 5 × 5,000).
 GB-FESO (MMD) uses the Table 1 loss, so MLGD* vs GB-FESO (MMD) differs only in the search; GB-FESO (KL) is their
 method with their KDE-KL loss.
-Setup and commands: `../README.md`, section "GB-FESO on the retrained samplers". Written by
+Setup and commands: `../README.md`, section "MLGD* and GB-FESO". Written by
 `pipeline/make_table1_d256.py`.
 
 | dim X × dim Y | MLGD* | GB-FESO (KL) | GB-FESO (MMD) |

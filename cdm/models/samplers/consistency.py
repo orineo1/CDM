@@ -306,11 +306,9 @@ def ict_discretization_schedule(epoch, total_epochs, s0=10, s1=1280):
 
 
 # iCT-specific network definitions.
-# These are NOT the networks in utils.nn: they are the smaller copies that came in
-# with ConsistencyModeliCT. They used to be named TimeEmbedding/GenericNN, which
-# shadowed the `from utils.nn import ...` at the top of this file and silently
-# rebound ConsistencyModel's networks too. Renamed so only ConsistencyModeliCT
-# uses them (see plan Item 4).
+# These are NOT the networks in utils.nn: they are the smaller networks of
+# ConsistencyModeliCT, named apart so they cannot shadow the `utils.nn` imports
+# that ConsistencyModel uses.
 class _ICTTimeEmbedding(nn.Module):
     def __init__(self, dim):
         super().__init__()
@@ -488,7 +486,7 @@ class ConsistencyModeliCT(nn.Module):
 
         with torch.no_grad():
             if diffusion is not None:
-            # TODO in order to train using CT the noise also should by kerreas and the diff using score model (t should be not integers)
+            # consistency distillation from a trained diffusion model
                 x2,_= diffusion.noise(x, t1)
                 x1,_ = diffusion.sample_ddim_step( x2, t1, condition_x=cond, device=device, eta=0.0)
             else:

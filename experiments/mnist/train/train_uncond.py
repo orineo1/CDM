@@ -1,10 +1,7 @@
 #!/usr/bin/env python
-"""Train the unconditional DDPM prior P(X) on rotated MNIST (Tables 11 and 12).
+"""Train the unconditional DDPM prior P(X) on rotated MNIST.
 
-Ported from `MNIST/train/train_uncond.py` of `orineo1/conditional-matching-paper`
-(branch `main`, MNIST tree at 7c856e2). The file-local copies of
-`UnconditionalUnet` and `RotatedMNISTDataset` are gone; both come from
-`cdm.models.mnist`, so the UNet configuration of Table 11 is defined once.
+`UnconditionalUnet` and `RotatedMNISTDataset` come from `cdm.models.mnist`.
 """
 
 import argparse

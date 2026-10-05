@@ -1,8 +1,5 @@
 """Rotated-MNIST dataset construction, and the classifier it depends on.
 
-Ported from `MNIST/src/dataset.py` and `MNIST/train/train_uncond.py` of
-`orineo1/conditional-matching-paper` (branch `main`, MNIST tree at 7c856e2).
-
 Two different datasets are built here, and they are not interchangeable:
 
   * `AugmentedMNISTDataset` -- the SEARCH set the conditional iCT angle model is
@@ -50,12 +47,9 @@ ROTATION_ANGLES = [90, 180, 270]
 class ConstructionCNN(nn.Module):
     """Three-block CNN classifier used to BUILD the dataset.
 
-    Named `ImprovedCNN` in the source repo, where a second and different class
-    of the same name lived in `MNIST/src/classifier.py` (the rotation-robust
-    evaluation classifier, ported to `cdm/models/mnist/classifier.py`). The two are not
-    interchangeable -- this one has no input/mid dropout and is trained without
-    label smoothing or noise augmentation -- so the name is made distinct here.
-    A class rename does not affect state-dict keys.
+    Not the rotation-robust evaluation classifier of `cdm/models/mnist/classifier.py`:
+    this one has no input/mid dropout and is trained without label smoothing or
+    noise augmentation.
     """
 
     def __init__(self):

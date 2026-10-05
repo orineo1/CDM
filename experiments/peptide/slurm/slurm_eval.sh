@@ -2,7 +2,6 @@
 # Step 4: re-simulate every returned eps_hat (plus eps* itself, the noise floor) and score it against the
 # target ensemble.   [N=5] sbatch experiments/peptide/slurm/slurm_eval.sh   (N > 4: results_table_N<N>.md)
 #SBATCH --job-name=pep-eval
-#SBATCH --partition=salmon,catfish
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
@@ -10,7 +9,7 @@
 #SBATCH --output=logs/peptide/%x_%j.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
+VENV=${VENV:-.venv}; [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; P=experiments/peptide/pipeline; RES=${RES:-$R/results}; EV=${EV:-$R/eval}; mkdir -p $EV
 # simulation protocol (training data, targets and evaluation must share it): N = 4 their 4M steps, N >= 5 longer

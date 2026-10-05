@@ -4,13 +4,11 @@
 #   N=6 bash experiments/peptide/slurm/submit_all.sh
 #   N=5 SKIP_DATA=1 bash ...    (data exist)     N=5 SKIP_TRAIN=1 bash ...   (networks exist too)
 #   N=5 AFTER=<jobid> bash ...  (the data job waits for that job, e.g. the equilibration check, to succeed)
-# Searches (each on catfish L4s, so that wall times compare), 40 targets:
+# Searches (each on the same GPU type, so that wall times compare), 40 targets:
 #   MLGD (10 trajectories), MLGD_r2 (2 trajectories), MLGD-F, GB-FESO (4 starts: all-low, all-high, rand1, rand2),
 #   random-1500 and random-8000 (random search on our diffusion sampler's loss, ~ the time of one GB-FESO run /
 #   of MLGD), then sampler accuracy at held-out eps* and the evaluation (results_table_N<N>.md).
 set -euo pipefail
-source /etc/profile.d/huji-lmod.sh 2>/dev/null || true
-module load slurm/moriah 2>/dev/null || true
 N=${N:-5}; export N
 S=experiments/peptide/slurm
 mkdir -p logs/peptide

@@ -1,11 +1,11 @@
-"""Tier 2: same seed must give the same answer, twice in a row.
+"""Same seed must give the same answer, twice in a row.
 
 If this fails, the other tests are meaningless -- you cannot
 compare two code paths when one path does not agree with itself. On CUDA,
 some kernels are nondeterministic by default; if that is the cause, set
     torch.use_deterministic_algorithms(True)
     CUBLAS_WORKSPACE_CONFIG=:4096:8
-and re-run, then record in revision/CHANGES.md that determinism requires it.
+and re-run.
 """
 
 
@@ -67,7 +67,7 @@ def test_same_seed_same_result(models):
 
 def test_different_seed_different_result(models):
     """Sanity check on the seeding itself: if two seeds give identical output,
-    cfg.seed is not actually being applied and Tier 1 would pass vacuously."""
+    cfg.seed is not actually being applied and the test above passes vacuously."""
     model_uncond, model_cond = models
     loss_fn = MMDLoss(kernel=RBF(device=DEVICE))
 

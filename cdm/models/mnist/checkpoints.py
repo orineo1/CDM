@@ -65,6 +65,6 @@ def load_uncond_model(device="cpu", local_dir=None, path=None, allow_untrained=F
 
 
 def make_noise_scheduler():
-    """The DDPM training schedule the prior was trained with (Table 12)."""
+    """The DDPM training schedule the prior was trained with."""
     from diffusers import DDPMScheduler
     return DDPMScheduler(num_train_timesteps=1000, beta_schedule="squaredcos_cap_v2")

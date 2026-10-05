@@ -20,7 +20,6 @@
 #   OUT       table stem (default results/table1$TAG)
 #
 #SBATCH --job-name=cdm-table1
-#SBATCH --partition=catfish
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
@@ -32,7 +31,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 [ -f experiments/synthetic/pipeline/make_table1.py ] || { echo "run sbatch from the repo root"; exit 1; }
 mkdir -p logs
-VENV=${VENV:-/sci/labs/orzuk/ori_m/venvs/cdm}
+VENV=${VENV:-.venv}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 

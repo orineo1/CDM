@@ -1,11 +1,10 @@
 """
-Figure 1 of the paper (the toy example), from the refactored library, with
-simulation and plotting separated.
+Figure 1 of the paper (the toy example), with simulation and plotting separated.
 
     python experiments/synthetic/pipeline/fig1_toy_example.py                 # simulate if no cache, then plot
     python experiments/synthetic/pipeline/fig1_toy_example.py --rerun-sim     # force a new simulation
     python experiments/synthetic/pipeline/fig1_toy_example.py --quick         # 1-2 min smoke test
-    python experiments/synthetic/pipeline/fig1_toy_example.py --setting paper # the paper's 2-component toy
+    python experiments/synthetic/pipeline/fig1_toy_example.py --setting paper # a 2-component toy
 
 The simulation writes <out>_sim.json (all numbers) and <out>_sweep.npz (the
 guided samples). Re-running without --rerun-sim only re-draws the figure from
@@ -17,9 +16,9 @@ Settings (--setting):
             true optimum x* = -3 the conditional P(Y | X = x*) is a two-mode
             mixture in y; at x = +3 it is unimodal. The target G(Y) is bimodal,
             so matching it forces the optimiser to find x*.
-  paper     the paper's App. B.8 toy: components (-3, 2), (3, -2), x* = -3;
+  paper     a two-component toy: components (-3, 2), (3, -2), x* = -3;
             here G is a single Gaussian.
-  hard      four well-separated x-clusters with different induced shapes on y,
+  hard      the paper's Figure 1. Four well-separated x-clusters with different induced shapes on y,
             placed so that distance in x is unrelated to distributional fit:
             three modes at x = -6 (over-covering, the best wrong match, far from
             x*); one mode at x = -2 (misses a mode, the worst match, adjacent to
@@ -37,7 +36,7 @@ Panels:
               in every panel. beta -> 0 gives the prior, beta -> inf a spike at x*.
 
 Everything runs through guidance.optimize_guided:
-  * MLGD   = legacy optimize_LGD config with the conditional *diffusion* sampler
+  * MLGD   = the LGD configuration with the conditional *diffusion* sampler
   * MLGD-F = the same config with the conditional *consistency* sampler (CM=True)
   * beta-sweep = the same outer loop with n_cond = n_mc = 1, an identity "sampler"
     (so the loss is evaluated at the Tweedie point itself), the analytic L2-GMM
@@ -50,12 +49,9 @@ iCT on Y|X; 3 blocks x 128 units, 3000 epochs, batch 1024, as in the paper) are
 trained on the fly and cached under --ckpt-dir/<setting>/; --uncond/--cond/--cm
 {auto,train,load} control each one, --retrain retrains all three.
 
-Differences from the original notebook (conditional-matching-paper/simulations/
-notebooks/toy_example_with_beta_sweep.ipynb), all deliberate: one shared
-unconditional model (T = 100, all steps) for every panel instead of a separate
-T = 999 DDPM with 20 DDIM steps for the sweep; the mixture weights of P(Y|X=x)
-are differentiated in x in the sweep loss; notation follows the paper (G(Y) for
-the target, x* for the truth, x-hat for the recovered input, Q_beta(x) below).
+One unconditional model (T = 100, all steps) serves every panel; the mixture weights
+of P(Y|X=x) are differentiated in x in the sweep loss; notation follows the paper
+(G(Y) for the target, x* for the truth, x-hat for the recovered input, Q_beta(x) below).
 
 CPU or GPU, auto-detected; --device overrides. Full run ~5 min on CPU with cached
 models, ~9 min including training.
@@ -197,7 +193,7 @@ def parse_args():
     p.add_argument("--n-restarts", type=int, default=10,
                    help="independent restarts per method; the best final loss is shown, all endpoints are saved")
     p.add_argument("--init", choices=["randn", "zeros"], default="randn",
-                   help="x_T initialisation; the paper says N(0,I), the legacy code used zeros")
+                   help="x_T initialisation (the paper: N(0, I))")
     p.add_argument("--betas", type=float, nargs="+", default=[0.0, 2.0, 8.0, 16.0])
     p.add_argument("--panels", default="abcd",
                    help="panels to draw: a joint, b loss landscape, c conditionals, d beta sweep; letters are relabeled "
@@ -317,7 +313,7 @@ def get_models(st, args):
 
 
 # ----------------------------------------------------------------------------
-# MLGD / MLGD-F (legacy optimize_LGD configuration)
+# MLGD / MLGD-F (LGD configuration)
 # ----------------------------------------------------------------------------
 def target_mixture(st):
     mu_t, S_t = compute_conditionals(st.mu_list, st.Sigma_list, st.x_star)

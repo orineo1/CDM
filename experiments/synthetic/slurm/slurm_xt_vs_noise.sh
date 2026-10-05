@@ -3,7 +3,6 @@
 #   task 0: exact-loss oracle, 40 starts x 4 guidance seeds;  task 1: Table 1 sampler (diffusion_10k), 20 x 3
 #   sbatch --array=0-1 experiments/synthetic/slurm/slurm_xt_vs_noise.sh
 #SBATCH --job-name=cdm-xt
-#SBATCH --partition=salmon
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -11,7 +10,7 @@
 #SBATCH --output=logs/xt_%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}
+VENV=${VENV:-.venv}
 [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 D=${D:-runs/table1v2/x10_y1}

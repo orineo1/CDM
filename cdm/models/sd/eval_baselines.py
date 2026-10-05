@@ -1,4 +1,3 @@
-# Copied from orineo1/conditional-matching-paper @ cb8bc91, SD_cond_SD_controlnet/scripts/eval_baselines.py
 # Entry point. Run as:  python -m cdm.models.sd.eval_baselines --help
 
 """
@@ -32,10 +31,6 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from pathlib import Path
 from tqdm import tqdm
-
-# Make src/ importable when called from repo root
-# Upstream inserted ../src on sys.path here so its bare sibling imports would
-# resolve. Not needed: this is a package now and the imports are absolute.
 
 # ── SDEdit settings per scenario ──────────────────────────────────────────────
 # Only what the SDEdit baselines need and config/<scenario>.env does not carry. The

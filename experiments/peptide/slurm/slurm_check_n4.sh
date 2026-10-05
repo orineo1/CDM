@@ -4,7 +4,6 @@
 #  2. GB-FESO (4 corner starts) and MLGD with 2 trajectories on targets 0-1 vs the stored result files
 #   sbatch experiments/peptide/slurm/slurm_check_n4.sh       -> experiments/peptide/results/check_N4.md
 #SBATCH --job-name=pep-check4
-#SBATCH --partition=catfish
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
@@ -12,7 +11,7 @@
 #SBATCH --output=logs/peptide/%x_%j.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
+VENV=${VENV:-.venv}; [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 R=runs/peptide; C=$R/check_generalized; P=experiments/peptide/pipeline; mkdir -p $C/results
 python -c "import torch; print(torch.cuda.get_device_name())"

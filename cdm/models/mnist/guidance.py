@@ -11,14 +11,13 @@ runs it; this module only supplies the MNIST-shaped callables it takes:
                          the MNIST UNet is a bare `UNet2DModel` wrapper with no
                          such attribute, so the closure below reads the scheduler
                          the experiment already holds.
-  * `step_size_fn`    -- the zeta_t rules of Table 13.
+  * `step_size_fn`    -- the zeta_t rules of the paper's MNIST hyperparameter table.
   * `update_fn`       -- `guidance.config.update_ddim_minus_grad` plus the
                          [-1, 1] clamp the MNIST runs used (`--clamp`). There is
                          no `clamp` field on GuidanceConfig; the update callable
                          is the documented extension point for it.
-  * `loss_function`   -- the SWD exactly as `MNIST/run_mlgdf.py` computes it (one
-                         mean over all sorted differences), so every float matches
-                         the source; see `make_swd_loss`.
+  * `loss_function`   -- the SWD as the paper's runs computed it (one mean over all
+                         sorted differences); see `make_swd_loss`.
 
 Everything else -- log-mean-exp aggregation over the n_mc Tweedie perturbations,
 the guidance cutoff, the explicit timestep list, the trailing unguided DDIM step,
@@ -34,8 +33,8 @@ from cdm.losses.circular import angles_to_circular, circular_to_angles
 # The iCT multi-step sampling schedule used everywhere in the MNIST experiment.
 ICT_TS = [150.0, 50.0, 20.0, 10.0, 5.0, 1.0]
 
-# zeta_t rules. "original" is the rule quoted in the paper's Table 13 caption;
-# "double" is the doubled variant that caption assigns to the unimodal target.
+# zeta_t rules. "original" is the rule quoted in the paper's MNIST hyperparameter table;
+# "double" is its doubled variant.
 STEP_SIZE_MODES = ("original", "dps", "half", "double",
                    "tripleLinear", "doubleLinear", "no_linear")
 
@@ -89,8 +88,7 @@ def make_clamped_update(lo=-1.0, hi=1.0):
 def make_swd_loss(device="cpu", n_projections=50):
     """Sliced Wasserstein distance as a plain (X, Y) -> scalar callable.
 
-    Written exactly as `sliced_wasserstein_distance` in the source runner
-    (`MNIST/run_mlgdf.py` of conditional-matching-paper): ONE mean over all
+    Computed as in the paper's runs: ONE mean over all
     |sorted differences|. The shared `SupportAwareSlicedWassersteinLoss` takes the
     mean per projection and then over projections -- equal in exact arithmetic,
     but rounded differently in float32, which is enough to send some guided
@@ -109,7 +107,7 @@ def make_swd_loss(device="cpu", n_projections=50):
 
 
 def _angle_roundtrip(samples):
-    """(cos, sin) -> degrees -> (cos, sin), as the source loop did."""
+    """(cos, sin) -> degrees -> (cos, sin), as in the paper's runs."""
     return angles_to_circular(circular_to_angles(samples))
 
 

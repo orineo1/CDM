@@ -3,22 +3,12 @@ cond_model.py
 =============
 Conditional iCT angle model for the MNIST rotated-digits experiment: it samples
 the rotation angle y = (cos theta, sin theta) of an image x, i.e. it is the
-fast conditional sampler f_phi = P(Y|X) of the paper's Section 5.2.
+fast conditional sampler f_phi = P(Y|X) of the paper's MNIST experiment.
 
-Ported from `MNIST/src/cond_model.py` of `orineo1/conditional-matching-paper`
-(branch `main`, MNIST tree at 7c856e2). Two changes were made on the way in:
-
-  * `angles_to_circular` / `circular_to_angles` were DELETED from this file and
-    are imported from `cdm.losses.circular`, which already carries identical
-    implementations. Nothing here re-defines them.
-  * the file-local `TimeEmbedding` / `GenericNN` are renamed to
-    `MnistTimeEmbedding` / `MnistAngleMLP`. `utils.nn` exports classes of the
-    original names with DIFFERENT architectures (residual MLPBlock stack,
-    learned time projection), so importing those would silently change the
-    network and break the published checkpoint. The rename makes the collision
-    impossible rather than merely currently-harmless -- this is the bug class
-    PLAN item 4 documents in `models/samplers/consistency.py`. State-dict keys
-    are unaffected by a class rename, so the checkpoint still loads.
+The angle helpers come from `cdm.losses.circular`. The networks are named
+`MnistTimeEmbedding` / `MnistAngleMLP` because `cdm.utils.nn` has classes named
+`TimeEmbedding` / `GenericNN` with different architectures; using those would break
+the published checkpoint.
 
 Exports:
     - CircularAngleConsistencyModel

@@ -1,16 +1,12 @@
 """The three angle targets G of the MNIST rotated-digits experiment.
 
 Uniform on [0, 360), bimodal (equal Gaussian modes at 0 and 180 degrees) and
-unimodal (a Gaussian at 0 degrees) -- the three rows of the paper's Table 2,
-with the variances of Table 13.
+unimodal (a Gaussian at 0 degrees) -- the three rows of the paper's MNIST table.
 
 Everything distributional here is the shared library:
   * mixture sampling  -> `utils.dist.generate_mog_samples_not_differentiable`
   * circular density  -> `cdm.losses.circular.mog_pdf_circular`
   * angle <-> (cos,sin) -> `cdm.losses.circular.angles_to_circular`
-The source repo's `MNIST/run_mlgdf.py` carried its own copies of all three
-(`generate_mog_samples`, `mog_pdf`, `angles_to_circular`); those copies are
-not ported.
 """
 
 from dataclasses import dataclass, field
@@ -22,11 +18,11 @@ import torch
 from cdm.losses.circular import angles_to_circular, mog_pdf_circular
 from cdm.utils.dist import generate_mog_samples_not_differentiable
 
-# Digit classes the source repo highlighted per target (console summary only).
+# Digit classes highlighted per target (console summary only).
 UNIMODAL_DIGITS_OF_INTEREST = [2, 3, 5, 7]
 BIMODAL_DIGITS_OF_INTEREST = [1, 6, 8, 9]
 
-# Table 13 variances, in degrees^2.
+# Target variances, in degrees^2.
 UNIMODAL_VAR = 515.0
 BIMODAL_VAR = 252.0
 
@@ -40,7 +36,7 @@ class AngleTarget:
     mog_variances: Optional[List[torch.Tensor]] = None
     weights: Optional[torch.Tensor] = None
     digits_of_interest: List[int] = field(default_factory=lambda: list(range(10)))
-    # The uniform target is the only one the source repo guides on a truncated
+    # The uniform target is the only one guided on a truncated
     # schedule: it zeroes the guidance push for t below this timestep.
     guidance_cutoff_t: Optional[int] = None
 
@@ -52,10 +48,9 @@ class AngleTarget:
         """n draws from G, in degrees.
 
         `device` applies to the uniform target only. The mixture draw is taken
-        on the CPU generator because `MNIST/run_mlgdf.py` calls
-        `generate_mog_samples(...)` without a device argument, i.e. on the CPU
-        default; the loss moves both sample sets to the compute device anyway,
-        so the only thing this preserves is which RNG stream is consumed.
+        on the CPU generator, as in the paper's runs; the loss moves both sample
+        sets to the compute device anyway, so the only thing this preserves is
+        which RNG stream is consumed.
         """
         if self.is_uniform:
             return torch.rand(n, device=device) * 360.0
@@ -66,8 +61,7 @@ class AngleTarget:
     def generator(self) -> Callable[[int, str], torch.Tensor]:
         """`GuidanceConfig.target_generator`: (n, device) -> (n, 2) circular samples."""
         def target_generator(n, device):
-            # float32 BEFORE cos/sin, as the source's angles_to_circular does
-            # (`angles_deg.float()`); the mixture targets are sampled in float64.
+            # float32 BEFORE cos/sin, as in the paper's runs; the mixture targets are sampled in float64.
             return angles_to_circular(self.sample_angles(n, device).float())
         return target_generator
 
@@ -92,12 +86,9 @@ def make_target(name: str, unimodal_var: float = UNIMODAL_VAR,
         return AngleTarget(name="uniform", guidance_cutoff_t=250)
     if name == "bimodal":
         # Modes at 180 and 360 (= 0) degrees, IN THIS ORDER: it is how the paper's
-        # bimodal run record was produced (conditional-matching-paper, branch
-        # gread-search-mnist, sample_mnist_gridsearch.py). `main`'s run_mlgdf.py
-        # writes [0, 180]: the same distribution on the circle, but the mixture
-        # components are ordered differently, so every categorical draw picks the
-        # other mode and the guided trajectory differs. [180, 360] reproduces the
-        # branch bit for bit.
+        # bimodal run was produced. [0, 180] is the same distribution on the circle,
+        # but the mixture components are ordered differently, so every categorical
+        # draw picks the other mode and the guided trajectory differs.
         return AngleTarget(
             name="bimodal",
             mog_means=[torch.tensor([180], dtype=torch.float64),

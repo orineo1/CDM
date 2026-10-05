@@ -1,6 +1,5 @@
-# Port of orineo1/conditional-matching-paper SD_cond_SD_controlnet/notebooks/measure_dps_step_memory.ipynb
-# (memory) and of scripts/time_dps_step.py on branch test-witness-result (the per-step timing of the
-# selection table), measured the same way: random latents and target embeddings, one warm-up call
+# Memory and per-step time of one guidance step (the paper's ablation and selection-rule timing),
+# measured on random latents and target embeddings, one warm-up call
 # of the same configuration, then the timed repeats; the target set has n_cond vectors. Run as:
 #     bash experiments/stable_diffusion/step_cost/run.sh
 #     python -m cdm.models.sd.step_cost --help

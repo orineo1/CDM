@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 """MNIST figures: the top-k digit panel, the per-seed rows, and the polar /
 cartesian histograms of P(Y | X = x_hat) against the target density
-(paper Figure 5 and Figures 6-8).
+(the paper's MNIST figure and its all-seeds appendix figures).
 
 Reads the `.pkl` run records written by `table_mlgdf/search_mnist.py`.
 
     python make_figures.py --results-dir <dir with .pkl> --out <dir>
 
-Ported from `MNIST/visualize.py` of `orineo1/conditional-matching-paper`
-(branch `main`, MNIST tree at 7c856e2). The plotting itself is in
-`cdm.models.mnist.plotting`; this file is the entry point only. The source version
-imported four helpers from `run_mlgdf.py`; nothing here imports the runner.
+The plotting itself is in `cdm.models.mnist.plotting`; this file is the entry point only.
 """
 
 import argparse

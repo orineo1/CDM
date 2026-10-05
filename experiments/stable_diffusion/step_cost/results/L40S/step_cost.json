@@ -263,7 +263,7 @@
     }
   ],
   "settings": {
-    "output_dir": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/step_cost/outputs/L40S_46288830",
+    "output_dir": "experiments/stable_diffusion/step_cost/outputs/L40S_46288830",
     "num_variations": [
       100,
       120
@@ -315,6 +315,6 @@
   "wandb": {
     "project": "sdxl-step-cost",
     "name": "step_cost_L40S_46288830",
-    "url": "https://wandb.ai/conditional-matching/sdxl-step-cost/runs/h33drx4p"
+    "url": ""
   }
 }

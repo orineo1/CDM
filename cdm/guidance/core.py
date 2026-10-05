@@ -3,7 +3,7 @@
 One implementation of the guided reverse-diffusion loop behind every MLGD /
 MLGD-F variant in the paper (LGD, DPS, the consistency-model sampler and the
 MNIST classifier-free-guidance loop). Each variant is a GuidanceConfig; every
-axis on which the historical variants differed is an explicit strategy field,
+axis on which the variants differ is an explicit strategy field,
 so a variant's behaviour -- including the order in which random numbers are
 consumed -- is fixed by its configuration.
 """
@@ -18,7 +18,7 @@ from .config import GuidanceConfig
 
 
 def _iter_timesteps(model_uncond, cfg):
-    """Yield (i, t) pairs in the order the legacy variant used."""
+    """Yield (i, t) pairs in the order the configuration asks for."""
     if cfg.timestep_source == "range":
         start = cfg.range_t_start if getattr(cfg, "range_t_start", None) is not None else model_uncond.diffusion_steps - 1
         steps = range(start, 0, -1)
@@ -38,7 +38,7 @@ def _iter_timesteps(model_uncond, cfg):
 
 
 def _ddim_step(model_uncond, x_t, t, i, cfg):
-    """Legacy variants expose three different ways of taking a DDIM step."""
+    """Take one DDIM step in one of the three ways the models expose."""
     if cfg.ddim_step_fn is not None:
         # MNIST computes the step inline against a diffusers scheduler.
         return cfg.ddim_step_fn(model_uncond, x_t, t, i)
@@ -55,7 +55,7 @@ def _ddim_step(model_uncond, x_t, t, i, cfg):
 
 
 def _draw_conditional(model_cond, x0_sample, cfg):
-    """Draw n_cond samples from f_phi(x0_sample, .), matching legacy plumbing."""
+    """Draw n_cond samples from f_phi(x0_sample, .)."""
     if cfg.repeat_condition:
         condition = x0_sample.view(1, -1).repeat(cfg.n_cond, 1).to(cfg.device)
     else:
@@ -86,7 +86,7 @@ def _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best, 
 
     Tweedie estimate, MC perturbations, inner loss (Algorithm 2), gradient with respect to
     x_t, DDIM step minus the guidance push. `best` is a dict {loss, x0} updated in place with
-    the lowest inner loss seen so far. Consumes random numbers in the legacy order."""
+    the lowest inner loss seen so far. Consumes random numbers in a fixed order."""
     if n_total is not None and cfg.n_cond_schedule != "constant":
         cfg = _EvalView(cfg, _n_cond_at(cfg, i, n_total))
     device = cfg.device
@@ -95,9 +95,8 @@ def _guided_step(model_uncond, model_cond, loss_function, cfg, x_t, t, i, best, 
     x_t_minus_1, pred_x0 = _ddim_step(model_uncond, x_t, t, i, cfg)
 
     if cfg.skip_guidance:
-        # Pure prior sampling. Upstream (conditional-matching-paper
-        # simulations/src/Optimization.py::optimize_LGD, `if zeta == 0.0`) skips the
-        # whole Monte-Carlo block here, so no random numbers are consumed.
+        # Pure prior sampling: skip the whole Monte-Carlo block, so no random
+        # numbers are consumed.
         with torch.no_grad():
             x_next = x_t_minus_1.detach().clone()
         return x_next, {"loss": float("nan"), "grad_norm": 0.0, "step": 0.0}

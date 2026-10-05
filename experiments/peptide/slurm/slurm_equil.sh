@@ -3,7 +3,6 @@
 # straight chain, every frame kept; populations early vs late and between replica halves (check_equilibration.py).
 #   N=6 sbatch experiments/peptide/slurm/slurm_equil.sh       (STEPS=8000000 BURN=... to test a longer protocol)
 #SBATCH --job-name=pep-equil
-#SBATCH --partition=salmon,catfish
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
@@ -11,7 +10,7 @@
 #SBATCH --output=logs/peptide/%x_%j.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-. ${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv}/bin/activate
+VENV=${VENV:-.venv}; [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 N=${N:-4}; [ "$N" = 4 ] && R0=runs/peptide || R0=runs/peptide_N$N; R=${R:-$R0}; P=experiments/peptide/pipeline; mkdir -p $R
 # simulation protocol (training data, targets and evaluation must share it): N = 4 their 4M steps, N >= 5 longer

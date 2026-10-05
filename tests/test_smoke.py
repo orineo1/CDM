@@ -1,4 +1,4 @@
-"""Tier 0: does anything import and run at all?
+"""Does anything import and run at all?
 
 Seconds, CPU-only. Catches import errors, typos and config mistakes before
 burning GPU time.
@@ -14,7 +14,7 @@ SEED = 20260816
 
 
 def test_imports():
-    """Every module the refactor touches must import cleanly."""
+    """Every core module must import cleanly."""
     from cdm import guidance
     import cdm.guidance.core
     import cdm.guidance.config

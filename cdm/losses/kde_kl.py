@@ -4,7 +4,7 @@
 Zick & Mendels, "Gradient-Based Inverse Design of Free-Energy Landscapes with Diffusion Models"
 (arXiv:2607.06421), file `GB-FESO/loss.py` of
 https://github.com/MendelsResearchGroup/Gradient-Based-Free-Energy-Surface-Optimization
-(commit 4e021a4 of the fork orineo1/gradient-based-free-energy-surface-optimization), under its license:
+(commit 4e021a4), under its license:
 
     MIT License
 

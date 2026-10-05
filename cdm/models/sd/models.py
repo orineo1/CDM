@@ -1,5 +1,3 @@
-# Copied from orineo1/conditional-matching-paper @ cb8bc91 (branch claude/sd-shared-controlnet-hvt-uniform),
-# path SD_cond_SD_controlnet/models.py
 # SD-specific: the Stable Diffusion pipeline itself. Nothing here duplicates a shared package.
 
 """
@@ -91,7 +89,7 @@ def _resolve_lora_path(lora_path: str) -> str:
     return local_path
 
 
-# Single source of truth for the default ControlNet, so eval (notebooks calling
+# Single source of truth for the default ControlNet, so eval (callers of
 # load_models() with no override) and generation (run_mlgd_f.py's --controlnet_model_id
 # default) can't silently drift onto different weights -- both import this constant
 # instead of each hardcoding their own copy of the model id string.
