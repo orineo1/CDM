@@ -295,6 +295,8 @@ python experiments/synthetic/pipeline/make_table1_d256.py --runs-dir runs/gbfeso
 
 `results/table1_gbfeso_d256.{json,md,tex}`: the `.json` and `.tex` as `make_table1.py --collect` writes them
 (exact TV, ‖x̂ − x*‖, relative L2, time per cell and method), the `.md` the TV table and every column.
+The paper's run (`tab:sim_gbfeso`, and the MLGD\* and GB-FESO (KL) columns of `tab:sim_main`) is in
+`reference/table1_gbfeso_d256.{json,md,tex}`.
 
 ## Research diagnostics (not in the paper)
 
@@ -316,7 +318,7 @@ All of these use the Table 1 networks and flags. The usage line is at the top of
 ## `reference/`
 
 Imported from `orineo1/GlobalConditional` `master` `9ddf570` (`results/`), except
-`smc/fig_smc_hard.npz` (`1a5edcd`). Tables use the `make_table1.py` Markdown format.
+`smc/fig_smc_hard.npz` (`1a5edcd`) and `table1_gbfeso_d256.*` (this repository, `da7e031`). Tables use the `make_table1.py` Markdown format.
 
 | file | run |
 |---|---|
@@ -325,6 +327,7 @@ Imported from `orineo1/GlobalConditional` `master` `9ddf570` (`results/`), excep
 | `table1_swd_5x1.md` | sliced-Wasserstein loss at (5, 1) |
 | `table1_long.md`, `table1_wide.md` | retrained networks, 50,000 batches / 256 units |
 | `table1_10x1_r100.md` | (10, 1) with 100 restarts |
+| `table1_gbfeso_d256.{json,md,tex}` | MLGD\* against GB-FESO (KL, MMD) on the retrained samplers: `tab:sim_gbfeso` and the MLGD\* / GB-FESO (KL) columns of `tab:sim_main` (section "GB-FESO on the retrained samplers") |
 | `checks/table1_*.json`, `checks/{long,wide}_*.json` | `check_models.py` output of the Table 1 / long / wide networks (the four large cells) |
 | `smc/fig_smc_hard.{json,npz}` | twisted-SMC populations and TVs of Figure 1(d), published configuration |
 | `smc/fig_smc_hard_cpu.json` | an earlier CPU run of 2,000 particles, from before the script recorded `--n-repeats` and `--max-shift` |
