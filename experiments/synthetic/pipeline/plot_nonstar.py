@@ -3,7 +3,7 @@ Figure fig:nonstar (no-star target): the joint P(x, y), the two candidate condit
 point target y* = 4, and where each guidance arm's 25 restarts land. Reads the scenario constants
 (configs/mog/nonstar_2d.txt) and the arm JSONs (results/nonstar/arm_*.json). Run from the repository root:
 
-    python experiments/synthetic/pipeline/plot_nonstar.py --out experiments/synthetic/results/nonstar/no_star_mmd_vs_l2.png
+    python experiments/synthetic/pipeline/plot_nonstar.py --out results/nonstar/no_star_mmd_vs_l2.png
 """
 import argparse
 import json
@@ -23,8 +23,8 @@ ARMS = [("MMD_n250", "MMD, $n_{cond}=250$", "#1f77b4"),
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--config", default="experiments/synthetic/configs/mog/nonstar_2d.txt")
-    p.add_argument("--runs", default="experiments/synthetic/results/nonstar")
-    p.add_argument("--out", default="experiments/synthetic/results/nonstar/no_star_mmd_vs_l2.png")
+    p.add_argument("--runs", default="results/nonstar")
+    p.add_argument("--out", default="results/nonstar/no_star_mmd_vs_l2.png")
     p.add_argument("--x-bi", type=float, default=-2.0)
     p.add_argument("--x-uni", type=float, default=2.0)
     a = p.parse_args()

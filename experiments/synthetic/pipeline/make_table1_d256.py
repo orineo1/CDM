@@ -14,7 +14,7 @@ method: mean +- std over the runs, the trajectories (30 per run) with TV < 0.5 a
 Run from the repository root, with the cells' data.pt files under --data-root:
 
     python experiments/synthetic/pipeline/make_table1_d256.py --runs-dir runs/gbfeso_d256 \\
-        --data-root /sci/labs/orzuk/orzuk/github/CDM/runs/table1v2 --out experiments/synthetic/results/table1_gbfeso_d256
+        --data-root /sci/labs/orzuk/orzuk/github/CDM/runs/table1v2 --out results/table1_gbfeso_d256
 """
 import argparse
 import glob
@@ -156,7 +156,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--runs-dir", default="runs/gbfeso_d256")
     p.add_argument("--data-root", required=True, help="directory holding <cell>/data.pt")
-    p.add_argument("--out", default="experiments/synthetic/results/table1_gbfeso_d256")
+    p.add_argument("--out", default="results/table1_gbfeso_d256")
     a = p.parse_args()
 
     rows, scenarios = [], {}

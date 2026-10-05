@@ -13,7 +13,6 @@ conditional as sampler) and `exactloss` (closed-form MMD).
 | `slurm/` | SLURM job scripts for the HUJI cluster, and `cluster_setup.txt` |
 | `configs/mog/` | fixed mixture parameter files (`generate_data.py --params-file`) |
 | `reference/` | outputs of the runs behind the paper, imported from `orineo1/GlobalConditional` (this repository before it was renamed `orineo1/CDM`) |
-| `results/` | a full rerun of the paper's synthetic experiments with the current code (detached bandwidth) |
 
 Run everything from the repository root after `pip install -e .` (or with
 `PYTHONPATH=$PWD`). Outputs go to `runs/`, `results/` and `checkpoints/` at the repository root, which are
@@ -179,7 +178,7 @@ done
 
 Each JSON holds the 25 `x_hat` and the time per attempt. The "% at x_bi" column is the
 fraction of `x_hat` closer to `x_bi = -2` than to `x_uni = 2`. No script computes it.
-`pipeline/plot_nonstar.py` draws `fig:nonstar` from these JSONs (`results/nonstar/no_star_mmd_vs_l2.png`).
+`pipeline/plot_nonstar.py --runs $D` draws `fig:nonstar` from these JSONs (`results/nonstar/no_star_mmd_vs_l2.png`).
 The originally published table and figure came from the notebook
 `simulations/notebooks/Exp_nonstar_mmd_target_ablation.ipynb` of
 `orineo1/conditional-matching-paper` (`main`, `fc4389d`), whose constants
@@ -262,8 +261,6 @@ RUNS=runs/table1v2 VENV=$VIRTUAL_ENV TAG=_main OUT=results/table1_gbfeso ARGS="-
 
 The last array task writes the table; rebuild it once every task is done (`--collect` reads the JSONs only):
 `python experiments/synthetic/pipeline/make_table1.py --collect --runs-dir runs/table1v2 --tag _main --methods GBFESO-KL GBFESO-MMD --out results/table1_gbfeso`.
-This run on the Table 1 networks is not committed: the committed GB-FESO results are those on the retrained
-samplers, below.
 
 ### GB-FESO on the retrained samplers (against MLGD\*)
 
@@ -293,7 +290,7 @@ at (10, 1) `runs/night/x10_y1/E6_sel5000_n3000_s<seed>.json`, the same recipe) a
 
 ```bash
 python experiments/synthetic/pipeline/make_table1_d256.py --runs-dir runs/gbfeso_d256 \
-    --data-root $OR/runs/table1v2 --out experiments/synthetic/results/table1_gbfeso_d256
+    --data-root $OR/runs/table1v2 --out results/table1_gbfeso_d256
 ```
 
 `results/table1_gbfeso_d256.{json,md,tex}`: the `.json` and `.tex` as `make_table1.py --collect` writes them
@@ -332,31 +329,4 @@ Imported from `orineo1/GlobalConditional` `master` `9ddf570` (`results/`), excep
 | `smc/fig_smc_hard.{json,npz}` | twisted-SMC populations and TVs of Figure 1(d), published configuration |
 | `smc/fig_smc_hard_cpu.json` | an earlier CPU run of 2,000 particles, from before the script recorded `--n-repeats` and `--max-shift` |
 | `smc/sweep/ms*_ess*.json` | the `--max-shift` / `--ess-frac` sweep |
-
-## `results/`
-
-A rerun of the synthetic experiments on NVIDIA L40S GPUs with the code of this repository
-(`search_mog.py` and the losses as on `master` at `602c09a`; later commits add options that
-are off by default). Every run uses the library default, a **detached** RBF bandwidth (no
-`--bandwidth-grad`), so the grid corresponds to the paper's detached rerun
-(`reference/table1_detach.md`), not to the published Table 1 run.
-
-`results/run.sh` reruns all of it with the exact flags, step by step or at once
-(`bash experiments/synthetic/results/run.sh all`, one GPU, about two days; the steps are
-`grid`, `checks`, `ablations`, `nonstar`, `fig1`, `smc`). It writes to the git-ignored
-`runs/reproduction/` and `results/reproduction/`.
-
-| file | command (from the repository root) |
-|---|---|
-| `table1.{md,json,tex}` | `$MT $T1 --runs-dir runs/table1v2` (no `--tag`, no `--extra`), then `--collect`: Table 1 and the refined columns of `tab:sim_full` |
-| `table1_gbfeso_d256.{md,json,tex}` | MLGD\* against GB-FESO (KL, MMD) on the retrained samplers (section "GB-FESO on the retrained samplers"): `make_table1_d256.py` |
-| `checks/table1_*.json` | `check_models.py` on the nine scenarios' networks, `--n-random-x 100`: `tab:model_quality` |
-| `nonstar/arm_*.json` | the [no-star target](#no-star-target) commands above: `tab:nonstar_results` |
-| `nonstar/no_star_mmd_vs_l2.png` | `fig:nonstar`, from the arm JSONs: `python experiments/synthetic/pipeline/plot_nonstar.py` |
-| `fig1/fig1_hard{.png,_sim.json,_sweep.npz}` | `fig1_toy_example.py --setting hard --n-restarts 25 --n-cond 250 --n-mc 3 --methods MLGD MLGD-F PMLGD PMLGD-F --betas 0 2 8 16 --n-beta-samples 2000 --rerun-sim --device cuda` (25 trajectories per method, not 10) |
-| `smc/fig_smc_hard.{json,png}` | `fig_smc_correction.py` with the Figure 1 flags above, on the networks of `fig1/` |
-
-Seeds are fixed (42), but trained weights differ across GPUs and library versions, so the
-numbers agree with the paper within run-to-run noise rather than digit for digit. The
-`tab:sim_full` ablation columns (plain, annealed, oracle) are not in this folder yet.
 
