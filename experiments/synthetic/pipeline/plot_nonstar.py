@@ -56,7 +56,7 @@ def main():
     ax[1].plot(ys, cond_pdf(a.x_bi), color="#ff7f0e", label=f"$P(Y \\mid X = x_{{bi}} = {a.x_bi:g})$")
     ax[1].plot(ys, cond_pdf(a.x_uni), color="#2ca02c", label=f"$P(Y \\mid X = x_{{uni}} = {a.x_uni:g})$")
     ax[1].axvline(y_star, color="#d62728", ls="--", label=f"target $y^* = {y_star:g}$")
-    ax[1].set_xlabel("$y$"); ax[1].set_ylabel("density"); ax[1].set_ylim(-0.05, 2.75); ax[1].legend(loc="upper left", ncol=1, frameon=False)
+    ax[1].set_xlabel("$y$"); ax[1].set_ylabel("density"); ax[1].set_ylim(-0.05, 2.15)
 
     # right: where the restarts land
     xs = {}
