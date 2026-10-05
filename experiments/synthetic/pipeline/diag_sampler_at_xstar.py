@@ -55,7 +55,7 @@ def main():
     m, v, w = info["target"]
     data = _load_mixture(f"{D}/data.pt")
     xs = info["x_star"].float().view(1, -1).to(dev)
-    loss_fn = fx.make_loss(args)
+    loss_fn = fx.loss_for_target(args, gen)
     c0 = torch.load(args.target, map_location="cpu", weights_only=False)["condition_on"]
     res = {"x_star_exact_tv": scale_free_distances(data, xs.view(-1).tolist(), n_mc=20000)["tv"]}
     ex = ExactConditionalSampler(info["mu_list"], info["Sigma_list"], info["alpha"], c0)

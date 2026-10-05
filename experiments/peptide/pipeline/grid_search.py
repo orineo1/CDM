@@ -68,8 +68,8 @@ def main():
         if not records:
             prior, _ = fx.load_model(a.prior, dev)
             sampler, sampler_type = fx.load_model(a.sampler, dev)
-            loss_fn = fx.make_loss(args)
         gen, _ = fx.load_target(tgt, dev)
+        loss_fn = fx.loss_for_target(args, gen)       # standardization scales are per target
         cfg = fx.make_cfg(args, prior, sampler_type, gen, a.seed)
         torch.manual_seed(a.seed + tid)
         torch.cuda.synchronize() if dev == "cuda" else None

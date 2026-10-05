@@ -41,7 +41,7 @@ def main():
         loss_fn = lambda pred, target: ex(pred[0]).float().to(pred.device)          # noqa: E731
     else:
         sampler, stype = fx.load_model(args.sampler, dev)
-        loss_fn = fx.make_loss(args)
+        loss_fn = fx.loss_for_target(args, gen)
     data = _load_mixture(args.target)
     raw = torch.load(args.target, map_location="cpu", weights_only=False)
     mu, Sig, al = raw["mu_list"], raw["Sigma_list"], raw["alpha"]

@@ -59,7 +59,7 @@ def main():
         sampler, arch = fx.load_model(args.sampler, dev)
     stype = arch if args.sampler_type == "auto" else args.sampler_type
     gen, info = fx.load_target(args.target, dev)
-    loss_fn = fx.make_loss(args)
+    loss_fn = fx.loss_for_target(args, gen)
     attempts = []
     for att in r["attempts"]:
         t0 = time.time()
