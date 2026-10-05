@@ -14,8 +14,7 @@
 #SBATCH --output=logs/diag_%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-VENV=${VENV:-/sci/labs/orzuk/orzuk/venvs/CDM_venv$(grep -q "^13" /etc/debian_version 2>/dev/null && echo _deb13)}
-[ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
+. ./cluster_env.sh             # Python environment (CDM_ENV)
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 D=${D:-runs/table1v2/x10_y1}
 COMMON="--prior $D/models/uncond/model_unconditional.pt --target $D/data.pt --algo lgd --n-cond 250
