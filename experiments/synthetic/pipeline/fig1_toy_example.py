@@ -832,9 +832,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
             if name in sim.get("empirical_loss", {}):
                 e = sim["empirical_loss"][name]
                 mu_e = np.array(e["values"]).mean(0)
-                ax.plot(np.array(e["x"]), mu_e / mu_e.max(), color=c, lw=1.2, alpha=0.9, zorder=2)
-        # line types only; the colors (one sample loss per method's sampler) are in the legend of (d)
-        ax.plot([], [], color="0.55", lw=1.2, label=r"$\hat{\mathcal{L}}(x)$, per sampler")
+                ax.plot(np.array(e["x"]), mu_e / mu_e.max(), color=c, lw=1.2, alpha=0.9, zorder=2,
+                        label=rf"$\hat{{\mathcal{{L}}}}(x)$, {name}")
         ax.legend(fontsize=fs_leg - 1, loc="upper right", frameon=False, handlelength=1.2, borderaxespad=0.2,
                   labelspacing=0.2)
     else:
