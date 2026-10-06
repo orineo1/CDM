@@ -896,7 +896,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
             dg = _kde(plain, x_grid, bw=0.12)      # fixed small bandwidth: the default oversmooths the separate modes
             ax.plot(x_grid, dg, color=c_data, lw=2.0, ls="--" if tv_panel else "-", label="guided samples", zorder=6)
             if smc:
-                ax.plot(x_grid, _kde(smc["corr"][beta], x_grid, bw=0.12), color="black", lw=1.8,
+                ax.plot(x_grid, _kde(smc["corr"][beta], x_grid, bw=0.12), color="tab:brown" if tv_panel else "black", lw=1.8,
                         ls="--" if tv_panel else "-", label="twisted-SMC corrected", zorder=7)
         else:
             ax.hist(plain, bins=80, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
@@ -973,7 +973,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         pos = np.arange(len(bs))                        # betas 0, 1, 2, 4, 8, 16 at equal spacing
         ax_tv.plot(pos, [smc_tv[str(b)][0] for b in bs], color=c_data, ls="--", lw=2.0, marker="o", ms=4,
                    label="guided samples")
-        ax_tv.plot(pos, [smc_tv[str(b)][1] for b in bs], color="black", ls="--", lw=1.8, marker="o", ms=4,
+        ax_tv.plot(pos, [smc_tv[str(b)][1] for b in bs], color="tab:brown", ls="--", lw=1.8, marker="o", ms=4,
                    label="twisted-SMC corrected")
         ax_tv.set_xticks(pos); ax_tv.set_xticklabels([f"{b:g}" for b in bs])
         ax_tv.set_xlabel(r"$\beta$", labelpad=0); ax_tv.set_ylabel(r"TV to $\mathcal{Q}_\beta$")
@@ -981,7 +981,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         ax_tv.text(0.012, 0.965, "(f)", transform=ax_tv.transAxes, fontsize=fs_title, fontweight="bold",
                    ha="left", va="top", zorder=10)
         ax_tv.text(0.45, 0.5, "guided", transform=ax_tv.transAxes, color=c_data, ha="center", fontsize=fs_leg)
-        ax_tv.text(0.45, 0.1, "corrected", transform=ax_tv.transAxes, color="black", ha="center", fontsize=fs_leg)
+        ax_tv.text(0.45, 0.1, "corrected", transform=ax_tv.transAxes, color="tab:brown", ha="center", fontsize=fs_leg)
     if W2:   # thinner lines and smaller dots for the print size, then one legend for all panels
         for a_ in fig.axes:
             for ln in a_.lines:
