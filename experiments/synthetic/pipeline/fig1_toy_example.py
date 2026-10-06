@@ -691,8 +691,9 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         top_axes = [ax_joint, ax_loss, ax_cond]
         tv_panel = len(betas) == 1            # (e) the densities at one beta, (f) TV to Q_beta against beta
         right = outer[:, 2].subgridspec(len(betas), 1, hspace=0.12) if not tv_panel else None
-        sweep_axes = [fig.add_subplot(outer[0, 2])] if tv_panel else []
-        ax_tv = fig.add_subplot(outer[1, 2]) if tv_panel else None
+        right_col = outer[:, 2].subgridspec(2, 1, hspace=0.3) if tv_panel else None   # same heights as (c), (d)
+        sweep_axes = [fig.add_subplot(right_col[0])] if tv_panel else []
+        ax_tv = fig.add_subplot(right_col[1]) if tv_panel else None
         for i in range(0 if tv_panel else len(betas)):
             sweep_axes.append(fig.add_subplot(right[i], sharex=sweep_axes[0] if sweep_axes else None,
                                               sharey=sweep_axes[0] if sweep_axes else None))
@@ -895,7 +896,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         if smc and not W3:   # twisted-SMC corrected population of fig_smc_correction.py, same setting and betas
             ax.hist(smc["corr"][beta], bins=80, range=(xlo, xhi), density=True, histtype="step",
                     color="black", linewidth=1.3, label="twisted-SMC corrected", zorder=4)
-        if smc and str(float(beta)) in smc_tv:
+        if smc and str(float(beta)) in smc_tv and not tv_panel:
                 tp, tc = smc_tv[str(float(beta))]
                 ax.text(0.97 if tv_panel else 0.03 if (compact or W2) else 0.98,
                         0.62 if tv_panel else (0.74 if W2 else 0.62) if (compact or W2) else 0.9,
@@ -1013,6 +1014,10 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                            labelspacing=0.25, borderaxespad=0.2)
             short = {"guided samples": "guided", "twisted-SMC corrected": "SMC-corrected",
                      r"prior $\mathcal{P}(x)$": r"prior $\mathcal{P}$"}
+            tv_b = smc_tv.get(str(float(betas[0]))) if tv_panel else None
+            if tv_b:
+                short["guided samples"] = f"guided (TV {tv_b[0]:.2f})"
+                short["twisted-SMC corrected"] = f"corrected (TV {tv_b[1]:.2f})"
             sweep_axes[0].legend([h_ for h_, _ in right_], [short.get(l_, l_) for _, l_ in right_],
                                  loc="upper left" if tv_panel else "upper right",
                                  ncol=1, fontsize=fs_leg - 1, frameon=True, framealpha=1.0, facecolor="white",
