@@ -678,9 +678,9 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
     elif layout == "wide3":
         # full width, one 2 x 3 grid so that (a)-(d) have the same size: joint over loss (same x) |
         # conditionals over trajectories | the betas stacked over both rows; one legend under (a)-(d), one under (e)
-        fig = plt.figure(figsize=figsize or (6.75, 3.5))
+        fig = plt.figure(figsize=figsize or (6.75, 3.15))     # legends inside (d) and (e): no legend rows below
         outer = gridspec.GridSpec(2, 3, figure=fig, width_ratios=[1.0, 1.0, 1.0], height_ratios=[1, 1],
-                                  wspace=0.42, hspace=0.42, left=0.07, right=0.99, top=0.94, bottom=0.2)
+                                  wspace=0.42, hspace=0.42, left=0.07, right=0.99, top=0.933, bottom=0.11)
         left_col = outer[:, 0].subgridspec(2, 1, hspace=0.06)    # (a) and (b) share x and touch
         ax_joint = fig.add_subplot(left_col[0])
         ax_loss = fig.add_subplot(left_col[1], sharex=ax_joint)
@@ -861,8 +861,6 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
     if W3:
         if traj:
             draw_trajectories(ax_traj, traj, x_star, xlo, xhi, fs_leg, STYLE)
-        ax_traj.text(0.5, 0.07, "guided trajectories, 10 restarts\n(bold: the returned one)",
-                     transform=ax_traj.transAxes, ha="center", va="bottom", fontsize=fs_leg)
         ax_traj.text(0.012, 0.965, "(d)", transform=ax_traj.transAxes, fontsize=fs_title, fontweight="bold",
                      ha="left", va="top", zorder=10)
         ax_traj.grid(alpha=0.2)
@@ -974,11 +972,17 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
             left.insert(0, (Line2D([], [], ls="none"), r"$\bf{(a)}$–$\bf{(d)}$:"))   # the legend serves all four panels
             pa, pc = ax_joint.get_position(), ax_traj.get_position()
             pe = sweep_axes[-1].get_position()
-            fig.legend(*zip(*left), loc="lower center", ncol=len(left), fontsize=fs_leg, frameon=False,
-                       bbox_to_anchor=((pa.x0 + pc.x1) / 2, 0.0), columnspacing=1.6, handlelength=1.8)
-            fig.legend(*zip(*right_), loc="lower center", ncol=2, fontsize=fs_leg, frameon=False,
-                       bbox_to_anchor=((pe.x0 + pe.x1) / 2, 0.0), columnspacing=1.0, handlelength=1.6,
-                       labelspacing=0.3)
+            # (a)-(d): in the empty lower part of (d); (e): in the empty upper part of its first panel
+            left = left[1:]
+            ax_traj.legend(*zip(*left), loc="lower center", ncol=1, fontsize=fs_leg - 1, frameon=False,
+                           title=r"$\bf{(a)}$–$\bf{(d)}$", title_fontsize=fs_leg - 1, handlelength=1.8,
+                           labelspacing=0.25, borderaxespad=0.2)
+            short = {"guided samples": "guided", "twisted-SMC corrected": "SMC-corrected",
+                     r"prior $\mathcal{P}(x)$": r"prior $\mathcal{P}$"}
+            sweep_axes[0].legend([h_ for h_, _ in right_], [short.get(l_, l_) for _, l_ in right_], loc="upper right",
+                                 ncol=2, fontsize=fs_leg - 1, frameon=True, framealpha=1.0, facecolor="white",
+                                 edgecolor="none", handlelength=1.3, columnspacing=0.8, labelspacing=0.25,
+                                 borderaxespad=0.15, borderpad=0.2).set_zorder(20)   # opaque: x* runs underneath
         else:
             fig.legend(hs, ls_, loc="lower center", ncol=(len(ls_) + 1) // 2, fontsize=fs_leg - 1, frameon=False,
                        bbox_to_anchor=(0.5, 0.0), columnspacing=1.0, handlelength=1.6)
