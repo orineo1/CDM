@@ -8,7 +8,10 @@
 # overrides both.
 CDM_ENV=${CDM_ENV:-auto}
 
-_venvs=/sci/labs/orzuk/orzuk/venvs
+# Site paths (lab storage for venvs and caches) come from cluster_local.sh, which is not in git:
+#   CDM_LAB=/path/to/lab/storage   (holds venvs/ and hf_cache/)
+[ -f ./cluster_local.sh ] && . ./cluster_local.sh
+_venvs=${CDM_LAB:-.}/venvs
 case "$CDM_ENV" in
   old)  _venv=$_venvs/CDM_venv ;;
   new)  _venv=$_venvs/CDM_venv_deb13 ;;

@@ -15,7 +15,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../..}"
 . ./cluster_env.sh
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
-export HF_HOME=${HF_HOME:-/sci/labs/orzuk/orzuk/hf_cache}
+export HF_HOME=${HF_HOME:-${CDM_LAB:-.}/hf_cache}
 M=experiments/mnist
 python - <<PY
 import os, shutil, torch

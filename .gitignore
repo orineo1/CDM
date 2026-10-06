@@ -40,3 +40,4 @@ experiments/mnist/checkpoints/*.pth
 # cluster job logs (slurm --output=logs/...)
 logs/
 slurm-*.out
+cluster_local.sh
