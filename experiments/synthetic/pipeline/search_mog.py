@@ -7,7 +7,7 @@ specific to vector data with trained checkpoints: it loads a prior over X (uncon
 checkpoint), a conditional sampler for Y | X (consistency-model or conditional-diffusion
 checkpoint, or the mixture oracles `exact` / `exactloss`) and a target G(Y), builds the
 per-trajectory `GuidanceConfig`, evaluates designs against the mixture when it is known, and adds
-the particle and screened-start variants. The peptide experiment reuses it for its vector data.
+the particle and screened-start variants.
 
     python experiments/synthetic/pipeline/search_mog.py --prior runs/mog4d/models/model_unconditional.pt \
         --sampler runs/mog4d/models/model_conditional.pt --target runs/mog4d/data.pt \
@@ -34,8 +34,18 @@ Which algorithm (presets; any individual knob below overrides the preset)
 Inner estimator (Algorithm 2)
   --n-cond N          conditional samples per step for the loss         (250)
   --n-target M        target samples per step                       (= n_cond)
-  --loss mmd|swd|l2   MMD with a multi-bandwidth RBF kernel, sliced Wasserstein, or the
-                      pointwise squared-error baseline (the no-star experiment's pointwise arm)
+  --loss mmd|cyclic-mmd|swd|l2|kde-kl
+                      MMD with a multi-bandwidth RBF kernel; the same MMD with the coordinates in
+                      --periodic-dims treated as angles (each angle t enters as (cos t, sin t), so -pi
+                      and pi coincide); sliced Wasserstein; the pointwise squared-error baseline (the
+                      no-star experiment's pointwise arm); or GB-FESO's KDE estimate of KL
+                      (Zick & Mendels 2026), with --periodic-dims as its angle coordinates
+  --periodic-dims I ...  coordinates of Y that are angles in radians, for cyclic-mmd and kde-kl
+                      (default for cyclic-mmd: all)
+  --standardize       divide each coordinate of Y by its spread in the target sample before the loss
+                      (standard deviation; for an angle that of its (cos, sin) pair), so coordinates on
+                      different scales weigh alike
+  --kde-bandwidth H   kde-kl kernel bandwidth (0.5)
   --rbf-kernels K --rbf-mul F   RBF mixture: K bandwidths, geometric factor F
   --swd-projections P
   --select all|uniform --n-sel k   backpropagate through all n_cond samples,
@@ -165,7 +175,12 @@ def parse_args():
     g = p.add_argument_group("inner estimator")
     g.add_argument("--n-cond", type=int, default=250)
     g.add_argument("--n-target", type=int, default=None)
-    g.add_argument("--loss", choices=["mmd", "swd", "l2"], default="mmd")
+    g.add_argument("--loss", choices=["mmd", "cyclic-mmd", "swd", "l2", "kde-kl"], default="mmd")
+    g.add_argument("--periodic-dims", type=int, nargs="*", default=None,
+                   help="coordinates of Y that are angles (radians), for cyclic-mmd and kde-kl")
+    g.add_argument("--standardize", action="store_true",
+                   help="divide each coordinate of Y by its spread in the target sample before the loss")
+    g.add_argument("--kde-bandwidth", type=float, default=0.5)
     g.add_argument("--rbf-kernels", type=int, default=5)
     g.add_argument("--rbf-mul", type=float, default=2.0)
     g.add_argument("--swd-projections", type=int, default=100)
@@ -213,10 +228,45 @@ def load_target(path, device):
     return gen, {"kind": "samples", "x_star": None, "n_samples": int(samples.shape[0])}
 
 
-def make_loss(args):
-    if args.loss == "mmd":
+def resolve_periodic_dims(args, dim_y):
+    """--periodic-dims, else all coordinates for cyclic-mmd and none otherwise; stored back in args."""
+    if args.periodic_dims is None:
+        args.periodic_dims = list(range(dim_y)) if args.loss == "cyclic-mmd" else []
+    if args.periodic_dims and args.loss not in ("cyclic-mmd", "kde-kl"):
+        raise SystemExit(f"--periodic-dims is for --loss cyclic-mmd or kde-kl, not {args.loss}")
+    return args.periodic_dims
+
+
+def make_loss(args, target_sample=None):
+    """The loss(pred, target). With --standardize the scales are fitted on `target_sample` [n, dim(Y)]."""
+    base = _base_loss(args)
+    if args.loss == "l2" or not (args.periodic_dims or args.standardize):
+        return base
+    from cdm.losses.features import FeatureLoss
+    # kde-kl wraps angle differences itself: no embedding, only the Euclidean coordinates are standardized
+    f = FeatureLoss(base, periodic_dims=args.periodic_dims, standardize=args.standardize, embed=args.loss != "kde-kl")
+    return f.fit(target_sample) if args.standardize and target_sample is not None else f
+
+
+def loss_for_target(args, target_generator, n_fit=10_000):
+    """make_loss for one target. Draws a target sample (outside the global random stream, so the run is
+    unchanged) only when the loss needs dim(Y) or the standardization scales."""
+    if args.loss == "mmd" and args.periodic_dims is None and not args.standardize:
+        return make_loss(args)
+    dev = args.device
+    with torch.random.fork_rng(devices=[torch.device(dev)] if str(dev).startswith("cuda") else []):
+        y = target_generator(n_fit, dev)
+    resolve_periodic_dims(args, y.shape[-1])
+    return make_loss(args, y)
+
+
+def _base_loss(args):
+    if args.loss in ("mmd", "cyclic-mmd"):     # cyclic-mmd: the same MMD on the embedded coordinates
         return MMDLoss(kernel=RBF(n_kernels=args.rbf_kernels, mul_factor=args.rbf_mul, device=args.device,
                                   detach_bandwidth=not args.bandwidth_grad))
+    if args.loss == "kde-kl":
+        from cdm.losses.kde_kl import KDEKLLoss
+        return KDEKLLoss(bandwidth=args.kde_bandwidth, angle_indices=tuple(args.periodic_dims))
     if args.loss == "l2":
         # pointwise squared error -- NOT a distributional loss. The no-star experiment's baseline arm.
         from cdm.losses.functions import pointwise_squared_error
@@ -306,12 +356,12 @@ def main():
     method = ("P" if args.algo == "particles" else "") + {"cm": "MLGD-F", "exact": "MLGD-X", "exactloss": "MLGD-E"}.get(sampler_type, "MLGD")
     R = args.n_particles if args.algo == "particles" else args.n_restarts
     target_generator, info = load_target(args.target, dev)
-    loss_fn = make_loss(args)
+    loss_fn = loss_for_target(args, target_generator)
     if sampler_arch == "exactloss":
         assert info.get("mu_list") is not None, "--sampler exactloss needs a target file with the mixture"
         _exact = ExactConditionalMMD(info["mu_list"], info["Sigma_list"], info["alpha"], info["target"])
         loss_fn = lambda pred, target: _exact(pred[0]).float().to(pred.device)   # noqa: E731
-    print(f"[search_mog] {method} with {args.guidance.upper()} guidance | loss={args.loss} n_cond={args.n_cond} "
+    print(f"[search_mog] {method} with {args.guidance.upper()} guidance | loss={args.loss}{f' periodic={args.periodic_dims}' if args.periodic_dims else ''}{' standardized' if args.standardize else ''} n_cond={args.n_cond} "
           f"n_mc={args.n_mc} perturb={args.perturb} aggregate={args.aggregate} step={args.step_size} "
           f"select={args.select}{'' if args.select == 'all' else f'(n_sel={args.n_sel})'} init={args.init} eta={args.eta} "
           f"| budget R={R} {'particles' if args.algo == 'particles' else 'restarts'}, attempts={args.n_attempts} "

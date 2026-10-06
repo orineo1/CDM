@@ -12,8 +12,7 @@
 #SBATCH --output=logs/%x_%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-VENV=${VENV:-.venv}
-[ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
+. ./cluster_env.sh             # Python environment (VENV)
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 D=${D:-runs/table1v2/x10_y1}
 S=$((42 + ${SLURM_ARRAY_TASK_ID:-0}))

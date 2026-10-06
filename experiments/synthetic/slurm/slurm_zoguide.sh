@@ -14,8 +14,7 @@
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 [ -f experiments/synthetic/pipeline/make_table1.py ] || { echo "run sbatch from the repo root"; exit 1; }
-VENV=${VENV:-.venv}
-[ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
+. ./cluster_env.sh             # Python environment (VENV)
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 RUNS=${RUNS:-runs/screen}
 echo "=== task $SLURM_ARRAY_TASK_ID on $(hostname) $(date) ==="

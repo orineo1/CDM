@@ -10,5 +10,4 @@ that it reproduces the paper's numbers. Those numbers are in each experiment's `
 | `test_determinism.py` | the same seed gives the same result |
 | `test_population.py` | particle populations and refinement (structure only) |
 | `test_guards.py` | no module redefines a name it imports |
-| `test_peptide_nbead.py` | the peptide simulator's N-bead generalization (GB-FESO parts skipped without their code) |
 | `test_sd.py` | the Stable Diffusion experiment's CPU parts (some skipped without its extra dependencies) |

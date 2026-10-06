@@ -10,8 +10,7 @@
 #SBATCH --output=logs/%x_%j.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
-VENV=${VENV:-.venv}
-[ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
+. ./cluster_env.sh             # Python environment (VENV)
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 MODEL=conditional; A=$ARCH
 [ "$ARCH" = unconditional ] && { MODEL=unconditional; A=diffusion; }

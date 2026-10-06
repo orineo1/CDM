@@ -31,8 +31,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 [ -f experiments/synthetic/pipeline/make_table1.py ] || { echo "run sbatch from the repo root"; exit 1; }
 mkdir -p logs
-VENV=${VENV:-.venv}
-[ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
+. ./cluster_env.sh             # Python environment (VENV)
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 
 ALL_SETTINGS=${SETTINGS:-"1x1 1x5 1x10 5x1 5x5 5x10 10x1 10x5 10x10"}

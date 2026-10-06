@@ -26,8 +26,7 @@ cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 [ -f experiments/synthetic/pipeline/fig1_toy_example.py ] || { echo "run sbatch from the repo root"; exit 1; }
 mkdir -p logs results
 # environment: a venv with CUDA torch (no modules needed when the torch wheel bundles CUDA)
-VENV=${VENV:-.venv}
-if [ -f "$VENV/bin/activate" ]; then source "$VENV/bin/activate"; fi
+. ./cluster_env.sh             # Python environment (VENV)
 
 N_RESTARTS=${N_RESTARTS:-10}   # Figure 1: ten restarts (or particles) per method
 EXTRA_ARGS=${EXTRA_ARGS:-}          # e.g. EXTRA_ARGS=--retrain after the setting changed

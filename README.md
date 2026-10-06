@@ -41,7 +41,6 @@ Each directory's README has the commands, the settings and the committed results
 | [`experiments/synthetic/`](experiments/synthetic/README.md) | toy example and β-sweep; Gaussian-mixture grid (MLGD, MLGD\*, MLGD-F, particle variants, ablations, network accuracy); comparison with GB-FESO; no-star target |
 | [`experiments/mnist/`](experiments/mnist/README.md) | rotated digits: SWD, recovered digits, angle histograms; network and search settings |
 | [`experiments/stable_diffusion/`](experiments/stable_diffusion/README.md) | sketch-to-portrait with four distributional targets against baselines; scribble edits and saliency; interpolation grids; per-step cost; Jacobian error of the few-step sampler |
-| [`experiments/peptide/`](experiments/peptide/README.md) | molecular design: comparison with GB-FESO on the four-bead peptide |
 
 ## Code
 
