@@ -56,3 +56,27 @@ n_cond = 600, no clamping; `var300` is the target variance where there is one.
   trajectory near a tipping point between two digits can then end on the other one.
 - On a GPU, one short untimed warm-up run precedes seed 0, so that CUDA start-up is
   not counted in its time (`--no-warmup` turns it off). It cannot change any result.
+
+## GB-FESO baseline (`search_gbfeso_mnist.py`)
+
+GB-FESO (Zick & Mendels 2026) on the same problem: Adam on the image x through the frozen
+conditional angle sampler f_phi, no prior over X (the DDPM is not loaded). The optimizer is
+`run_phase` of `../../synthetic/pipeline/search_gbfeso.py` with GB-FESO's defaults: two phases
+of 201 Adam steps at lr 0.05, phase-0 per-pixel noise 0.05 decaying linearly to 0, best iterate
+per phase, x clamped to [-1, 1] (the prior's pixel range, the space MLGD-F's x is in). The
+problem is MLGD-F's: same targets, SWD (50 projections) on n_cond (cos, sin) samples per step
+against fresh target samples (n_cond from `config/targets.tsv`), and the reported SWD is
+MLGD-F's final loss (4 n_cond fresh draws at x). Starts: a uniformly rotated MNIST training
+digit (`--init data`, default) or x0 ~ N(0, I) (`--init randn`); `--n-restarts K` runs K starts
+per seed and keeps the smallest final SWD. Per start: 404 sampler draws with backpropagation
+(MLGD-F: T n_MC = 390 / 375 / 900 for unimodal / bimodal / uniform). The `.pkl` has the layout of
+`search_mnist.py` (plus `method: GB-FESO`, the start digit and angle, both phases' traces and the
+sampler-call counts), so `make_table.py` and `../figures/make_figures.py` read it; keep it in
+its own directory, since `make_table.py` takes one record per target.
+
+```bash
+sbatch --array=0-2 experiments/mnist/table_mlgdf/slurm_gbfeso_mnist.sh   # cluster: 3 targets x 15 seeds
+python experiments/mnist/table_mlgdf/make_table.py runs/mnist_gbfeso
+python experiments/mnist/table_mlgdf/search_gbfeso_mnist.py --target unimodal --n-cond 64 --steps 5 \
+    --n-seeds 2 --device cpu --no-classify --out outputs/gbfeso_smoke     # CPU smoke test, seconds
+```
