@@ -300,6 +300,15 @@ def _zo_grad(model_cond, loss_function, cfg, view, x, n_ref, seed, dirs=None):
     return losses[0], g.to(x.dtype).view_as(x)
 
 
+def _project(cfg, x):
+    """x projected onto cfg.x_box (in place on a detached copy); x itself when no box is set."""
+    box = getattr(cfg, "x_box", None)
+    if box is None:
+        return x
+    lo, hi = (torch.as_tensor(b, dtype=x.dtype, device=x.device) for b in box)
+    return torch.maximum(torch.minimum(x.detach(), hi), lo)
+
+
 def refine(model_uncond, model_cond, loss_function, cfg, x0):
     """Post-refinement: gradient steps (Adam or SGD) on the plug-in loss L_hat(x) (Algorithm 2
     called at the clean x with refine_n_cond samples, gradient with respect to x, no diffusion),
@@ -336,6 +345,9 @@ def refine(model_uncond, model_cond, loss_function, cfg, x0):
             break
         x.grad = grad
         opt.step()
+        if getattr(cfg, "x_box", None) is not None:
+            with torch.no_grad():
+                x.copy_(_project(cfg, x))
         trace.append({"k": k, "loss": float(loss_val.detach()), "grad_norm": float(grad.norm()),
                       "prior_score_norm": prior_norm, "elapsed_s": time.time() - t_start})
     if keep_best and cfg.refine_steps > 0:
@@ -423,12 +435,14 @@ def optimize_guided(model_uncond, model_cond, loss_function, cfg: GuidanceConfig
     refine_info = None
     if cfg.refine_steps > 0:
         loss_before = _final_loss(model_cond, loss_function, cfg, x_t) if cfg.compute_final_loss else None
+        x_t = _project(cfg, x_t)
         x_before = x_t.detach().clone()
         x_t, rtrace = refine(model_uncond, model_cond, loss_function, cfg, x_t)
         refine_info = {"trace": rtrace, "x_before": x_before,
                        "final_loss_before": None if loss_before is None else float(loss_before)}
 
     # ---- final loss, evaluated fresh at the returned x ----
+    x_t = _project(cfg, x_t)
     final_loss = _final_loss(model_cond, loss_function, cfg, x_t) if cfg.compute_final_loss else None
     if diverged and final_loss is not None:
         final_loss = torch.full_like(final_loss, float("inf"))   # never selected as the best restart

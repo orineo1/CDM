@@ -44,6 +44,9 @@ def add_search_args(parser):
     g.add_argument("--refine-grad", choices=["pathwise", "zo"], default="pathwise")
     g.add_argument("--refine-keep-best", action="store_true",
                    help="return the refinement iterate with the lowest loss estimate instead of the last one")
+    g.add_argument("--x-box", type=float, nargs=2, default=None, metavar=("LO", "HI"),
+                   help="box constraint on every coordinate of the search variable x (its own units, e.g. standardized): "
+                        "the guided output and every refinement iterate are projected onto [LO, HI] (default: none)")
     g.add_argument("--select-top", type=int, default=0,
                    help="re-score the K trajectories with the smallest final loss before choosing (0: no re-scoring)")
     g.add_argument("--select-n", type=int, default=2000, help="conditional samples per re-scoring")
@@ -59,7 +62,8 @@ def search_overrides(args):
                 zo_dirs_mode=args.zo_dirs_mode, zo_from_t=args.zo_from_t, zo_jvp_delta=args.zo_jvp_delta,
                 refine_steps=args.refine_steps, refine_lr=args.refine_lr, refine_n_cond=args.refine_n_cond,
                 refine_optim=args.refine_optim, refine_lambda=args.refine_lambda, refine_grad=args.refine_grad,
-                refine_keep_best=args.refine_keep_best)
+                refine_keep_best=args.refine_keep_best,
+                **({"x_box": tuple(args.x_box)} if getattr(args, "x_box", None) is not None else {}))
 
 
 def _to_list(v):

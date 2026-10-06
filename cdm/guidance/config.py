@@ -264,6 +264,10 @@ class GuidanceConfig:
     zo_jvp_delta: float = 1e-3           # tangent: relative step of the central differences of the Tweedie map
     guide_grad: str = "pathwise"         # inner-loss gradient in guided steps: "pathwise" (autograd through the sampler) or "zo"
     refine_keep_best: bool = False       # return the refinement iterate with the lowest loss estimate, not the last one
+    # box constraint on the design: (lo, hi), scalars or per-coordinate sequences in the units of x. When set, the
+    # guided output is projected onto the box before refinement and every refinement iterate after its step
+    # (projected Adam / SGD), as GB-FESO clamps eps to the training range. None (default): no projection.
+    x_box: Optional[Any] = None
 
     # --- bookkeeping ---
     device: str = "cuda"
