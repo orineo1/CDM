@@ -97,26 +97,29 @@ def analyze(a):
     import matplotlib.pyplot as plt
     files = sorted(glob.glob(os.path.join(a.analyze, "t*.json")))
     lines_md = [f"Landscape summary of {a.analyze} ({len(files)} targets)", "",
-                "| target | floor ED | floor TV | random: ED<2 floor | ED<5 floor | min ED | lines with a barrier | pert ED by radius |",
-                "|---|---|---|---|---|---|---|---|"]
+                "| target | floor ED (target halves) | noise ED (design at x*) | floor TV | random: ED<2 noise | ED<5 noise | min ED | lines with a barrier | pert ED by radius |",
+                "|---|---|---|---|---|---|---|---|---|"]
     fig, axes = plt.subplots(1, 2, figsize=(9, 3.2))
     for f in files:
         d = json.load(open(f))
         fl = max(d["floor"]["ed"], 1e-4)
         ed = np.array([s["ed"] for s in d["random"]["score"]])
+        # noise of one design's loss at this replica count: the designs closest to x* (smallest radius)
+        noise = max(float(np.mean([s["ed"] for s in d["pert"]["score"][0]])), fl)
         nb = 0
         for li, sc in enumerate(d["lines"]["score"]):
             e = np.array([s["ed"] for s in sc])
-            # barrier: a rise of more than 3 noise floors after an earlier minimum on the way to x*
+            e = np.array([np.median(e[max(0, i - 1):i + 2]) for i in range(len(e))])     # 3-point median
+            # barrier: a rise of more than 3 noise levels after an earlier minimum on the way to x*
             run_min = np.minimum.accumulate(e)
-            if np.any(e - run_min > 3 * fl):
+            if np.any(e - run_min > 3 * noise):
                 nb += 1
             if d["target_id"] == 0:
                 axes[0].plot(d["lines"]["lam"], e, lw=0.8)
         pe = [np.mean([s["ed"] for s in sc]) for sc in d["pert"]["score"]]
         axes[1].plot(d["pert"]["radii"], pe, marker="o", lw=0.8, label=f"t{d['target_id']}")
-        lines_md.append(f"| {d['target_id']} | {fl:.4f} | {d['floor']['tv']:.3f} | {np.mean(ed < 2 * fl):.3f} | "
-                        f"{np.mean(ed < 5 * fl):.3f} | {ed.min():.4f} | {nb}/{len(d['lines']['score'])} | "
+        lines_md.append(f"| {d['target_id']} | {fl:.4f} | {noise:.4f} | {d['floor']['tv']:.3f} | {np.mean(ed < 2 * noise):.3f} | "
+                        f"{np.mean(ed < 5 * noise):.3f} | {ed.min():.4f} | {nb}/{len(d['lines']['score'])} | "
                         + ", ".join(f"{r:g}:{v:.3f}" for r, v in zip(d["pert"]["radii"], pe)) + " |")
     axes[0].set_xlabel("position on line (0 = random start, 1 = x*)"); axes[0].set_ylabel("energy distance"); axes[0].set_title("line scans, target 0")
     axes[1].set_xlabel("perturbation radius (std of X)"); axes[1].set_ylabel("mean energy distance"); axes[1].set_title("loss around x*")
