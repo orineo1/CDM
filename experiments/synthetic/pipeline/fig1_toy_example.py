@@ -973,7 +973,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
             # (a)-(d): in the empty lower part of (d); (e): in the empty upper part of its first panel
             left = left[1:]
             ax_traj.legend(*zip(*left), loc="lower right", ncol=1, fontsize=fs_leg - 1, frameon=False,
-                           title=r"$\bf{(a)}$–$\bf{(d)}$", title_fontsize=fs_leg - 1, handlelength=1.8,
+                           handlelength=1.8,
                            labelspacing=0.25, borderaxespad=0.2)
             short = {"guided samples": "guided", "twisted-SMC corrected": "SMC-corrected",
                      r"prior $\mathcal{P}(x)$": r"prior $\mathcal{P}$"}
