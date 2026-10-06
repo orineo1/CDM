@@ -646,8 +646,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
 
     def vline(ax, m, label=None):
         st_ = STYLE[m]
-        if layout == "wide3":   # a star on the bottom edge of the panel instead of a full-height line
-            ax.plot([res[m]["x_hat"]], [0.0], ls="none", marker="*", ms=11, color=st_["color"], mec="white", mew=0.6,
+        if layout == "wide3":   # a triangle on the bottom edge of the panel instead of a full-height line
+            ax.plot([res[m]["x_hat"]], [0.0], ls="none", marker="^", ms=7, color=st_["color"], mec="white", mew=0.5,
                     transform=ax.get_xaxis_transform(), clip_on=False, zorder=8, label=label)
             return
         ax.axvline(res[m]["x_hat"], color=st_["color"], lw=st_["lw"], alpha=st_["alpha"], zorder=st_["z"], label=label)
@@ -744,14 +744,17 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
     ax.scatter(xy[:, 0], xy[:, 1], s=7, alpha=0.3, color=c_data)
     for m in methods:
         vline(ax, m, lab(m, res[m]))
-    if W3:   # x* as a black marker on the top edge, under its label
-        ax.plot([x_star], [0.93], ls="none", marker="o", ms=6, mfc="none", mec=c_true, mew=1.4,
+    if W3:   # x* as a black star on the bottom edge, with the returned x-hat (triangles) on top of it
+        ax.plot([x_star], [0.0], ls="none", marker="*", ms=12, color=c_true, mec="white", mew=0.5,
                 transform=ax.get_xaxis_transform(), clip_on=False, zorder=7)
+        ax.annotate(r"$x^*$", (x_star, 0.0), xycoords=ax.get_xaxis_transform(), xytext=(5, 4),
+                    textcoords="offset points", ha="left", va="bottom", fontsize=fs_title - 1, zorder=6)
     else:
         ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
     y0, y1 = ax.get_ylim()
-    ax.annotate(r"$x^*$", (x_star, y1), xytext=(-6 if W3 else -4, -2 if W3 else -4), textcoords="offset points",
-                ha="right", va="top", fontsize=fs_title - 1, zorder=6)
+    if not W3:
+        ax.annotate(r"$x^*$", (x_star, y1), xytext=(-4, -4), textcoords="offset points",
+                    ha="right", va="top", fontsize=fs_title - 1, zorder=6)
     ax.set_xlim(xlo, xhi); ax.set_ylabel("y")
     ax.set_title(r"joint $\mathcal{P}(X, Y)$, recovered $\hat{x}$" if (compact or W2) else
                  r"joint $\mathcal{P}(X, Y)$ and the recovered $\hat{x}$", fontsize=fs_title); ax.grid(alpha=0.2)
@@ -837,18 +840,12 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         n_c = sim["empirical_loss"]["MLGD"]["n_cond"]
         ax.plot([], [], color="0.5", lw=1.2, label=r"sample $\hat{\mathcal{L}}(x)$ (right axis)" if (compact or W2) else
                 rf"$\hat{{\mathcal{{L}}}}(x)$ (MMD, $n_{{\rm cond}}={n_c}$; right axis)")
-    if W3:   # the returned x-hat as stars on L(x), x* (where L = 0) as an open circle
-        for m in methods:
-            xm = res[m]["x_hat"]
-            ax.plot([xm], [np.interp(xm, x_grid, L) / sc], ls="none", marker="*", ms=11, color=STYLE[m]["color"],
-                    mec="white", mew=0.6, zorder=8)
-        ax.plot([x_star], [0.0], ls="none", marker="o", ms=7, mfc="none", mec=c_true, mew=1.6, clip_on=False, zorder=7)
-    else:
+    if not W3:   # in wide3 the x-hat and x* markers are drawn once, on the edge between (a) and (b)
         for m in methods:
             vline(ax, m, lab(m, res[m]))
         ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
     ax.set_xlim(xlo, xhi); ax.set_xlabel("x")
-    ax.set_ylim(-0.05 if W3 else 0, 1.08 if W3 else 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max())
+    ax.set_ylim(0, 1.08 if W3 else 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max())
     ax.set_ylabel("loss (max 1)" if W3 else r"$\mathcal{L}(x)$" if (compact or W2) else
                   r"$\mathcal{L}(x) = \mathcal{D}\left(\mathcal{P}(Y\mid X=x),\,\mathcal{G}\right)$")
     if layout == "lr":
@@ -861,6 +858,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
     if W3:
         if traj:
             draw_trajectories(ax_traj, traj, x_star, xlo, xhi, fs_leg, STYLE)
+            ax_traj.set_ylim(-5.0, xhi)        # no trajectory goes below -3
         ax_traj.text(0.012, 0.965, "(d)", transform=ax_traj.transAxes, fontsize=fs_title, fontweight="bold",
                      ha="left", va="top", zorder=10)
         ax_traj.grid(alpha=0.2)
@@ -965,22 +963,22 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                             key=lambda t: ["guided samples", "twisted-SMC corrected", r"$\mathcal{Q}_\beta(x)$",
                                            r"prior $\mathcal{P}(x)$"].index(t[1]))
             from matplotlib.lines import Line2D
-            left = [(Line2D([], [], color=STYLE[m]["color"], lw=1.4, marker="*", ms=8, mec="white", mew=0.5),
+            left = [(Line2D([], [], color=STYLE[m]["color"], lw=1.4, marker="^", ms=6, mec="white", mew=0.4),
                      rf"{m}, returned $\hat{{x}}$") for m in methods]
-            left.append((Line2D([], [], color=c_true, ls="--", lw=1.0, marker="o", ms=5, mfc="none", mew=1.2),
+            left.append((Line2D([], [], color=c_true, ls="--", lw=1.0, marker="*", ms=8, mec="white", mew=0.4),
                          r"$x^*$ and its target $\mathcal{G}$"))
             left.insert(0, (Line2D([], [], ls="none"), r"$\bf{(a)}$–$\bf{(d)}$:"))   # the legend serves all four panels
             pa, pc = ax_joint.get_position(), ax_traj.get_position()
             pe = sweep_axes[-1].get_position()
             # (a)-(d): in the empty lower part of (d); (e): in the empty upper part of its first panel
             left = left[1:]
-            ax_traj.legend(*zip(*left), loc="lower center", ncol=1, fontsize=fs_leg - 1, frameon=False,
+            ax_traj.legend(*zip(*left), loc="lower right", ncol=1, fontsize=fs_leg - 1, frameon=False,
                            title=r"$\bf{(a)}$–$\bf{(d)}$", title_fontsize=fs_leg - 1, handlelength=1.8,
                            labelspacing=0.25, borderaxespad=0.2)
             short = {"guided samples": "guided", "twisted-SMC corrected": "SMC-corrected",
                      r"prior $\mathcal{P}(x)$": r"prior $\mathcal{P}$"}
             sweep_axes[0].legend([h_ for h_, _ in right_], [short.get(l_, l_) for _, l_ in right_], loc="upper right",
-                                 ncol=2, fontsize=fs_leg - 1, frameon=True, framealpha=1.0, facecolor="white",
+                                 ncol=1, fontsize=fs_leg - 1, frameon=True, framealpha=1.0, facecolor="white",
                                  edgecolor="none", handlelength=1.3, columnspacing=0.8, labelspacing=0.25,
                                  borderaxespad=0.15, borderpad=0.2).set_zorder(20)   # opaque: x* runs underneath
         else:
