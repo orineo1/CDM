@@ -832,8 +832,9 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
             if name in sim.get("empirical_loss", {}):
                 e = sim["empirical_loss"][name]
                 mu_e = np.array(e["values"]).mean(0)
-                ax.plot(np.array(e["x"]), mu_e / mu_e.max(), color=c, lw=1.2, alpha=0.9, zorder=2,
-                        label=rf"$\hat{{\mathcal{{L}}}}(x)$, {name}")
+                ax.plot(np.array(e["x"]), mu_e / mu_e.max(), color=c, lw=1.2, alpha=0.9, zorder=2)
+        # line types only; the colors (one sample loss per method's sampler) are in the legend of (d)
+        ax.plot([], [], color="0.55", lw=1.2, label=r"$\hat{\mathcal{L}}(x)$, per sampler")
         ax.legend(fontsize=fs_leg - 1, loc="upper right", frameon=False, handlelength=1.2, borderaxespad=0.2,
                   labelspacing=0.2)
     else:
@@ -872,6 +873,14 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         if traj:
             draw_trajectories(ax_traj, traj, x_star, xlo, xhi, fs_leg, STYLE)
             ax_traj.set_ylim(-5.0, xhi)        # no trajectory goes below -3
+            # the markers of (a) at the right edge: where each returned trajectory ends, and x*
+            for name in ("MLGD-F", "MLGD"):
+                if name in traj and traj[name].get("selected") is not None:
+                    end = float(np.asarray(traj[name]["x0"])[traj[name]["selected"]][-1])
+                    ax_traj.plot([1.0], [end], ls="none", marker="^", ms=7, color=STYLE[name]["color"], mec="white",
+                                 mew=0.5, transform=ax_traj.get_yaxis_transform(), clip_on=False, zorder=9)
+            ax_traj.plot([1.0], [x_star], ls="none", marker="*", ms=11, color=c_true, mec="white", mew=0.5,
+                         transform=ax_traj.get_yaxis_transform(), clip_on=False, zorder=8)
         ax_traj.text(0.012, 0.965, "(d)", transform=ax_traj.transAxes, fontsize=fs_title, fontweight="bold",
                      ha="left", va="top", zorder=10)
         ax_traj.grid(alpha=0.2)
@@ -1004,9 +1013,9 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                                            "twisted-SMC corrected"].index(t[1]))   # prior -> tilt -> guided -> corrected
             from matplotlib.lines import Line2D
             left = [(Line2D([], [], color=STYLE[m]["color"], lw=1.4, marker="^", ms=6, mec="white", mew=0.4),
-                     rf"{m}, returned $\hat{{x}}$") for m in methods]
+                     m) for m in methods]
             left.append((Line2D([], [], color=c_true, ls="--", lw=1.0, marker="*", ms=8, mec="white", mew=0.4),
-                         r"$x^*$ and its target $\mathcal{G}$"))
+                         r"$x^*$"))
             left.insert(0, (Line2D([], [], ls="none"), r"$\bf{(a)}$–$\bf{(d)}$:"))   # the legend serves all four panels
             pa, pc = ax_joint.get_position(), ax_traj.get_position()
             pe = sweep_axes[-1].get_position()
@@ -1019,8 +1028,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                      r"prior $\mathcal{P}(x)$": r"prior $\mathcal{P}$"}
             tv_b = smc_tv.get(str(float(betas[0]))) if tv_panel else None
             if tv_b:
-                short["guided samples"] = f"guided (TV {tv_b[0]:.2f})"
-                short["twisted-SMC corrected"] = f"corrected (TV {tv_b[1]:.2f})"
+                short["guided samples"] = f"guided (TV={tv_b[0]:.2f})"
+                short["twisted-SMC corrected"] = f"corrected (TV={tv_b[1]:.2f})"
             sweep_axes[0].legend([h_ for h_, _ in right_], [short.get(l_, l_) for _, l_ in right_],
                                  loc="upper left" if tv_panel else "upper right",
                                  bbox_to_anchor=(0.0, 0.84) if tv_panel else None,   # below the panel letter
