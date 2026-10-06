@@ -5,7 +5,7 @@ import sys
 D = sys.argv[1] if len(sys.argv) > 1 else "iclr2027/Experiments/SD/LGD-CM appendix/"   # appendix image folder of the paper repo
 D = D.rstrip("/") + "/"
 H = 360                    # row height in px (one face)
-LABEL_W, GAP, SEP = 520, 18, 46
+LABEL_W, GAP, SEP = 300, 10, 30
 font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 44)
 METHODS = [("Source", "source"), ("Average\nprompt", "avg_prompt"), ("SDEdit\nBest", "sdedit_best"), ("MLGD-F", "mlgdd")]
 COND = {"source": "source", "avg_prompt": "avg_prompt", "sdedit_best": "sdebest", "mlgdd": "MLGDD"}
