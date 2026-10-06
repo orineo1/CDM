@@ -4,6 +4,10 @@
 #   2. MLGD*'s retrained conditional sampler (diffusion, 256 units, 4 blocks) -> runs/table1v2/<cell>/check_d256.json
 # The previous check.json is kept once as check_before_norm1d.json (it predates the normalised 1D error at x*).
 #   sbatch --array=0-8 --job-name=check experiments/synthetic/slurm/slurm_check_models.sh
+# SRC: repository whose runs/ hold the networks and data (default: this one). OUT: where the checks go
+# (default: next to the networks). To read someone else's runs and write in your own directory:
+#   SRC=/sci/labs/orzuk/orzuk/github/CDM OUT=$PWD/runs/checks sbatch --array=0-8 --job-name=check --export=ALL \
+#     experiments/synthetic/slurm/slurm_check_models.sh
 # then rebuild the tables (the _models.tex file gets the two d256 columns):
 #   python experiments/synthetic/pipeline/make_table1.py --collect --runs-dir runs/table1v2 --tag _main --out <out>
 #SBATCH --partition=salmon
@@ -18,16 +22,18 @@ cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 CELLS=(x1_y1 x1_y5 x1_y10 x5_y1 x5_y5 x5_y10 x10_y1 x10_y5 x10_y10)
 CELL=${CELL:-${CELLS[${SLURM_ARRAY_TASK_ID:-0}]}}
-RUNS=${RUNS:-runs/table1v2}
-D=$RUNS/$CELL
-if [ "$CELL" = x10_y1 ]; then D256=runs/night/x10_y1/models/d256; else D256=runs/night/grid/$CELL/d256; fi
-echo "check $CELL ($(hostname) $(date))"
+SRC=${SRC:-.}
+D=$SRC/runs/table1v2/$CELL
+if [ "$CELL" = x10_y1 ]; then D256=$SRC/runs/night/x10_y1/models/d256; else D256=$SRC/runs/night/grid/$CELL/d256; fi
+O=${OUT:+$OUT/$CELL}; O=${O:-$D}
+mkdir -p "$O"
+echo "check $CELL: networks from $D, d256 from $D256, output to $O ($(hostname) $(date))"
 
-[ -f "$D/check.json" ] && [ ! -f "$D/check_before_norm1d.json" ] && cp "$D/check.json" "$D/check_before_norm1d.json"
+if [ -f "$O/check.json" ] && [ ! -f "$O/check_before_norm1d.json" ]; then cp "$O/check.json" "$O/check_before_norm1d.json"; fi
 python experiments/synthetic/pipeline/check_models.py --prior $D/models/uncond/model_unconditional.pt \
   --sampler $D/models/diffusion/model_conditional.pt $D/models/cm/model_conditional.pt \
-  --data $D/data.pt --out $D/check --device cuda
+  --data $D/data.pt --out $O/check --device cuda
 
 python experiments/synthetic/pipeline/check_models.py --sampler $D256/model_conditional.pt \
-  --data $D/data.pt --out $D/check_d256 --device cuda
+  --data $D/data.pt --out $O/check_d256 --device cuda
 echo "done $(date)"
