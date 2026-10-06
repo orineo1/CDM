@@ -44,7 +44,7 @@ def same(paper, mean, std, nd):
 
 
 refine, plain, oracle = load("_adam_refine"), load("_adam"), load("_adam_oracle")
-bad = 0
+bad = n_checked = 0
 print(f"{'cell':9s} {'method':7s} {'column':12s} {'paper':>16s} {'run files':>18s}")
 for c in CELLS:
     for m in ("MLGD", "MLGD-F"):
@@ -65,6 +65,7 @@ for c in CELLS:
         for name, pv, mean, std, nd in checks:
             ok = same(pv, mean, std, nd)
             bad += not ok
+            n_checked += 1
             print(f"{str(c):9s} {m:7s} {name:12s} {pv[0]:>7.{nd}f} ± {pv[1]:.{nd}f} {mean:>9.{nd}f} ± {std:.{nd}f}  "
                   f"{'ok' if ok else '<-- DIFFERENT'}")
 print("\ntimes per run (caption says 496-526 s diffusion = MLGD, 46-55 s consistency = MLGD-F):")
@@ -72,4 +73,10 @@ for m in ("MLGD", "MLGD-F"):
     ts = [refine[(*c, m)]["time_mean"] for c in CELLS if (*c, m) in refine]
     if ts:
         print(f"  {m:7s} {min(ts):.0f}-{max(ts):.0f} s")
-print(f"\n{bad} value(s) differ from the run files" if bad else "\nall values match the run files")
+if n_checked == 0:
+    print("\nNOTHING CHECKED: no run values were loaded (see the missing files above)")
+    sys.exit(1)
+print(f"\n{bad} of {n_checked} value(s) differ from the run files" if bad else f"\nall {n_checked} values match the run files")
+expected = 9 * 2 * 4 + 9   # per cell and method: dist, L2, Table 1 TV, plain TV; plus 9 oracle values
+if n_checked < expected:
+    print(f"warning: only {n_checked} of {expected} values could be checked (some runs are missing)")
