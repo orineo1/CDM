@@ -897,7 +897,11 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                         ha="left" if (compact or W2) else "right", va="top", fontsize=fs_leg - (1 if W2 else 0))
         ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"$\mathcal{Q}_\beta(x)$", zorder=3)
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
-        ax.axvline(x_star, color=c_true, ls="--", lw=1.8, zorder=4)
+        if W3:   # x* as the black star on the x-axis, as in (a)
+            ax.plot([x_star], [0.0], ls="none", marker="*", ms=10, color=c_true, mec="white", mew=0.5,
+                    transform=ax.get_xaxis_transform(), clip_on=False, zorder=9)
+        else:
+            ax.axvline(x_star, color=c_true, ls="--", lw=1.8, zorder=4)
         if i == 0 and not W2:
             ax.annotate(r"$x^*$", (x_star, ymax), xytext=(-4, -4), textcoords="offset points", ha="right", va="top",
                         fontsize=fs_title - 1)
