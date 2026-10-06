@@ -196,6 +196,9 @@ def collect(settings, args):
         cp = os.path.join(d, "check.json")
         if os.path.exists(cp):
             entry["check"] = json.load(open(cp))
+        cp = os.path.join(d, "check_d256.json")    # MLGD*'s retrained sampler (slurm/slurm_check_models.sh)
+        if os.path.exists(cp):
+            entry["check_d256"] = json.load(open(cp))
         for m in args.methods:
             fp = os.path.join(d, f"{m}{args.tag}.json")
             if not os.path.exists(fp):
@@ -350,15 +353,17 @@ def write_tables(rows, everything, args):
         c = e["check"]
         worst = max((o["rel_fisher"] for o in c.get("score", []) if o["t"] > 1), default=float("nan"))
         pr = c.get("prior", {}).get("swd_norm", float("nan"))
-        def at(k, key):
+        def at(k, key, c=c):
             r = c.get(k)
             if not r:
                 return "--"
             v = r["points"].get("x*", {}).get("mean") if key == "xstar" else r["swd_norm_random_x_mean"]
             return "--" if v is None else f"{v:.3f}"
         label = f"$\\dim X={st.get('dim_x')}$, $\\dim Y={st.get('dim_y')}$" if "dim_x" in st else st["name"]
+        c256 = e.get("check_d256", {})
         mrows.append(f"{label} & {worst:.3f} & {pr:.3f} & {at('cond_diffusion', 'xstar')} & {at('cond_diffusion', 'rand')} "
-                     f"& {at('cond_cm', 'xstar')} & {at('cond_cm', 'rand')} \\\\")
+                     f"& {at('cond_cm', 'xstar')} & {at('cond_cm', 'rand')} "
+                     f"& {at('cond_diffusion', 'xstar', c256)} & {at('cond_diffusion', 'rand', c256)} \\\\")
     open(args.out + "_models.tex", "w").write("\n".join(mrows) + "\n")
     # appendix: model checks, hits, resamplings
     ap = ["# Table 1 appendix: networks and search diagnostics", ""]
@@ -375,6 +380,10 @@ def write_tables(rows, everything, args):
                     pts = c[k]["points"]
                     at = pts.get("x*", {}).get("mean", float("nan"))
                     ap.append(f"- {k}: {c[k]['metric_at_points']} at x* {at:.3f}; SWD over random x {c[k]['swd_norm_random_x_mean']:.3f}")
+        if "cond_diffusion" in e.get("check_d256", {}):
+            r = e["check_d256"]["cond_diffusion"]
+            at = r["points"].get("x*", {}).get("mean", float("nan"))
+            ap.append(f"- cond_diffusion d256 (MLGD*): {r['metric_at_points']} at x* {at:.3f}; SWD over random x {r['swd_norm_random_x_mean']:.3f}")
         for m in args.methods:
             if m in e:
                 ap.append(f"- {m}: {e[m]['n_attempts']} attempts x budget {e[m]['budget']}; trajectories with TV<0.5: {e[m].get('success_tv')}; in x* basin {e[m]['hits']}; "

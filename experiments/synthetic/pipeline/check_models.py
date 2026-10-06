@@ -14,8 +14,9 @@ Three measurements, each answering one question:
   3. sampler   Does the conditional sampler reproduce P(Y | X = x)? Sliced Wasserstein averaged
                over random x ~ P(X) (utils.evaluation.evaluate_conditional_model), and the same
                comparison at chosen points: x*, the other cluster centres, random draws, and,
-               when dim(X) = 1, a grid over x. dim(Y) = 1 in every synthetic setting, so the
-               per-point error is the exact 1D Wasserstein-1 between sorted samples.
+               when dim(X) = 1, a grid over x. The per-point error is the normalised SWD, as over
+               random x; when dim(Y) = 1 it is computed exactly (the 1D Wasserstein-1 between sorted
+               samples) and divided by the same sqrt(tr Cov / d) of the exact conditional.
 
 Inputs, either the pipeline checkpoints
     python experiments/synthetic/pipeline/check_models.py --prior runs/mog4d/models/model_unconditional.pt \
@@ -40,7 +41,7 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # sibling pipeline modules
 
 from cdm.utils.dist import (generate_mog_samples_not_differentiable, compute_conditionals, compute_alpha,   # noqa: E402
-                        filter_and_normalize)
+                        filter_and_normalize, mog_covariance)
 from cdm.utils.evaluation import evaluate_unconditional_model, evaluate_conditional_model                 # noqa: E402
 from cdm.losses.functions import sliced_wasserstein_distance                                             # noqa: E402
 
@@ -203,14 +204,15 @@ def w1_1d(a, b):
 
 @torch.no_grad()
 def cond_error_at(model, kind, mix, x, args):
-    """Sampler against the exact conditional at one x: W1 (dim(Y) = 1) or normalised SWD, over seeds."""
+    """Sampler against the exact conditional at one x: normalised SWD over seeds (dim(Y) = 1: the exact
+    W1 divided by the standard deviation of the exact conditional, which is the normalised SWD in 1D)."""
     vals = []
     for s in range(args.n_seeds):
         torch.manual_seed(1000 * args.seed + s)
         y = draw_cond(model, kind, x, args.n_samples, args.device)
         y_true, (m, S, w) = exact_cond(mix, x, args.n_samples)
         if y.shape[1] == 1:
-            vals.append(w1_1d(y, y_true))
+            vals.append(w1_1d(y, y_true) / float(torch.sqrt(torch.trace(mog_covariance(m, S, w)))))
         else:
             vals.append(sliced_wasserstein_distance(y, y_true, num_projections=args.n_projections, p=2,
                                                     mu_list_sliced=m, Sigma_list_sliced=S, alpha=w)[1])
@@ -225,7 +227,7 @@ def check_sampler(model, kind, mix, args):
         num_evaluations=args.n_random_x, nsamples=args.n_samples, num_projections=args.n_projections,
         extract_generated_only=(kind == "diffusion"), model_type=kind)
     out = {"swd_norm_random_x_mean": float(avg), "swd_norm_random_x_std": float(std), "n_random_x": args.n_random_x,
-           "metric_at_points": "W1" if mix["mu_list"][0].numel() - c == 1 else "SWD_norm", "points": {}}
+           "metric_at_points": "SWD_norm", "points": {}}
     pts = {}
     if mix["x_star"] is not None:
         pts["x*"] = mix["x_star"].view(-1).float()
