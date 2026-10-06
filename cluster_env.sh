@@ -22,3 +22,14 @@ if [ -f "$VENV/bin/activate" ]; then
 else
   echo "cluster_env.sh: no virtual environment at $VENV (CDM_ENV=$CDM_ENV)" >&2
 fi
+
+# GPU driver libraries. Since the Debian 13 upgrade (2026-10-06) the NVIDIA user-space driver is not installed
+# system-wide but in /usr/local/nvidia/<version> (the `nvidia` modules point there); use the version that
+# matches the node's kernel module.
+if [ -r /proc/driver/nvidia/version ] && ! ldconfig -p 2>/dev/null | grep -q "libcuda.so"; then
+  _nv=$(sed -n 's/.*Kernel Module[^0-9]*\([0-9][0-9.]*\).*/\1/p' /proc/driver/nvidia/version | head -1)
+  [ -d "/usr/local/nvidia/$_nv/lib" ] || _nv=$(ls /usr/local/nvidia 2>/dev/null | grep -E '^[0-9]' | sort -V | tail -1)
+  if [ -n "$_nv" ] && [ -d "/usr/local/nvidia/$_nv/lib" ]; then
+    export LD_LIBRARY_PATH="/usr/local/nvidia/$_nv/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" PATH="/usr/local/nvidia/$_nv/bin:$PATH"
+  fi
+fi
