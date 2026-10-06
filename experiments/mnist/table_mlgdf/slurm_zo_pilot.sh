@@ -4,8 +4,9 @@
 #   tasks 0-4    base           the Table 2 run (backpropagation through the sampler)
 #   tasks 5-9    tangent30      --guide-grad zo --zo-dirs-mode tangent --zo-dirs 30, every step
 #   tasks 10-14  tangent30_late the same, only at reverse steps t <= 500 (backpropagation before)
-#   task 15      diag           diag_tweedie_spectrum.py: how many directions span the Tweedie Jacobian
-#   sbatch --array=0-15 experiments/mnist/table_mlgdf/slurm_zo_pilot.sh      (from the repository root)
+#   tasks 15-19  orth30         --guide-grad zo --zo-dirs-mode orth --zo-dirs 30 (random orthonormal directions)
+#   task 20      diag           diag_tweedie_spectrum.py: how many directions span the Tweedie Jacobian
+#   sbatch --array=0-20 experiments/mnist/table_mlgdf/slurm_zo_pilot.sh      (from the repository root)
 # Outputs runs/mnist_zo/<arm>/s<seed>/*.pkl (search_mnist.py) and runs/mnist_zo/spectrum.json;
 # python experiments/mnist/table_mlgdf/make_table.py runs/mnist_zo/<arm>/s<seed> prints a run's numbers.
 #SBATCH --job-name=mnist-zo
@@ -22,18 +23,19 @@ export PYTHONUNBUFFERED=1 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 M=experiments/mnist
 OUT=${OUT:-runs/mnist_zo}; mkdir -p "$OUT"
 k=${SLURM_ARRAY_TASK_ID:-0}
-if [ "$k" = 15 ]; then
+if [ "$k" = 20 ]; then
   python $M/table_mlgdf/diag_tweedie_spectrum.py --steps 125 --at 0.9 0.6 0.3 0.1 0.03 --m 100 --n-traj 3 \
     --ckpt-dir $M/checkpoints --out "$OUT/spectrum.json"
   exit 0
 fi
-ARMS=(base tangent30 tangent30_late)
+ARMS=(base tangent30 tangent30_late orth30)
 ARM=${ARMS[$((k / 5))]}
 S=$((k % 5))
 case $ARM in
   base)           ZO="" ;;
   tangent30)      ZO="--guide-grad zo --zo-dirs-mode tangent --zo-dirs 30" ;;
   tangent30_late) ZO="--guide-grad zo --zo-dirs-mode tangent --zo-dirs 30 --zo-from-t 500" ;;
+  orth30)         ZO="--guide-grad zo --zo-dirs-mode orth --zo-dirs 30" ;;
 esac
 echo "mnist-zo $ARM seed $S: $ZO ($(hostname) $(date))"
 python $M/table_mlgdf/search_mnist.py --target bimodal --steps 125 --n-cond 1500 --n-mc 3 \
