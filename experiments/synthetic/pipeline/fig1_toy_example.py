@@ -657,6 +657,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
     # layout "lr": left column = joint / loss landscape (same x-axis) / conditionals on y;
     #              right column = the four beta panels stacked, sharing the x-axis so basins line up
     # layout "tb": top row = joint / loss / conditionals, bottom row = 1x4 beta sweep
+    tv_panel, ax_tv = False, None
     if layout == "lr":
         fig = plt.figure(figsize=figsize or ((14, 12) if show_cond else (14, 8)))
         outer = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1], wspace=0.55 if compact else 0.33)
@@ -688,9 +689,11 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         ax_cond = fig.add_subplot(mid_col[0])
         ax_traj = fig.add_subplot(mid_col[1])
         top_axes = [ax_joint, ax_loss, ax_cond]
-        right = outer[:, 2].subgridspec(len(betas), 1, hspace=0.12)
-        sweep_axes = []
-        for i in range(len(betas)):
+        tv_panel = len(betas) == 1            # (e) the densities at one beta, (f) TV to Q_beta against beta
+        right = outer[:, 2].subgridspec(len(betas), 1, hspace=0.12) if not tv_panel else None
+        sweep_axes = [fig.add_subplot(outer[0, 2])] if tv_panel else []
+        ax_tv = fig.add_subplot(outer[1, 2]) if tv_panel else None
+        for i in range(0 if tv_panel else len(betas)):
             sweep_axes.append(fig.add_subplot(right[i], sharex=sweep_axes[0] if sweep_axes else None,
                                               sharey=sweep_axes[0] if sweep_axes else None))
         sweep_ylabel = lambda i: i == len(betas) // 2
@@ -874,16 +877,18 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
 
     # ---- right: the CDMS beta-sweep, 2 x 2 -------------------------------------
     ymax = 1.1 * max(max(Q[b].max(), px.max()) for b in betas)
+    if tv_panel and smc:   # one beta: the sample curves may peak above Q_beta
+        ymax = max(ymax, 1.08 * max(_kde(smc[k][betas[0]], x_grid, bw=0.12).max() for k in ("plain", "corr")))
     smc_tv = (smc or {}).get("tv", {})
     for i, beta in enumerate(betas):
         ax = sweep_axes[i]
         plain = smc["plain"][beta] if smc else sweep[beta]
         if W3:    # both sample sets as smoothed empirical densities, drawn alike
             dg = _kde(plain, x_grid, bw=0.12)      # fixed small bandwidth: the default oversmooths the separate modes
-            ax.plot(x_grid, dg, color=c_data, lw=2.0, label="guided samples", zorder=2)
+            ax.plot(x_grid, dg, color=c_data, lw=2.0, ls="--" if tv_panel else "-", label="guided samples", zorder=6)
             if smc:
-                ax.plot(x_grid, _kde(smc["corr"][beta], x_grid, bw=0.12), color="black", lw=1.6,
-                        label="twisted-SMC corrected", zorder=4)
+                ax.plot(x_grid, _kde(smc["corr"][beta], x_grid, bw=0.12), color="black", lw=1.8,
+                        ls="--" if tv_panel else "-", label="twisted-SMC corrected", zorder=7)
         else:
             ax.hist(plain, bins=80, range=(xlo, xhi), density=True, color=c_data, alpha=0.5,
                     edgecolor="white", linewidth=0.3, label="guided samples")
@@ -892,9 +897,10 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                     color="black", linewidth=1.3, label="twisted-SMC corrected", zorder=4)
         if smc and str(float(beta)) in smc_tv:
                 tp, tc = smc_tv[str(float(beta))]
-                ax.text(0.03 if (compact or W2) else 0.98, (0.74 if W2 else 0.62) if (compact or W2) else 0.9,
+                ax.text(0.97 if tv_panel else 0.03 if (compact or W2) else 0.98,
+                        0.62 if tv_panel else (0.74 if W2 else 0.62) if (compact or W2) else 0.9,
                         rf"TV {tp:.2f}$\to${tc:.2f}", transform=ax.transAxes,
-                        ha="left" if (compact or W2) else "right", va="top", fontsize=fs_leg - (1 if W2 else 0))
+                        ha="right" if tv_panel else "left" if (compact or W2) else "right", va="top", fontsize=fs_leg - (1 if W2 else 0))
         ax.plot(x_grid, Q[beta], color=c_q, lw=2.0, label=r"$\mathcal{Q}_\beta(x)$", zorder=3)
         ax.fill_between(x_grid, Q[beta], color=c_q, alpha=0.12, zorder=2)
         if W3:   # x* as the black star on the x-axis, as in (a)
@@ -905,14 +911,17 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         if i == 0 and not W2:
             ax.annotate(r"$x^*$", (x_star, ymax), xytext=(-4, -4), textcoords="offset points", ha="right", va="top",
                         fontsize=fs_title - 1)
-        ax.plot(x_grid, px, color=c_prior, ls="-.", lw=2.2, label=r"prior $\mathcal{P}(x)$", zorder=5)   # drawn last
+        ax.plot(x_grid, px, color=c_prior, ls="-" if tv_panel else "-.", lw=1.8 if tv_panel else 2.2,
+                label=r"prior $\mathcal{P}(x)$", zorder=3 if tv_panel else 5)   # dashed sample curves on top
         ax.set_xlim(xlo, xhi); ax.set_ylim(0, ymax); ax.grid(alpha=0.15)
         if W2:
-            ax.text(0.03, 0.93, rf"$\beta = {beta:g}$", transform=ax.transAxes, fontsize=fs_leg + 1, va="top")
+            if not tv_panel:
+                ax.text(0.03, 0.93, rf"$\beta = {beta:g}$", transform=ax.transAxes, fontsize=fs_leg + 1, va="top")
             if W3:
                 ax.set_xticks([-5, 0, 5])
             if i == 0:
-                ax.set_title(r"$\bf{" + sweep_letter + r"}$ CDMS samples", fontsize=fs_title, loc="left")
+                ax.set_title(r"$\bf{" + sweep_letter + r"}$ CDMS samples" + (rf", $\beta = {beta:g}$" if tv_panel else ""),
+                             fontsize=fs_title, loc="left")
             if not sweep_xlabel(i):
                 ax.tick_params(labelbottom=False)
             if not sweep_ylabel(i) and not W3:
@@ -947,6 +956,20 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                           loc="upper right" if not smc else "upper left",
                           bbox_to_anchor=None if not smc else (0.0, 0.78), frameon=False)
 
+    if tv_panel and smc_tv:   # (f): TV to Q_beta of the guided and the corrected samples, for every beta of the run
+        bs = sorted(float(k) for k in smc_tv)
+        pos = np.arange(len(bs))                        # betas 0, 1, 2, 4, 8, 16 at equal spacing
+        ax_tv.plot(pos, [smc_tv[str(b)][0] for b in bs], color=c_data, ls="--", lw=2.0, marker="o", ms=4,
+                   label="guided samples")
+        ax_tv.plot(pos, [smc_tv[str(b)][1] for b in bs], color="black", ls="--", lw=1.8, marker="o", ms=4,
+                   label="twisted-SMC corrected")
+        ax_tv.set_xticks(pos); ax_tv.set_xticklabels([f"{b:g}" for b in bs])
+        ax_tv.set_xlabel(r"$\beta$", labelpad=0); ax_tv.set_ylabel(r"TV to $\mathcal{Q}_\beta$")
+        ax_tv.set_ylim(0, 1.12 * max(v[0] for v in smc_tv.values())); ax_tv.grid(alpha=0.2)
+        ax_tv.text(0.012, 0.965, "(f)", transform=ax_tv.transAxes, fontsize=fs_title, fontweight="bold",
+                   ha="left", va="top", zorder=10)
+        ax_tv.text(0.45, 0.5, "guided", transform=ax_tv.transAxes, color=c_data, ha="center", fontsize=fs_leg)
+        ax_tv.text(0.45, 0.1, "corrected", transform=ax_tv.transAxes, color="black", ha="center", fontsize=fs_leg)
     if W2:   # thinner lines and smaller dots for the print size, then one legend for all panels
         for a_ in fig.axes:
             for ln in a_.lines:
@@ -990,7 +1013,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                            labelspacing=0.25, borderaxespad=0.2)
             short = {"guided samples": "guided", "twisted-SMC corrected": "SMC-corrected",
                      r"prior $\mathcal{P}(x)$": r"prior $\mathcal{P}$"}
-            sweep_axes[0].legend([h_ for h_, _ in right_], [short.get(l_, l_) for _, l_ in right_], loc="upper right",
+            sweep_axes[0].legend([h_ for h_, _ in right_], [short.get(l_, l_) for _, l_ in right_],
+                                 loc="upper left" if tv_panel else "upper right",
                                  ncol=1, fontsize=fs_leg - 1, frameon=True, framealpha=1.0, facecolor="white",
                                  edgecolor="none", handlelength=1.3, columnspacing=0.8, labelspacing=0.25,
                                  borderaxespad=0.15, borderpad=0.2).set_zorder(20)   # opaque: x* runs underneath
