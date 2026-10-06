@@ -27,13 +27,16 @@ D=$SRC/runs/table1v2/$CELL
 if [ "$CELL" = x10_y1 ]; then D256=$SRC/runs/night/x10_y1/models/d256; else D256=$SRC/runs/night/grid/$CELL/d256; fi
 O=${OUT:+$OUT/$CELL}; O=${O:-$D}
 mkdir -p "$O"
-echo "check $CELL: networks from $D, d256 from $D256, output to $O ($(hostname) $(date))"
+# cuda when the job really sees a GPU, else cpu (the checkpoints were saved on cuda; load_model maps them to DEV)
+DEV=${DEV:-$(python -c "import torch; print('cuda' if torch.cuda.is_available() else 'cpu')")}
+echo "check $CELL: networks from $D, d256 from $D256, output to $O, device $DEV ($(hostname) $(date))"
+echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"; nvidia-smi -L 2>&1 | head -2 || true
 
 if [ -f "$O/check.json" ] && [ ! -f "$O/check_before_norm1d.json" ]; then cp "$O/check.json" "$O/check_before_norm1d.json"; fi
 python experiments/synthetic/pipeline/check_models.py --prior $D/models/uncond/model_unconditional.pt \
   --sampler $D/models/diffusion/model_conditional.pt $D/models/cm/model_conditional.pt \
-  --data $D/data.pt --out $O/check --device cuda
+  --data $D/data.pt --out $O/check --device $DEV
 
 python experiments/synthetic/pipeline/check_models.py --sampler $D256/model_conditional.pt \
-  --data $D/data.pt --out $O/check_d256 --device cuda
+  --data $D/data.pt --out $O/check_d256 --device $DEV
 echo "done $(date)"
