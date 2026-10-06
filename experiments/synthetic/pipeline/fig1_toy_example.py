@@ -920,9 +920,12 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                 ax.text(0.03, 0.93, rf"$\beta = {beta:g}$", transform=ax.transAxes, fontsize=fs_leg + 1, va="top")
             if W3:
                 ax.set_xticks([-5, 0, 5])
-            if i == 0:
-                ax.set_title(r"$\bf{" + sweep_letter + r"}$ CDMS samples" + (rf", $\beta = {beta:g}$" if tv_panel else ""),
-                             fontsize=fs_title, loc="left")
+            if i == 0 and tv_panel:   # letter inside the panel, as in (a)-(d)
+                ax.set_title(rf"CDMS samples, $\beta = {beta:g}$", fontsize=fs_title)
+                ax.text(0.012, 0.965, sweep_letter, transform=ax.transAxes, fontsize=fs_title, fontweight="bold",
+                        ha="left", va="top", zorder=21)
+            elif i == 0:
+                ax.set_title(r"$\bf{" + sweep_letter + r"}$ CDMS samples", fontsize=fs_title, loc="left")
             if not sweep_xlabel(i):
                 ax.tick_params(labelbottom=False)
             if not sweep_ylabel(i) and not W3:
@@ -1020,6 +1023,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                 short["twisted-SMC corrected"] = f"corrected (TV {tv_b[1]:.2f})"
             sweep_axes[0].legend([h_ for h_, _ in right_], [short.get(l_, l_) for _, l_ in right_],
                                  loc="upper left" if tv_panel else "upper right",
+                                 bbox_to_anchor=(0.0, 0.84) if tv_panel else None,   # below the panel letter
                                  ncol=1, fontsize=fs_leg - 1, frameon=True, framealpha=1.0, facecolor="white",
                                  edgecolor="none", handlelength=1.3, columnspacing=0.8, labelspacing=0.25,
                                  borderaxespad=0.15, borderpad=0.2).set_zorder(20)   # opaque: x* runs underneath
