@@ -997,8 +997,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
             left = [(h_, l_) for h_, l_ in zip(hs, ls_) if l_ not in sweep_keys and not l_.startswith(r"$\hat")
                     and l_ != r"$\mathcal{L}(x)$"]
             right_ = sorted([(h_, l_) for h_, l_ in zip(hs, ls_) if l_ in sweep_keys],
-                            key=lambda t: ["guided samples", "twisted-SMC corrected", r"$\mathcal{Q}_\beta(x)$",
-                                           r"prior $\mathcal{P}(x)$"].index(t[1]))
+                            key=lambda t: [r"prior $\mathcal{P}(x)$", r"$\mathcal{Q}_\beta(x)$", "guided samples",
+                                           "twisted-SMC corrected"].index(t[1]))   # prior -> tilt -> guided -> corrected
             from matplotlib.lines import Line2D
             left = [(Line2D([], [], color=STYLE[m]["color"], lw=1.4, marker="^", ms=6, mec="white", mew=0.4),
                      rf"{m}, returned $\hat{{x}}$") for m in methods]
