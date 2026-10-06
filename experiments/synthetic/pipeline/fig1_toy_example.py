@@ -684,8 +684,9 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         left_col = outer[:, 0].subgridspec(2, 1, hspace=0.06)    # (a) and (b) share x and touch
         ax_joint = fig.add_subplot(left_col[0])
         ax_loss = fig.add_subplot(left_col[1], sharex=ax_joint)
-        ax_cond = fig.add_subplot(outer[0, 1])
-        ax_traj = fig.add_subplot(outer[1, 1])
+        mid_col = outer[:, 1].subgridspec(2, 1, hspace=0.3)      # (c), (d): only (c)'s x-axis between them
+        ax_cond = fig.add_subplot(mid_col[0])
+        ax_traj = fig.add_subplot(mid_col[1])
         top_axes = [ax_joint, ax_loss, ax_cond]
         right = outer[:, 2].subgridspec(len(betas), 1, hspace=0.12)
         sweep_axes = []
@@ -787,7 +788,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
     ax.plot([], [], color=c_true, ls="--", lw=2, label=r"target $\mathcal{G}(Y)$")   # legend slot before the methods
     # the recovered conditionals often coincide (every method that found x* draws the same curve), so
     # they are drawn as nested outlines: decreasing width in a fixed order, each on top of the previous
-    widths = {"MLGD": 6.0, "PMLGD": 4.2, "PMLGD-F": 2.6, "MLGD-F": 1.4}
+    widths = {"MLGD": 3.4 if layout == "wide3" else 6.0, "PMLGD": 4.2, "PMLGD-F": 2.6, "MLGD-F": 1.4}
     for z, name in enumerate([m for m in ("MLGD", "PMLGD", "PMLGD-F", "MLGD-F") if m in methods]):
         r, st_ = res[name], STYLE[name]
         p = cond_params(st, torch.tensor(r["x_hat"]))
@@ -795,7 +796,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                 label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={max(r['l2_gmm'], 0.0):.4f}$")
     # the target is drawn last (dashed, like x*) so it stays visible where a recovered x-hat matches it exactly
     ax.plot(y, gy, color=c_true, ls="--", lw=2, zorder=5)
-    ax.set_xlim(ylo, yhi); ax.set_ylim(0, min(0.61, 1.1 * ax.get_ylim()[1] / 1.05)); ax.set_xlabel("y"); ax.set_ylabel("density")
+    ax.set_xlim(ylo, yhi); ax.set_ylim(0, min(0.61, 1.1 * ax.get_ylim()[1] / 1.05)); ax.set_ylabel("density")
+    ax.set_xlabel("y", labelpad=0 if layout == "wide3" else None)
     ax.set_title(r"$\mathcal{P}(Y\mid X=\hat{x})$ vs. the target $\mathcal{G}$" if W2 else
                  r"induced conditional $\mathcal{P}(Y\mid X=x)$ vs. the target, on $y$", fontsize=fs_title)
     if not W2:
@@ -969,6 +971,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                      rf"{m}, returned $\hat{{x}}$") for m in methods]
             left.append((Line2D([], [], color=c_true, ls="--", lw=1.0, marker="o", ms=5, mfc="none", mew=1.2),
                          r"$x^*$ and its target $\mathcal{G}$"))
+            left.insert(0, (Line2D([], [], ls="none"), r"$\bf{(a)}$–$\bf{(d)}$:"))   # the legend serves all four panels
             pa, pc = ax_joint.get_position(), ax_traj.get_position()
             pe = sweep_axes[-1].get_position()
             fig.legend(*zip(*left), loc="lower center", ncol=len(left), fontsize=fs_leg, frameon=False,
