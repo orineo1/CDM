@@ -646,6 +646,10 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
 
     def vline(ax, m, label=None):
         st_ = STYLE[m]
+        if layout == "wide3":   # a star on the bottom edge of the panel instead of a full-height line
+            ax.plot([res[m]["x_hat"]], [0.0], ls="none", marker="*", ms=11, color=st_["color"], mec="white", mew=0.6,
+                    transform=ax.get_xaxis_transform(), clip_on=False, zorder=8, label=label)
+            return
         ax.axvline(res[m]["x_hat"], color=st_["color"], lw=st_["lw"], alpha=st_["alpha"], zorder=st_["z"], label=label)
     fs_title, fs_leg = 13 * font_scale, 9 * font_scale
     x_star = float(st.x_star[0])
@@ -672,18 +676,18 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         sweep_ylabel = lambda i: True
         sweep_xlabel = lambda i: i == len(betas) - 1
     elif layout == "wide3":
-        # full width: joint over loss (same x) | conditionals over trajectories | the betas stacked
-        fig = plt.figure(figsize=figsize or (6.75, 3.3))
-        outer = gridspec.GridSpec(1, 3, figure=fig, width_ratios=[1.12, 1.0, 1.0], wspace=0.5,
-                                  left=0.065, right=0.995, top=0.94, bottom=0.21)
-        left_top = outer[0].subgridspec(2, 1, height_ratios=[1.15, 1], hspace=0.08)
-        ax_joint = fig.add_subplot(left_top[0])
-        ax_loss = fig.add_subplot(left_top[1], sharex=ax_joint)
-        mid = outer[1].subgridspec(2, 1, height_ratios=[1, 1], hspace=0.62)
-        ax_cond = fig.add_subplot(mid[0])
-        ax_traj = fig.add_subplot(mid[1])
+        # full width, one 2 x 3 grid so that (a)-(d) have the same size: joint over loss (same x) |
+        # conditionals over trajectories | the betas stacked over both rows; one legend under (a)-(d), one under (e)
+        fig = plt.figure(figsize=figsize or (6.75, 3.5))
+        outer = gridspec.GridSpec(2, 3, figure=fig, width_ratios=[1.0, 1.0, 1.0], height_ratios=[1, 1],
+                                  wspace=0.42, hspace=0.42, left=0.07, right=0.99, top=0.94, bottom=0.2)
+        left_col = outer[:, 0].subgridspec(2, 1, hspace=0.06)    # (a) and (b) share x and touch
+        ax_joint = fig.add_subplot(left_col[0])
+        ax_loss = fig.add_subplot(left_col[1], sharex=ax_joint)
+        ax_cond = fig.add_subplot(outer[0, 1])
+        ax_traj = fig.add_subplot(outer[1, 1])
         top_axes = [ax_joint, ax_loss, ax_cond]
-        right = outer[2].subgridspec(len(betas), 1, hspace=0.12)
+        right = outer[:, 2].subgridspec(len(betas), 1, hspace=0.12)
         sweep_axes = []
         for i in range(len(betas)):
             sweep_axes.append(fig.add_subplot(right[i], sharex=sweep_axes[0] if sweep_axes else None,
@@ -722,7 +726,7 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
     for letter, ax_ in zip("abc", shown):   # inside the top-left corner (empty in every panel)
         ax_.text(0.012, 0.965, f"({letter})", transform=ax_.transAxes, fontsize=fs_title, fontweight="bold",
                  ha="left", va="top", zorder=10)
-    sweep_letter = f"({'abcd'[len(shown)]})"
+    sweep_letter = "(e)" if layout == "wide3" else f"({'abcd'[len(shown)]})"
     W2 = layout in ("wide2", "wide3")
     W3 = layout == "wide3"
     if not compact and not W2:
@@ -739,10 +743,14 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
     ax.scatter(xy[:, 0], xy[:, 1], s=7, alpha=0.3, color=c_data)
     for m in methods:
         vline(ax, m, lab(m, res[m]))
-    ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
+    if W3:   # x* as a black marker on the top edge, under its label
+        ax.plot([x_star], [0.93], ls="none", marker="o", ms=6, mfc="none", mec=c_true, mew=1.4,
+                transform=ax.get_xaxis_transform(), clip_on=False, zorder=7)
+    else:
+        ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
     y0, y1 = ax.get_ylim()
-    ax.annotate(r"$x^*$", (x_star, y1), xytext=(-4, -4), textcoords="offset points", ha="right", va="top",
-                fontsize=fs_title - 1, zorder=6)
+    ax.annotate(r"$x^*$", (x_star, y1), xytext=(-6 if W3 else -4, -2 if W3 else -4), textcoords="offset points",
+                ha="right", va="top", fontsize=fs_title - 1, zorder=6)
     ax.set_xlim(xlo, xhi); ax.set_ylabel("y")
     ax.set_title(r"joint $\mathcal{P}(X, Y)$, recovered $\hat{x}$" if (compact or W2) else
                  r"joint $\mathcal{P}(X, Y)$ and the recovered $\hat{x}$", fontsize=fs_title); ax.grid(alpha=0.2)
@@ -799,8 +807,20 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
     ax = ax_loss
     Gd = tuple(g.detach() for g in G)
     L = l2_1d(cond_params(st, torch.as_tensor(x_grid, dtype=torch.float32)), Gd).numpy()
-    ax.plot(x_grid, L, color="0.25", lw=2, label=r"$\mathcal{L}(x)$" if (compact or W2) else r"population $\mathcal{L}(x)$", zorder=2)
-    if "empirical_loss" in sim:   # the sample loss the optimiser sees (MMD), mean +- sd over seeds, own scale
+    if W3:    # one axis: the population loss and the sample loss of each sampler, each scaled to max 1
+        sc = L[(x_grid > xlo) & (x_grid < xhi)].max()
+        ax.plot(x_grid, L / sc, color="0.25", lw=2, label=r"$\mathcal{L}(x)$", zorder=2)
+        for name, c in [("MLGD", c_mlgd), ("MLGD-F", c_mlgdf)]:
+            if name in sim.get("empirical_loss", {}):
+                e = sim["empirical_loss"][name]
+                mu_e = np.array(e["values"]).mean(0)
+                ax.plot(np.array(e["x"]), mu_e / mu_e.max(), color=c, lw=1.2, alpha=0.9, zorder=2,
+                        label=rf"$\hat{{\mathcal{{L}}}}(x)$, {name}")
+        ax.legend(fontsize=fs_leg - 1, loc="upper right", frameon=False, handlelength=1.2, borderaxespad=0.2,
+                  labelspacing=0.2)
+    else:
+        ax.plot(x_grid, L, color="0.25", lw=2, label=r"$\mathcal{L}(x)$" if (compact or W2) else r"population $\mathcal{L}(x)$", zorder=2)
+    if "empirical_loss" in sim and not W3:   # the sample loss the optimiser sees (MMD), mean +- sd over seeds, own scale
         ax2 = ax.twinx()
         for name, c in [("MLGD", c_mlgd), ("MLGD-F", c_mlgdf)]:
             if name not in sim["empirical_loss"]:
@@ -815,11 +835,19 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         n_c = sim["empirical_loss"]["MLGD"]["n_cond"]
         ax.plot([], [], color="0.5", lw=1.2, label=r"sample $\hat{\mathcal{L}}(x)$ (right axis)" if (compact or W2) else
                 rf"$\hat{{\mathcal{{L}}}}(x)$ (MMD, $n_{{\rm cond}}={n_c}$; right axis)")
-    for m in methods:
-        vline(ax, m, lab(m, res[m]))
-    ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
-    ax.set_xlim(xlo, xhi); ax.set_ylim(0, 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max()); ax.set_xlabel("x")
-    ax.set_ylabel(r"$\mathcal{L}(x)$" if (compact or W2) else
+    if W3:   # the returned x-hat as stars on L(x), x* (where L = 0) as an open circle
+        for m in methods:
+            xm = res[m]["x_hat"]
+            ax.plot([xm], [np.interp(xm, x_grid, L) / sc], ls="none", marker="*", ms=11, color=STYLE[m]["color"],
+                    mec="white", mew=0.6, zorder=8)
+        ax.plot([x_star], [0.0], ls="none", marker="o", ms=7, mfc="none", mec=c_true, mew=1.6, clip_on=False, zorder=7)
+    else:
+        for m in methods:
+            vline(ax, m, lab(m, res[m]))
+        ax.axvline(x_star, color=c_true, ls="--", lw=2, zorder=5)
+    ax.set_xlim(xlo, xhi); ax.set_xlabel("x")
+    ax.set_ylim(-0.05 if W3 else 0, 1.08 if W3 else 1.15 * L[(x_grid > xlo) & (x_grid < xhi)].max())
+    ax.set_ylabel("loss (max 1)" if W3 else r"$\mathcal{L}(x)$" if (compact or W2) else
                   r"$\mathcal{L}(x) = \mathcal{D}\left(\mathcal{P}(Y\mid X=x),\,\mathcal{G}\right)$")
     if layout == "lr":
         ax.legend(fontsize=fs_leg - 1, loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=2, frameon=False)
@@ -831,8 +859,9 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
     if W3:
         if traj:
             draw_trajectories(ax_traj, traj, x_star, xlo, xhi, fs_leg, STYLE)
-        ax_traj.set_title("guided trajectories (10 restarts)", fontsize=fs_title)
-        ax_traj.text(0.012, 0.965, "(e)", transform=ax_traj.transAxes, fontsize=fs_title, fontweight="bold",
+        ax_traj.text(0.5, 0.07, "guided trajectories, 10 restarts\n(bold: the returned one)",
+                     transform=ax_traj.transAxes, ha="center", va="bottom", fontsize=fs_leg)
+        ax_traj.text(0.012, 0.965, "(d)", transform=ax_traj.transAxes, fontsize=fs_title, fontweight="bold",
                      ha="left", va="top", zorder=10)
         ax_traj.grid(alpha=0.2)
 
@@ -844,7 +873,6 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
         plain = smc["plain"][beta] if smc else sweep[beta]
         if W3:    # both sample sets as smoothed empirical densities, drawn alike
             dg = _kde(plain, x_grid, bw=0.12)      # fixed small bandwidth: the default oversmooths the separate modes
-            ax.fill_between(x_grid, dg, color=c_data, alpha=0.25, zorder=1)
             ax.plot(x_grid, dg, color=c_data, lw=2.0, label="guided samples", zorder=2)
             if smc:
                 ax.plot(x_grid, _kde(smc["corr"][beta], x_grid, bw=0.12), color="black", lw=1.6,
@@ -920,6 +948,8 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                 p_.set_linewidth(p_.get_linewidth() * 0.6)
         rename = {lab("MLGD", None): "MLGD", lab("MLGD-F", None): "MLGD-F",
                   r"target $\mathcal{G}(Y)$": r"target $\mathcal{G}$, $x^*$"}
+        if W3:    # the returned x-hat (a, b), its conditional (c) and its trajectories (d) share the colour
+            rename = {r"target $\mathcal{G}(Y)$": r"$x^*$ and its target $\mathcal{G}$"}
         hs, ls_ = [], []
         for a_ in [ax_joint, ax_loss, ax_cond, sweep_axes[0]] + [a_ for a_ in fig.axes if a_ not in (ax_joint, ax_loss, ax_cond)]:
             for h_, l_ in zip(*a_.get_legend_handles_labels()):
@@ -927,8 +957,28 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                 if l_ in ls_ or l_.startswith("_") or l_.startswith(r"$\mathcal{P}(Y\mid X=") or ": " in l_:
                     continue
                 hs.append(h_); ls_.append(l_)
-        fig.legend(hs, ls_, loc="lower center", ncol=(len(ls_) + 1) // 2, fontsize=fs_leg - 1, frameon=False,
-                   bbox_to_anchor=(0.5, 0.0), columnspacing=1.0, handlelength=1.6)
+        if W3:
+            sweep_keys = {"guided samples", "twisted-SMC corrected", r"$\mathcal{Q}_\beta(x)$", r"prior $\mathcal{P}(x)$"}
+            left = [(h_, l_) for h_, l_ in zip(hs, ls_) if l_ not in sweep_keys and not l_.startswith(r"$\hat")
+                    and l_ != r"$\mathcal{L}(x)$"]
+            right_ = sorted([(h_, l_) for h_, l_ in zip(hs, ls_) if l_ in sweep_keys],
+                            key=lambda t: ["guided samples", "twisted-SMC corrected", r"$\mathcal{Q}_\beta(x)$",
+                                           r"prior $\mathcal{P}(x)$"].index(t[1]))
+            from matplotlib.lines import Line2D
+            left = [(Line2D([], [], color=STYLE[m]["color"], lw=1.4, marker="*", ms=8, mec="white", mew=0.5),
+                     rf"{m}, returned $\hat{{x}}$") for m in methods]
+            left.append((Line2D([], [], color=c_true, ls="--", lw=1.0, marker="o", ms=5, mfc="none", mew=1.2),
+                         r"$x^*$ and its target $\mathcal{G}$"))
+            pa, pc = ax_joint.get_position(), ax_traj.get_position()
+            pe = sweep_axes[-1].get_position()
+            fig.legend(*zip(*left), loc="lower center", ncol=len(left), fontsize=fs_leg, frameon=False,
+                       bbox_to_anchor=((pa.x0 + pc.x1) / 2, 0.0), columnspacing=1.6, handlelength=1.8)
+            fig.legend(*zip(*right_), loc="lower center", ncol=2, fontsize=fs_leg, frameon=False,
+                       bbox_to_anchor=((pe.x0 + pe.x1) / 2, 0.0), columnspacing=1.0, handlelength=1.6,
+                       labelspacing=0.3)
+        else:
+            fig.legend(hs, ls_, loc="lower center", ncol=(len(ls_) + 1) // 2, fontsize=fs_leg - 1, frameon=False,
+                       bbox_to_anchor=(0.5, 0.0), columnspacing=1.0, handlelength=1.6)
     fig.savefig(out_png, dpi=300 if W2 else 200, bbox_inches=None if W2 else "tight")
     print(f"[figure] wrote {out_png}")
 
