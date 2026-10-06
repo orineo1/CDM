@@ -52,7 +52,7 @@ class GBFESOSampler(torch.nn.Module):
         x = torch.as_tensor(condition_x, dtype=torch.float32).to(self.dev)
         x = x.view(1, -1).expand(nsamples, -1) if x.dim() == 1 or x.shape[0] == 1 else x
         assert x.shape == (nsamples, self.condition_on), (tuple(x.shape), nsamples)
-        eps = x * common.X_STD + common.X_MEAN
+        eps = common.x_from_std(x, self.design) if not self.design.is_legacy else x * common.X_STD + common.X_MEAN
         z = self.model.ddim_sample(eps, shape=(nsamples, self.frame_ds.target_dim), sample_steps=self.steps,
                                    eta=0.0, clamp_x0=False)
         y = self.scaler.fwd(self.frame_ds.denormalize_target(z, clamp=False))

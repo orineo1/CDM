@@ -46,7 +46,7 @@ from utils import compare_basin_metrics   # noqa: E402  (GB-FESO)
 from loss import kde_kl_target_to_generated   # noqa: E402  (GB-FESO)
 
 
-def load_runs(paths):
+def load_runs(paths, design=None):
     runs = []
     for p in paths:
         for f in sorted(glob.glob(p)):
@@ -61,7 +61,9 @@ def load_runs(paths):
                 if stem.endswith("_theirs"):        # MLGD run on GB-FESO's surrogate (gbfeso_sampler.py)
                     stem = stem[:-len("_theirs")] + ", their surrogate"
                 runs.append({"method": stem, "family": stem, "target_id": tid,
-                             "x_hat_std": b["x_hat"], "eps_hat": (np.array(b["x_hat"]) * common.X_STD + common.X_MEAN).tolist(),
+                             "x_hat_std": b["x_hat"], "eps_hat": common.x_from_std(np.array(b["x_hat"], dtype=np.float64), design).tolist()
+                             if design is not None and not design.is_legacy else
+                             (np.array(b["x_hat"]) * common.X_STD + common.X_MEAN).tolist(),
                              "budget": d.get("budget"),
                              "surrogate_loss": b.get("select_loss", b["final_loss"]),
                              "time_s": d["summary"]["time_s"]["mean"]})
@@ -69,14 +71,16 @@ def load_runs(paths):
 
 
 def cmd_collect(a):
-    runs = load_runs(a.results)
     te = torch.load(a.targets_ens, weights_only=False)
+    design = Design.from_dict(te.get("design"))
+    runs = load_runs(a.results, design)
     for tid in ([] if a.no_oracle else range(te["eps"].shape[0])):
         runs.append({"method": "oracle (eps_hat = eps*)", "family": "oracle", "target_id": tid,
                      "eps_hat": te["eps"][tid].tolist(), "time_s": 0.0})
     for r in runs:
         r["eps_star"] = te["eps"][r["target_id"]].tolist()
-        r["eps_eval"] = np.clip(r["eps_hat"], *EPS_BOX).tolist()
+        r["eps_eval"] = (np.clip(r["eps_hat"], *EPS_BOX).tolist() if design.is_legacy
+                         else design.clip(r["eps_hat"]).tolist())
     np.save(a.out, np.array([r["eps_eval"] for r in runs], dtype=np.float32))
     json.dump(runs, open(os.path.splitext(a.out)[0] + "_runs.json", "w"))
     print(f"[evaluate] {len(runs)} runs -> {a.out}")
@@ -114,6 +118,7 @@ def cmd_metrics(a):
     ev = torch.load(a.eval_ens, weights_only=False)
     te = torch.load(a.targets_ens, weights_only=False)
     design = Design.from_dict(te.get("design"))
+    common.set_design(design)
     basins = a.basins or ("their" if design.n_beads == 4 else "tuple")
     assert basins == "tuple" or design.n_beads == 4, "their basin boxes exist for N = 4 only"
     scaler = get_scaler(a, te)
@@ -143,6 +148,7 @@ def cmd_sampler(a):
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     te = torch.load(a.targets_ens, weights_only=False)
     design = Design.from_dict(te.get("design"))
+    common.set_design(design)
     basins = a.basins or ("their" if design.n_beads == 4 else "tuple")
     mj = json.load(open(a.meta))
     sc = common.YScaler(mj["y_mean"], mj["y_std"])
@@ -169,7 +175,7 @@ def cmd_sampler(a):
         h = T.shape[0] // 2
         rows.setdefault("split halves of the target", []).append(
             score_pair(T[perm[:h]], T[perm[h:]], design, basins, a.n, sc, g, dev))
-        x = common.x_to_std(te["eps"][tid]).view(1, -1).to(dev)
+        x = common.x_to_std(te["eps"][tid], design).view(1, -1).to(dev)
         for name, smp, cfg in samplers:
             with torch.no_grad():
                 Z = _draw_conditional(smp, x, _EvalView(dataclasses.replace(cfg, final_n_cond=a.n), a.n)).float().cpu()

@@ -77,6 +77,7 @@ def main():
     a = p.parse_args()
     d = torch.load(a.ens, weights_only=False)
     design = Design.from_dict(d.get("design"))
+    common.set_design(design)
     pr = d["protocol"]
     assert pr.get("no_subsample"), "needs an ensemble simulated with --no-subsample"
     R = pr["n_rep"]

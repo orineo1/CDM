@@ -1,12 +1,13 @@
-"""Probe of the residue design (`simulate.ResidueDesign`): how the ensemble responds to one bead's size.
+"""Probe of a design: how the equilibrium ensemble responds to one design parameter (stage 1 of the rugged model).
 
-Sweeps sigma of one bead with the other beads fixed, simulates each design, and reports for every non-bonded
-pair the contact fraction (distance < CONTACT * sigma_ij) and the populations of the conformations (per-angle
-folded/open states, merged with their mirror images). A non-monotone (bump-shaped) response of the contacts
-to sigma is what makes the loss over designs multimodal: a target contact level is then reached at two sizes.
+For each of --n-base base designs drawn from the design's prior, sweeps one parameter (e.g. sigma4 or eta1) over
+--values with all others fixed, simulates every design, and reports per design the conformation (basin)
+populations (`common.basin_probs`; chain reversal merged only for reversal-symmetric designs) and, for every
+non-bonded pair, the contact fraction (distance < CONTACT * sigma_ij). A bump-shaped or switching response of
+the populations to one parameter is what makes the loss over designs multimodal.
 
-    python experiments/peptide/pipeline/probe_residue.py --n-beads 4 --bead 3 --sigmas 0.6:1.8:13 \
-        --base-sigma 1.0 --base-eps 0.8 --n-steps 1000000 --out probe_N4_bead3.json
+    python experiments/peptide/pipeline/probe_residue.py --n-beads 8 --free sigma,eta --fixed eps=0.5 \
+        --param sigma4 --values 0.7:1.4:15 --n-base 3 --n-rep 64 --n-steps 4000000 --out probe_sigma4.json
 """
 import argparse
 import itertools
@@ -19,17 +20,16 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from simulate import simulate, ResidueDesign   # noqa: E402
+import common   # noqa: E402
+from simulate import simulate, Design   # noqa: E402
 
 CONTACT = 1.3          # contact: r_ij < 1.3 sigma_ij (the LJ minimum is at 2^(1/6) sigma ~ 1.12 sigma)
-FOLD_MAX = 1.55        # per-angle folded / open threshold of common.py
 
 
 def positions(Y, n):
     """raw internal coordinates [m, 2N - 3] -> bead positions [m, N, 2] (bead 0 at the origin, bond 1 along x)."""
     r, th = Y[:, :n - 1], Y[:, n - 1:]
-    m = Y.shape[0]
-    x = torch.zeros(m, n, 2)
+    x = torch.zeros(Y.shape[0], n, 2)
     x[:, 1, 0] = r[:, 0]
     for k in range(1, n - 1):
         back = x[:, k - 1] - x[:, k]                    # i -> i-1
@@ -38,67 +38,62 @@ def positions(Y, n):
     return x
 
 
-def summarize(Y, sig, n):
+def contacts(Y, sig_pair, design):
+    """contact fraction of every non-bonded pair; sig_pair [n_pairs] in design.pairs() order"""
+    n = design.n_beads
     x = positions(Y, n)
-    out = {"contacts": {}, "conformations": {}}
-    for i, j in itertools.combinations(range(n), 2):
-        if j - i < 2:
+    out = {}
+    for k, (i, j, d) in enumerate(design.pairs()):
+        if d < 2:
             continue
-        s_ij = 0.5 * (sig[i] + sig[j])
-        d = (x[:, i] - x[:, j]).norm(dim=-1)
-        out["contacts"][f"{i + 1}-{j + 1}"] = float((d < CONTACT * s_ij).float().mean())
-    th = Y[:, n - 1:]
-    st = (th < 0).long() + 2 * (th.abs() >= FOLD_MAX).long()      # 0 +f, 1 -f, 2 +o, 3 -o
-    sym, flip = "fFoO", {0: 1, 1: 0, 2: 3, 3: 2}
-    counts = {}
-    for row in st.tolist():
-        t = tuple(row)
-        key = min(t, tuple(flip[s] for s in t))                     # mirror image: same population
-        counts[key] = counts.get(key, 0) + 1
-    tot = sum(counts.values())
-    for k, c in sorted(counts.items(), key=lambda kv: -kv[1]):
-        out["conformations"]["".join(sym[s] for s in k)] = c / tot
+        dist = (x[:, i] - x[:, j]).norm(dim=-1)
+        out[f"{i + 1}-{j + 1}"] = float((dist < CONTACT * float(sig_pair[k])).float().mean())
     return out
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--n-beads", type=int, default=4)
-    p.add_argument("--bead", type=int, default=3, help="0-based index of the bead whose size is swept")
-    p.add_argument("--sigmas", default="0.6:1.8:13", help="start:stop:count")
-    p.add_argument("--base-sigma", type=float, default=1.0)
-    p.add_argument("--base-eps", type=float, default=0.8)
-    p.add_argument("--n-rep", type=int, default=32)
-    p.add_argument("--n-steps", type=int, default=1_000_000)
-    p.add_argument("--burn", type=int, default=100_000)
+    p.add_argument("--n-beads", type=int, default=8)
+    p.add_argument("--free", default="sigma,eta")
+    p.add_argument("--fixed", default="eps=0.5")
+    p.add_argument("--box", default=None)
+    p.add_argument("--prior", default="uniform")
+    p.add_argument("--param", required=True, help="the swept parameter, e.g. sigma4 (must be free)")
+    p.add_argument("--values", default="0.7:1.4:15", help="start:stop:count")
+    p.add_argument("--n-base", type=int, default=3)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--temp", type=float, default=None)
+    p.add_argument("--n-rep", type=int, default=64)
+    p.add_argument("--n-steps", type=int, default=4_000_000)
+    p.add_argument("--burn", type=int, default=400_000)
+    p.add_argument("--stride", type=int, default=400)
     p.add_argument("--device", default=None)
     p.add_argument("--out", required=True)
     a = p.parse_args()
-    lo, hi, k = a.sigmas.split(":")
-    sigmas = np.linspace(float(lo), float(hi), int(k))
-    n = a.n_beads
-    design = ResidueDesign(n)
+    design = Design.from_args(a.n_beads, a.free, a.fixed, a.box, a.prior)
+    common.set_design(design)
+    assert a.param in design.free, f"{a.param} is not free in {design}"
+    k = design.free.index(a.param)
+    lo, hi, cnt = a.values.split(":")
+    values = np.linspace(float(lo), float(hi), int(cnt))
+    base = design.sample(a.n_base, generator=torch.Generator().manual_seed(a.seed))
     X = []
-    for s in sigmas:
-        sig = [a.base_sigma] * n
-        sig[a.bead] = float(s)
-        X.append([v for i in range(n) for v in (sig[i], a.base_eps)])
+    for b in range(a.n_base):
+        for v in values:
+            x = base[b].clone(); x[k] = float(v); X.append(x)
+    X = torch.stack(X)
     t0 = time.time()
-    Y = simulate(X, n_rep=a.n_rep, n_steps=a.n_steps, burn=a.burn, device=a.device, design=design, verbose=True)
+    Y = simulate(X, n_rep=a.n_rep, n_steps=a.n_steps, stride=a.stride, burn=a.burn, device=a.device, design=design,
+                 temp=a.temp, verbose=True)
+    sig = design.pair_sigma(X)
+    names = common.basin_classes(design.n_beads)[1]
     rows = []
-    for s, x, y in zip(sigmas, X, Y):
-        r = summarize(y, x[0::2], n)
-        r["sigma"] = float(s)
-        rows.append(r)
-    pairs = list(rows[0]["contacts"])
-    print(f"\nN = {n}, bead {a.bead + 1} swept, other sigma = {a.base_sigma}, all eps = {a.base_eps}; "
-          f"contact fraction (r < {CONTACT} sigma_ij) and the top conformations")
-    print("sigma  " + "  ".join(f"{q:>6s}" for q in pairs) + "   conformations")
-    for r in rows:
-        top = ", ".join(f"{c} {v:.2f}" for c, v in list(r["conformations"].items())[:3])
-        print(f"{r['sigma']:5.2f}  " + "  ".join(f"{r['contacts'][q]:6.3f}" for q in pairs) + f"   {top}")
-    json.dump({"args": vars(a), "design": design.to_dict(), "rows": rows, "time_s": time.time() - t0},
-              open(a.out, "w"), indent=1)
+    for i in range(X.shape[0]):
+        pr = common.basin_probs(Y[i]).tolist()
+        rows.append({"base": i // len(values), "value": float(X[i, k]), "x": X[i].tolist(), "basins": pr,
+                     "contacts": contacts(Y[i], sig[i] if sig is not None else torch.ones(len(design.pairs())), design)})
+    json.dump({"args": vars(a), "design": design.to_dict(), "param": a.param, "basin_names": names, "rows": rows,
+               "time_s": time.time() - t0}, open(a.out, "w"), indent=1)
     print(f"wrote {a.out} ({time.time() - t0:.0f}s)")
 
 

@@ -25,7 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "..", "synthetic", "pipeline"))
 from common import x_to_std, x_from_std   # noqa: E402
-from simulate import EPS_BOX   # noqa: E402
+from simulate import EPS_BOX, Design   # noqa: E402
 import search_mog as fx   # noqa: E402
 from cdm.guidance.core import _final_loss   # noqa: E402
 from gbfeso import parse_ids   # noqa: E402
@@ -51,17 +51,18 @@ def main():
     meta = json.load(open(os.path.join(a.targets_dir, "..", "meta.json")))
     eps_star = meta["eps_star"]
     K = len(eps_star[0])
+    design = Design.from_dict(meta.get("design"))
     method = a.method_name or (f"random-{a.random}" if a.random else "grid")
     if not a.random:
         lin = torch.linspace(*EPS_BOX, a.grid)
         E = torch.cartesian_prod(*([lin] * K))
-        X = x_to_std(E).to(dev)
+        X = x_to_std(E, design).to(dev)
     records = []
     for tid in parse_ids(a.target_ids, len(eps_star)):
         if a.random:
             gr = torch.Generator().manual_seed(a.seed + 7919 * tid)
-            E = EPS_BOX[0] + (EPS_BOX[1] - EPS_BOX[0]) * torch.rand(a.random, K, generator=gr)
-            X = x_to_std(E).to(dev)
+            E = design.sample(a.random, generator=gr)       # legacy: the same draws as before
+            X = x_to_std(E, design).to(dev)
         tgt = os.path.join(a.targets_dir, f"target_{tid:03d}.npy")
         sys.argv = ["search_mog", "--prior", a.prior, "--sampler", a.sampler, "--target", tgt, "--device", dev]
         args = fx.parse_args()

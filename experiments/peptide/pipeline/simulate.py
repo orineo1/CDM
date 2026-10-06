@@ -36,25 +36,85 @@ TEMP, GAMMA, DT = 0.09, 1.0, 0.005
 EPS_BOX = (0.21, 1.55)          # their gener.py range for eps1, eps2 (used for every free eps_d)
 
 
-class Design:
-    """The design space of the N-bead chain: eps_d for sequence distance d = 1..N-1; `free` lists the d
-    that the search varies (in this order, X = (eps_d for d in free)), `fixed` maps the others to values.
-    Default: N = 4 -> free (1, 2), fixed {3: 0.5} (their benchmark); N >= 5 -> all free."""
+SIGMA_BOX = (0.7, 1.4)          # residue size sigma_i (Design with free sigma)
+ETA_BOX = (0.3, 2.0)            # residue stickiness eta_i (Design with free eta)
+BOXES = {"eps": EPS_BOX, "sigma": SIGMA_BOX, "eta": ETA_BOX}
+DEFAULT_VALUE = {"sigma": 1.0, "eta": 1.0}     # per-bead parameters that are neither free nor fixed
 
-    def __init__(self, n_beads=4, free=None, fixed=None):
+
+def _group(name):
+    return name.rstrip("0123456789")
+
+
+class Design:
+    """The design space of the N-bead chain. Pair (i, j) at sequence distance d = |i - j| interacts by LJ with
+
+        eps_ij   = eps_d * sqrt(eta_i * eta_j)      chain-distance strength x residue stickiness
+        sigma_ij = (sigma_i + sigma_j) / 2          residue sizes (Lorentz-Berthelot), cutoff 4 sigma_ij
+
+    Parameters: eps1..eps{N-1}, sigma1..sigmaN, eta1..etaN. `free` lists those the search varies (X, in this
+    order), `fixed` gives values to others; sigma_i, eta_i that are neither are 1 (identical residues), every
+    eps_d must be free or fixed. `free` / `fixed` accept parameter names, group names ("eps", "sigma", "eta":
+    every parameter of the group not given otherwise) and, as before, integers d for eps_d.
+
+    Zick & Mendels' benchmark is the default Design(4): free eps1, eps2, fixed eps3 = 0.5, identical residues;
+    Design(N >= 5) frees every eps_d. A residue (heteropolymer) design on top of fixed chain strengths:
+    Design(8, free="sigma,eta", fixed="eps=0.5").
+
+    `box` maps a group or a parameter to its range (defaults BOXES); `prior` is how `sample` draws designs:
+    "uniform" (in the box), or "band:w" (each bead with free sigma_i and eta_i: eta_i follows sigma_i along the
+    diagonal of their box, with Gaussian spread w in box units: larger residues are stickier, as in amino
+    acids; the rest uniform)."""
+
+    def __init__(self, n_beads=4, free=None, fixed=None, box=None, prior="uniform"):
         n = int(n_beads)
         assert n >= 3
+        self.n_beads = n
+        params = [f"eps{d}" for d in range(1, n)] + [f"sigma{i}" for i in range(1, n + 1)] + [f"eta{i}" for i in range(1, n + 1)]
         if free is None:
             free = (1, 2) if n == 4 else tuple(range(1, n))
-        fixed = dict(fixed) if fixed is not None else ({3: EPS3} if n == 4 and tuple(free) == (1, 2) else {})
-        fixed = {int(d): float(v) for d, v in fixed.items()}
-        free = tuple(int(d) for d in free)
-        missing = [d for d in range(1, n) if d not in free and d not in fixed]
-        assert not missing, f"eps_d for d in {missing} is neither free nor fixed"
-        assert all(1 <= d < n for d in free) and not set(free) & set(fixed), (free, fixed)
-        self.n_beads, self.free, self.fixed = n, free, {d: fixed[d] for d in sorted(fixed) if d < n}
+        if fixed is None:
+            fixed = {3: EPS3} if n == 4 and tuple(free) in ((1, 2), ("eps1", "eps2")) else {}
 
-    # sizes
+        def tokens(spec):
+            return [str(t).strip() for t in (spec.split(",") if isinstance(spec, str) else spec) if str(t).strip()]
+
+        def expand(t):       # (parameters, explicit): a group name expands to all its parameters
+            if t.isdigit():
+                return [f"eps{t}"], True
+            if t in BOXES:
+                return [p for p in params if _group(p) == t], False
+            assert t in params, f"unknown parameter {t} (N = {n})"
+            return [t], True
+        if isinstance(fixed, str):
+            fixed = dict(kv.split("=") for kv in fixed.split(",") if kv)
+        fixed = {str(k): float(v) for k, v in fixed.items()}
+        # a parameter named explicitly (free or fixed) wins over a group name on the other side
+        explicit_free = {p for t in tokens(free) for p in expand(t)[0] if expand(t)[1]}
+        explicit_fixed = {p for k in fixed for p in expand(k)[0] if expand(k)[1]}
+        fr = []
+        for t in tokens(free):
+            ps, ex = expand(t)
+            fr += [p for p in ps if ex or p not in explicit_fixed]
+        fr = list(dict.fromkeys(fr))
+        fx = {}
+        for k, v in fixed.items():
+            ps, ex = expand(k)
+            for p in ps:
+                if ex or (p not in explicit_free and p not in fr):
+                    fx[p] = v
+        fx = {p: v for p, v in fx.items() if p not in fr}
+        missing = [p for p in params if _group(p) == "eps" and p not in fr and p not in fx]
+        assert not missing, f"{missing} are neither free nor fixed"
+        self.free = tuple(fr)
+        self.fixed = {p: fx[p] for p in params if p in fx}
+        bx = {g: tuple(map(float, r)) for g, r in BOXES.items()}
+        bx.update({k: tuple(map(float, v)) for k, v in (box or {}).items()})
+        self.box_spec = {k: v for k, v in bx.items() if k not in BOXES or v != BOXES[k]}
+        self._box = bx
+        self.prior = prior
+
+    # ---- sizes and identity
     @property
     def dim_x(self):
         return len(self.free)
@@ -67,77 +127,133 @@ class Design:
     def n_bonds(self):
         return self.n_beads - 1
 
+    @property
+    def is_legacy(self):
+        """only chain strengths eps_d, default box and prior: the design of the earlier runs (same files, same numbers)"""
+        return (all(_group(p) == "eps" for p in list(self.free) + list(self.fixed))
+                and not self.box_spec and self.prior == "uniform")
+
+    @property
+    def reversal_symmetric(self):
+        """reading the chain backwards leaves the energy unchanged (identical or palindromic residues, no free ones)"""
+        if any(_group(p) != "eps" for p in self.free):
+            return False
+        n = self.n_beads
+        return all(self.value(f"{g}{i}") == self.value(f"{g}{n + 1 - i}") for g in ("sigma", "eta") for i in range(1, n + 1))
+
+    def value(self, p):
+        """the fixed or default value of a parameter that is not free"""
+        return self.fixed.get(p, DEFAULT_VALUE.get(_group(p)))
+
     def to_dict(self):
-        return {"n_beads": self.n_beads, "free": list(self.free), "fixed": {str(d): v for d, v in self.fixed.items()}}
+        if self.is_legacy:
+            return {"n_beads": self.n_beads, "free": [int(p[3:]) for p in self.free],
+                    "fixed": {p[3:]: v for p, v in self.fixed.items()}}
+        return {"n_beads": self.n_beads, "free": list(self.free), "fixed": dict(self.fixed),
+                "box": {k: list(v) for k, v in self.box_spec.items()}, "prior": self.prior}
 
     @classmethod
     def from_dict(cls, d):
         if d is None:
             return cls(4)
-        if d.get("kind") == "residue":
-            return ResidueDesign(d["n_beads"], d["sizes_only"], d["eps_fixed"])
-        return cls(d["n_beads"], d["free"], {int(k): v for k, v in d["fixed"].items()})
+        if d.get("kind") == "residue":            # the short-lived residue-only format (sigma_i, eps_i per bead)
+            raise ValueError("residue-only design files are not supported; use Design(free='sigma,eta', fixed='eps=...')")
+        fixed = {(f"eps{k}" if str(k).isdigit() else k): v for k, v in d["fixed"].items()}
+        return cls(d["n_beads"], d["free"], fixed, d.get("box"), d.get("prior", "uniform"))
 
     @classmethod
-    def from_args(cls, n_beads=4, free=None, fixed=None):
-        """CLI form: free '1,2,3' (None = default), fixed '3=0.5,4=0.2' (None = default)."""
-        fr = None if free in (None, "") else tuple(int(s) for s in str(free).split(","))
-        fx = None if fixed is None else ({} if fixed == "" else
-                                         {int(k): float(v) for k, v in (s.split("=") for s in str(fixed).split(","))})
-        return cls(n_beads, fr, fx)
+    def from_args(cls, n_beads=4, free=None, fixed=None, box=None, prior="uniform"):
+        """CLI form: free '1,2,3' or 'sigma,eta' or 'eps1,sigma3' (None = default); fixed '3=0.5' or 'eps=0.5,eta4=2';
+        box 'sigma=0.7:1.4,eta=0.3:2'."""
+        fr = None if free in (None, "") else free
+        fx = None if fixed is None else ({} if fixed == "" else fixed)
+        bx = None if not box else {k: tuple(float(t) for t in v.split(":")) for k, v in (s.split("=") for s in box.split(","))}
+        return cls(n_beads, fr, fx, bx, prior or "uniform")
 
     def __repr__(self):
-        return f"Design(N={self.n_beads}, free={self.free}, fixed={self.fixed})"
+        extra = "" if self.prior == "uniform" else f", prior={self.prior}"
+        return f"Design(N={self.n_beads}, free={','.join(self.free)}, fixed={self.fixed}{extra})"
 
+    # ---- the box, standardization and the prior
+    def bounds(self):
+        """(lo, hi) of every free parameter, as Python floats"""
+        lo, hi = [], []
+        for p in self.free:
+            r = self._box.get(p, self._box[_group(p)])
+            lo.append(r[0]); hi.append(r[1])
+        return lo, hi
+
+    def to_std(self, v):
+        """free parameters -> standardized X (each the uniform box mapped to mean 0, std 1)"""
+        lo, hi = self.bounds()
+        lo, hi = torch.tensor(lo, dtype=torch.float64), torch.tensor(hi, dtype=torch.float64)
+        mean, std = ((lo + hi) / 2).float(), ((hi - lo) / math.sqrt(12.0)).float()
+        return (torch.as_tensor(v, dtype=torch.float32) - mean) / std
+
+    def from_std(self, x):
+        lo, hi = self.bounds()
+        lo, hi = torch.tensor(lo, dtype=torch.float64), torch.tensor(hi, dtype=torch.float64)
+        mean, std = ((lo + hi) / 2).float(), ((hi - lo) / math.sqrt(12.0)).float()
+        return torch.as_tensor(x, dtype=torch.float32) * std + mean
+
+    def clip(self, v):
+        lo, hi = self.bounds()
+        return torch.max(torch.min(torch.as_tensor(v, dtype=torch.float32), torch.tensor(hi)), torch.tensor(lo))
+
+    def sample(self, n, generator=None):
+        """[n, dim_x] designs drawn from the prior"""
+        lo, hi = self.bounds()
+        if self.is_legacy:          # bit-identical to the earlier eps draws
+            return lo[0] + (hi[0] - lo[0]) * torch.rand(n, self.dim_x, generator=generator)
+        lo_t, span = torch.tensor(lo), torch.tensor(hi) - torch.tensor(lo)
+        u = torch.rand(n, self.dim_x, generator=generator)
+        if self.prior.startswith("band"):
+            w = float(self.prior.split(":")[1]) if ":" in self.prior else 0.1
+            col = {p: k for k, p in enumerate(self.free)}
+            for i in range(1, self.n_beads + 1):
+                s, e = col.get(f"sigma{i}"), col.get(f"eta{i}")
+                if s is not None and e is not None:
+                    u[:, e] = (u[:, s] + w * torch.randn(n, generator=generator)).clamp(0.0, 1.0)
+        else:
+            assert self.prior == "uniform", f"unknown prior {self.prior}"
+        return lo_t + span * u
+
+    # ---- pairs
     def pairs(self):
         """(i, j, d) for every pair, ordered by sequence distance d then i: the bonds come first. For N = 4
         this is (0,1),(1,2),(2,3),(0,2),(1,3),(0,3), the order of the original 4-bead code."""
         return [(i, i + d, d) for d in range(1, self.n_beads) for i in range(self.n_beads - d)]
 
-    def pair_eps(self, eps):
-        """[B, dim_x] free eps -> [B, n_pairs] LJ epsilon of each pair."""
-        col = {d: eps[:, k:k + 1] for k, d in enumerate(self.free)}
-        cols = []
-        for d in range(1, self.n_beads):
-            c = col[d] if d in col else torch.full_like(eps[:, :1], self.fixed[d])
-            cols += [c] * (self.n_beads - d)
-        return torch.cat(cols, dim=1)
+    def _col(self, x, p):
+        if p in self.free:
+            k = self.free.index(p)
+            return x[:, k:k + 1]
+        return torch.full_like(x[:, :1], self.value(p))
 
-
-class ResidueDesign(Design):
-    """Residue design: bead i has a size sigma_i and a stickiness eps_i (a coarse-grained residue type), and every
-    pair (i, j) interacts by LJ with the Lorentz-Berthelot rules sigma_ij = (sigma_i + sigma_j) / 2,
-    eps_ij = sqrt(eps_i eps_j), cutoff 4 sigma_ij; bonds as in `Design`. X = (sigma_1, eps_1, ..., sigma_N, eps_N)
-    (dim 2N); with sizes_only, X = (sigma_1, ..., sigma_N) and every eps_i = eps_fixed."""
-
-    def __init__(self, n_beads=4, sizes_only=False, eps_fixed=0.5):
-        n = int(n_beads)
-        assert n >= 3
-        self.n_beads, self.sizes_only, self.eps_fixed = n, bool(sizes_only), float(eps_fixed)
-        self.free, self.fixed = (), {}
-
-    @property
-    def dim_x(self):
-        return self.n_beads if self.sizes_only else 2 * self.n_beads
-
-    def to_dict(self):
-        return {"kind": "residue", "n_beads": self.n_beads, "sizes_only": self.sizes_only, "eps_fixed": self.eps_fixed}
-
-    def __repr__(self):
-        return f"ResidueDesign(N={self.n_beads}, sizes_only={self.sizes_only})"
-
-    def _per_bead(self, x):
-        if self.sizes_only:
-            return x, torch.full_like(x, self.eps_fixed)
-        return x[:, 0::2], x[:, 1::2]
+    def _uses(self, g):
+        n = self.n_beads
+        return any(_group(p) == g for p in self.free) or any(self.value(f"{g}{i}") != 1.0 for i in range(1, n + 1))
 
     def pair_eps(self, x):
-        _, e = self._per_bead(x)
-        return torch.stack([torch.sqrt(e[:, i] * e[:, j]) for i, j, _ in self.pairs()], 1)
+        """[B, dim_x] free parameters -> [B, n_pairs] LJ epsilon of each pair."""
+        cols = []
+        for d in range(1, self.n_beads):
+            c = self._col(x, f"eps{d}")
+            cols += [c] * (self.n_beads - d)
+        e = torch.cat(cols, dim=1)
+        if self._uses("eta"):
+            eta = torch.cat([self._col(x, f"eta{i}") for i in range(1, self.n_beads + 1)], 1)
+            P = self.pairs()
+            e = e * torch.sqrt(eta[:, [i for i, _, _ in P]] * eta[:, [j for _, j, _ in P]])
+        return e
 
     def pair_sigma(self, x):
-        s, _ = self._per_bead(x)
-        return torch.stack([0.5 * (s[:, i] + s[:, j]) for i, j, _ in self.pairs()], 1)
+        """[B, dim_x] -> [B, n_pairs] LJ sigma of each pair, or None when every residue has sigma = 1."""
+        if not self._uses("sigma"):
+            return None
+        sig = torch.cat([self._col(x, f"sigma{i}") for i in range(1, self.n_beads + 1)], 1)
+        P = self.pairs()
+        return 0.5 * (sig[:, [i for i, _, _ in P]] + sig[:, [j for _, j, _ in P]])
 
 
 # the 4-bead constants of the original code (kept for imports)
@@ -167,7 +283,7 @@ def pair_eps(eps, design=None):
 
 def conservative_force(x, peps, A, bmask, psig=None):
     """x [B, N, 2], peps [B, P] -> force [B, N, 2]. A = _incidence(device): bead j of pair k gets +f_k.
-    psig [B, P]: LJ sigma of each pair (ResidueDesign), cutoff RCUT * sigma; None: sigma = 1 for all pairs."""
+    psig [B, P]: LJ sigma of each pair (Design with residue sizes), cutoff RCUT * sigma; None: sigma = 1 for all pairs."""
     d = torch.einsum("pk,bpd->bkd", A, x)               # [B, P, 2], vector i -> j  (x_j - x_i)
     r2 = (d * d).sum(-1)
     if psig is None:
@@ -199,17 +315,17 @@ def internal_coords(x):
     return torch.stack(r + th, -1)
 
 
-def initial_state(B, device, gen=None, n_beads=4):
+def initial_state(B, device, gen=None, n_beads=4, temp=TEMP):
     x = torch.zeros(B, n_beads, 2, device=device)
     x[:, :, 0] = torch.arange(n_beads, device=device, dtype=torch.float32)
-    v = torch.randn(B, n_beads, 2, device=device, generator=gen) * math.sqrt(TEMP)
+    v = torch.randn(B, n_beads, 2, device=device, generator=gen) * math.sqrt(temp)
     v = v - v.mean(1, keepdim=True)
     return x, v
 
 
 @torch.no_grad()
 def simulate(eps, n_rep=8, n_steps=4_000_000, stride=200, burn=50_000, device=None, seed=0,
-             use_graph=True, verbose=True, return_temperature=False, design=None):
+             use_graph=True, verbose=True, return_temperature=False, design=None, temp=None):
     """Simulate every eps (rows of [n_eps, design.dim_x] free eps) with n_rep independent replicas; returns Y
     frames [n_eps, n_rep * n_frames, 2N - 3] (float32, CPU; replica-major), frames every `stride` steps after
     `burn` steps. design = Design(4) by default (their 4-bead benchmark)."""
@@ -221,12 +337,13 @@ def simulate(eps, n_rep=8, n_steps=4_000_000, stride=200, burn=50_000, device=No
     E = eps.shape[0]
     B = E * n_rep
     peps = design.pair_eps(eps.to(device)).repeat_interleave(n_rep, dim=0)       # chain b = e * n_rep + r
-    psig = (design.pair_sigma(eps.to(device)).repeat_interleave(n_rep, dim=0)
-            if hasattr(design, "pair_sigma") else None)
+    psig = design.pair_sigma(eps.to(device))
+    psig = None if psig is None else psig.repeat_interleave(n_rep, dim=0)
     A, bmask = _incidence(device, design), _bond_mask(design).to(device)
-    x, v = initial_state(B, device, n_beads=N)
+    temp = TEMP if temp is None else float(temp)
+    x, v = initial_state(B, device, n_beads=N, temp=temp)
     F = conservative_force(x, peps, A, bmask, psig)
-    noise_sd = math.sqrt(2.0 * GAMMA * TEMP / DT)
+    noise_sd = math.sqrt(2.0 * GAMMA * temp / DT)
     state = {"x": x, "v": v, "F": F, "ke": torch.zeros(B, device=device)}
 
     def one_step():

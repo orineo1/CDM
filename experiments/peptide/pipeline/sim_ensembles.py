@@ -35,8 +35,14 @@ def main():
     p.add_argument("--n-eps", type=int, default=None, help="draw this many eps vectors uniformly in the box")
     p.add_argument("--eps-file", default=None, help=".npy [n, K] or .json list of K-vectors (K free eps)")
     p.add_argument("--n-beads", type=int, default=4)
-    p.add_argument("--free-eps", default=None, help="free sequence distances, e.g. 1,2 (default: N = 4 -> 1,2; else all)")
-    p.add_argument("--fixed-eps", default=None, help="values of the others, e.g. 3=0.5 (default: N = 4 -> 3=0.5)")
+    p.add_argument("--free-eps", "--free", dest="free_eps", default=None,
+                   help="free parameters: sequence distances 1,2 or names/groups, e.g. sigma,eta or eps1,sigma3 "
+                        "(default: N = 4 -> 1,2; else all eps_d)")
+    p.add_argument("--fixed-eps", "--fixed", dest="fixed_eps", default=None,
+                   help="values of the others, e.g. 3=0.5 or eps=0.5,eta4=2 (default: N = 4 -> 3=0.5)")
+    p.add_argument("--box", default=None, help="ranges, e.g. sigma=0.8:1.3,eta=0.5:1.5 (default simulate.BOXES)")
+    p.add_argument("--prior", default="uniform", help="design prior for --n-eps draws: uniform | band:<w>")
+    p.add_argument("--temp", type=float, default=None, help="Langevin temperature (default simulate.TEMP = 0.09)")
     p.add_argument("--design-from", default=None, help="take the design from this ensemble .pt (overrides the three above)")
     p.add_argument("--no-subsample", action="store_true",
                    help="keep all frames in replica-major time order (for the equilibration checks)")
@@ -52,7 +58,7 @@ def main():
     if a.design_from:
         design = Design.from_dict(torch.load(a.design_from, weights_only=False).get("design"))
     else:
-        design = Design.from_args(a.n_beads, a.free_eps, a.fixed_eps)
+        design = Design.from_args(a.n_beads, a.free_eps, a.fixed_eps, a.box, a.prior)
     K, dy = design.dim_x, design.dim_y
 
     if a.eps_file:
@@ -60,7 +66,7 @@ def main():
         eps = torch.as_tensor(eps, dtype=torch.float32).view(-1, K)
     else:
         g = torch.Generator().manual_seed(a.seed)
-        eps = EPS_BOX[0] + (EPS_BOX[1] - EPS_BOX[0]) * torch.rand(a.n_eps, K, generator=g)
+        eps = design.sample(a.n_eps, generator=g)       # legacy designs: the same draws as before
     print(f"[sim_ensembles] {design}: {eps.shape[0]} eps, {a.n_rep} replicas x {a.n_steps:,} steps, "
           f"keep {'all' if a.no_subsample else a.keep}/eps", flush=True)
     t0 = time.time()
@@ -68,7 +74,7 @@ def main():
     g = torch.Generator().manual_seed(a.seed + 12345)
     for c in range(0, eps.shape[0], a.chunk):
         Y, T = simulate(eps[c:c + a.chunk], n_rep=a.n_rep, n_steps=a.n_steps, stride=a.stride, burn=a.burn,
-                        seed=a.seed * 1000 + c, return_temperature=True, design=design)
+                        seed=a.seed * 1000 + c, return_temperature=True, design=design, temp=a.temp)
         if a.no_subsample:
             Ys.append(Y)
         else:
@@ -79,7 +85,7 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     torch.save({"eps": eps, "Y": torch.cat(Ys), "temperature": float(np.mean(Ts)), "time_s": time.time() - t0,
                 "design": design.to_dict(),
-                "protocol": {k: getattr(a, k) for k in ("n_rep", "n_steps", "stride", "burn", "keep", "seed", "no_subsample")}},
+                "protocol": {k: getattr(a, k) for k in ("n_rep", "n_steps", "stride", "burn", "keep", "seed", "no_subsample", "temp")}},
                a.out)
     print(f"[sim_ensembles] wrote {a.out} ({time.time() - t0:.0f}s)")
 

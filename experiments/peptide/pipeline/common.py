@@ -50,12 +50,28 @@ def feat_to_raw(F):
                                                 for k in range(na)], -1)], -1)
 
 
-def x_to_std(eps):
+def x_to_std(eps, design=None):
+    """free design parameters -> standardized X; the legacy constants unless a non-legacy design is given"""
+    if design is not None and not design.is_legacy:
+        return design.to_std(eps)
     return (torch.as_tensor(eps, dtype=torch.float32) - X_MEAN) / X_STD
 
 
-def x_from_std(x):
+def x_from_std(x, design=None):
+    if design is not None and not design.is_legacy:
+        return design.from_std(x)
     return torch.as_tensor(x, dtype=torch.float32) * X_STD + X_MEAN
+
+
+# Basin classes merge tuples related by the mirror image and, when the energy is symmetric under reading the chain
+# backwards (identical or palindromic residues), also by the reversal. Scripts that load a design call
+# set_design(design) so the classes follow it; the default (True) is the chain-distance benchmark.
+REVERSAL = True
+
+
+def set_design(design):
+    global REVERSAL
+    REVERSAL = bool(design.reversal_symmetric) if design is not None else True
 
 
 class YScaler:
@@ -95,7 +111,7 @@ def _flip(s):
     return s ^ 1          # sign flip: 0 <-> 1, 2 <-> 3
 
 
-def basin_classes(n_beads):
+def basin_classes(n_beads, reversal=None):
     """(class_of [4 ** (N - 2)] tuple index -> class id, names [n_classes]) under mirror + reversal."""
     import itertools
     na = n_beads - 2
@@ -104,7 +120,10 @@ def basin_classes(n_beads):
     index = {t: i for i, t in enumerate(tuples)}
     class_of, names, canon = [0] * len(tuples), [], {}
     for t in tuples:
-        orbit = {t, tuple(_flip(s) for s in t), tuple(_flip(s) for s in reversed(t)), tuple(reversed(t))}
+        rev = REVERSAL if reversal is None else reversal
+        orbit = {t, tuple(_flip(s) for s in t)}
+        if rev:
+            orbit |= {tuple(_flip(s) for s in reversed(t)), tuple(reversed(t))}
         c = min(orbit)
         if c not in canon:
             canon[c] = len(names)

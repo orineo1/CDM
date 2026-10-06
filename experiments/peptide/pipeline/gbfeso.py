@@ -76,16 +76,23 @@ def default_starts(design):
     return "low-low,low-high,high-low,high-high" if design.dim_x == 2 else "all-low,all-high,rand1,rand2"
 
 
-def start_eps(name, tid, K):
-    if name in STARTS and K == 2:
+def start_eps(name, tid, K, design=None):
+    """Named start of one run. Legacy designs: their constants (eps in the box [0.21, 1.55]); other designs: the same
+    positions relative to each parameter's box."""
+    legacy = design is None or design.is_legacy
+    if name in STARTS and K == 2 and legacy:
         return list(STARTS[name])
-    if name == "all-low":
-        return [LOW] * K
-    if name == "all-high":
-        return [HIGH] * K
+    if name in ("all-low", "all-high"):
+        if legacy:
+            return [LOW if name == "all-low" else HIGH] * K
+        lo, hi = design.bounds()
+        f = (LOW - EPS_BOX[0]) / (EPS_BOX[1] - EPS_BOX[0]) if name == "all-low" else (HIGH - EPS_BOX[0]) / (EPS_BOX[1] - EPS_BOX[0])
+        return [l + f * (h - l) for l, h in zip(lo, hi)]
     assert name.startswith("rand"), f"unknown start {name}"
     gr = torch.Generator().manual_seed(1000 * tid + int(name[4:]))     # uniform in the box, fixed per (target, k)
-    return (EPS_BOX[0] + (EPS_BOX[1] - EPS_BOX[0]) * torch.rand(K, generator=gr)).tolist()
+    if legacy:
+        return (EPS_BOX[0] + (EPS_BOX[1] - EPS_BOX[0]) * torch.rand(K, generator=gr)).tolist()
+    return design.sample(1, generator=gr)[0].tolist()
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -327,7 +334,7 @@ def cmd_opt(a):
         for sname in starts:
             if (tid, sname) in done:
                 continue
-            e0 = start_eps(sname, tid, design.dim_x)
+            e0 = start_eps(sname, tid, design.dim_x, design)
             torch.manual_seed(a.seed * 100003 + tid * 7 + starts.index(sname))
             init = dict(init_optimized_raw_1=e0[0], init_optimized_raw_2=e0[1]) if is_original(design) \
                 else dict(init_optimized_raw_1=e0)

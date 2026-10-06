@@ -44,13 +44,16 @@ def main():
     dx = design.dim_x
     feat = raw_to_feat(Y.reshape(-1, dy))
     sc = YScaler(feat.mean(0), feat.std(0))
-    x = x_to_std(tr["eps"]).repeat_interleave(K, dim=0)
+    x = x_to_std(tr["eps"], design).repeat_interleave(K, dim=0)
+    if design.is_legacy:
+        x_mean, x_std = X_MEAN, X_STD
+    else:
+        x_mean, x_std = design.from_std(torch.zeros(dx)).tolist(), (design.from_std(torch.ones(dx)) - design.from_std(torch.zeros(dx))).tolist()
     samples = torch.cat([x, sc.fwd(Y.reshape(-1, dy))], 1)
     os.makedirs(os.path.join(a.out, "targets"), exist_ok=True)
     torch.save({"samples": samples, "condition_on": dx, "y_mean": sc.mean, "y_std": sc.std,
-                "x_mean": X_MEAN, "x_std": X_STD, "eps": tr["eps"]}, os.path.join(a.out, "data.pt"))
-    lo, hi = EPS_BOX
-    prior = x_to_std(lo + (hi - lo) * torch.rand(a.n_prior, dx, generator=g))
+                "x_mean": x_mean, "x_std": x_std, "eps": tr["eps"]}, os.path.join(a.out, "data.pt"))
+    prior = x_to_std(design.sample(a.n_prior, generator=g), design)   # legacy: the same draws as before
     torch.save({"samples": prior, "condition_on": dx}, os.path.join(a.out, "prior_data.pt"))
     te = torch.load(a.targets, weights_only=False)
     assert Design.from_dict(te.get("design")).to_dict() == design.to_dict(), "train and target designs differ"
@@ -58,7 +61,7 @@ def main():
         assert tr["protocol"][k] == te["protocol"][k], f"training and target protocols differ in {k}"
     for i in range(te["eps"].shape[0]):
         np.save(os.path.join(a.out, "targets", f"target_{i:03d}.npy"), sc.fwd(te["Y"][i]).numpy())
-    json.dump({"design": design.to_dict(), "x_mean": X_MEAN, "x_std": X_STD, "y_mean": sc.mean.tolist(), "y_std": sc.std.tolist(),
+    json.dump({"design": design.to_dict(), "x_mean": x_mean, "x_std": x_std, "y_mean": sc.mean.tolist(), "y_std": sc.std.tolist(),
                "n_train_eps": E, "frames_per_eps": K, "eps_star": te["eps"].tolist(),
                "train_protocol": tr["protocol"], "target_protocol": te["protocol"]},
               open(os.path.join(a.out, "meta.json"), "w"), indent=1)
