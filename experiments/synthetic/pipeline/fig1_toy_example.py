@@ -785,20 +785,29 @@ def make_figure(st, sim, sweep, out_png, layout="lr", smc=None, panels="abcd", b
                  dict(xytext=(-16, 2), ha="right", va="bottom")][k % 3]
         if layout in ("wide2", "wide3"):
             place = dict(xytext=(0, 1), ha="center", va="bottom") if k != 1 else dict(xytext=(-4, -2), ha="right", va="top")
-        ax.annotate(rf"$x={cx:g}$", (float(y[j]), float(dk[j])), textcoords="offset points",
-                    fontsize=fs_leg, color=c_decoy[k % len(c_decoy)], **place)
+        anchor = (float(y[j]), float(dk[j]))
+        if layout == "wide3" and abs(cx - 6) < 1e-6:   # left of its peak, between the green and brown modes
+            anchor, place = (-0.95, 0.31), dict(xytext=(0, 0), ha="center", va="bottom")
+        ax.annotate(rf"$x={cx:g}$", anchor, textcoords="offset points",
+                    fontsize=fs_leg - (1 if layout == "wide3" else 0), color=c_decoy[k % len(c_decoy)], **place)
     ax.fill_between(y, gy, color=c_true, alpha=0.08, zorder=1)
     ax.plot([], [], color=c_true, ls="--", lw=2, label=r"target $\mathcal{G}(Y)$")   # legend slot before the methods
     # the recovered conditionals often coincide (every method that found x* draws the same curve), so
     # they are drawn as nested outlines: decreasing width in a fixed order, each on top of the previous
-    widths = {"MLGD": 3.4 if layout == "wide3" else 6.0, "PMLGD": 4.2, "PMLGD-F": 2.6, "MLGD-F": 1.4}
+    widths = {"MLGD": 1.8 if layout == "wide3" else 6.0, "PMLGD": 4.2, "PMLGD-F": 2.6,
+              "MLGD-F": 1.8 if layout == "wide3" else 1.4}
     for z, name in enumerate([m for m in ("MLGD", "PMLGD", "PMLGD-F", "MLGD-F") if m in methods]):
         r, st_ = res[name], STYLE[name]
         p = cond_params(st, torch.tensor(r["x_hat"]))
         ax.plot(y, mixture_density_1d(y, p).detach(), color=st_["color"], lw=widths[name], alpha=0.9, zorder=2 + z,
                 label=f"{name}: " + r"$\mathcal{P}(Y\mid X=\hat{x})$" + rf", $L^2={max(r['l2_gmm'], 0.0):.4f}$")
     # the target is drawn last (dashed, like x*) so it stays visible where a recovered x-hat matches it exactly
-    ax.plot(y, gy, color=c_true, ls="--", lw=2, zorder=5)
+    if layout == "wide3":   # solid, same width as the methods; labelled on its left flank
+        ax.plot(y, gy, color=c_true, lw=1.8, zorder=5)
+        ax.annotate(r"$\mathcal{G}$ ($x=2$)", (-2.62, 0.2), xytext=(-2, 0), textcoords="offset points",
+                    ha="right", va="center", fontsize=fs_leg - 1, color=c_true)
+    else:
+        ax.plot(y, gy, color=c_true, ls="--", lw=2, zorder=5)
     ax.set_xlim(ylo, yhi); ax.set_ylim(0, min(0.61, 1.1 * ax.get_ylim()[1] / 1.05)); ax.set_ylabel("density")
     ax.set_xlabel("y", labelpad=0 if layout == "wide3" else None)
     ax.set_title(r"$\mathcal{P}(Y\mid X=\hat{x})$ vs. the target $\mathcal{G}$" if W2 else
