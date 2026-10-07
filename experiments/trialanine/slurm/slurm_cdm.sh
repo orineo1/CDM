@@ -6,7 +6,7 @@
 #                                            starts), MLGD-KL + GB-FESO polish, MLGD-MMD + GB-FESO polish
 # Outputs: runs/trialanine/cdm/{data.pt, prior_data.pt, targets/, meta.json, models/, results/<method>_tXXX.json}
 #SBATCH --job-name=tri-cdm
-#SBATCH --partition=catfish
+#SBATCH --partition=salmon        # all methods on one GPU type (L40S) so wall times compare
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
