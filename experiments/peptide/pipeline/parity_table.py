@@ -41,7 +41,19 @@ def main():
             c = [M[s][t] for s in starts if t in M[s]]
             best.append({**min(c, key=lambda r: r["surrogate_loss"]), "time_s": sum(r["time_s"] for r in c)})
         rows[f"GB-FESO, best of {len(starts)} starts"] = best
-    for m in (a.methods or [m for m in M if not m.startswith("GB-FESO")]):
+    # other families run with several starts ("<family> [<start>]", e.g. GB-FESO polishing MLGD's answers):
+    # per target the start with the lowest surrogate loss, time = sum over its starts
+    fams = sorted({m.split(" [")[0] for m in M if " [" in m and not m.startswith("GB-FESO [")})
+    for fam in fams:
+        ms = [m for m in M if m.startswith(fam + " [")]
+        best = []
+        for t in sorted({t for m in ms for t in M[m]}):
+            c = [M[m][t] for m in ms if t in M[m]]
+            b = dict(min(c, key=lambda r: r.get("surrogate_loss", float("inf"))))
+            b["time_s"] = sum(r.get("time_s", 0.0) for r in c)
+            best.append(b)
+        rows[f"{fam}, best of {len(ms)} starts"] = best
+    for m in (a.methods or [m for m in M if not m.startswith("GB-FESO") and " [" not in m]):
         if m in M:
             rows[m] = list(M[m].values())
     print(f"| N={a.n} method | held-out mean | median | <=0.3 | n | test mean | median | <=0.3 | n | all-40 mean | median | <=0.3 | n | median time (s) |")

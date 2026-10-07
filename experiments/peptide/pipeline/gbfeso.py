@@ -326,16 +326,19 @@ def cmd_opt(a):
     assert Design.from_dict(te.get("design")).to_dict() == design.to_dict(), "targets and checkpoint designs differ"
     ids = parse_ids(a.target_ids, Yt.shape[0])
     starts = [s.strip() for s in (a.starts or default_starts(design)).split(",")]
+    from_file = json.load(open(a.starts_file)) if a.starts_file else None
     records = []
     if os.path.exists(a.out):
         records = json.load(open(a.out))["runs"]
     done = {(r["target_id"], r["start"]) for r in records}
     for tid in ids:
-        for sname in starts:
+        t_starts = list(from_file[str(tid)]) if from_file is not None else starts
+        for sname in t_starts:
             if (tid, sname) in done:
                 continue
-            e0 = start_eps(sname, tid, design.dim_x, design)
-            torch.manual_seed(a.seed * 100003 + tid * 7 + starts.index(sname))
+            e0 = [float(v) for v in from_file[str(tid)][sname]] if from_file is not None \
+                else start_eps(sname, tid, design.dim_x, design)
+            torch.manual_seed(a.seed * 100003 + tid * 7 + t_starts.index(sname))
             init = dict(init_optimized_raw_1=e0[0], init_optimized_raw_2=e0[1]) if is_original(design) \
                 else dict(init_optimized_raw_1=e0)
             oc = run_feso.EpsilonOptConfig(
@@ -383,6 +386,9 @@ def main():
                         "rand<k> (uniform in the box); default: the four corners for 2 free eps, else "
                         "all-low,all-high,rand1,rand2")
     o.add_argument("--method-name", default="GB-FESO", help="name of this variant in the results table")
+    o.add_argument("--starts-file", default=None,
+                   help="JSON {target_id: {start_name: [eps...]}}: start from these designs (e.g. another method's "
+                        "answers) instead of the named starts; --starts is then ignored")
     o.add_argument("--steps", type=int, default=201)
     o.add_argument("--lr", type=float, default=5e-2)
     o.add_argument("--lr-refine", type=float, default=5e-2)
