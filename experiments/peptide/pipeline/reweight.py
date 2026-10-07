@@ -18,7 +18,8 @@ For each target (a design q* simulated directly, 64 replicas):
   * descent : projected Adam on q from --n-starts prior draws (the ideal single-start gradient method, on the
               true loss); endpoints are clustered (q and -q have identical ensembles: distance min |a -+ b|), every
               cluster is a local minimum found by descent; 'solved' = the endpoint reaches the global basin
-              (loss <= the loss at q* + --solve-tol x the median random loss);
+              (loss <= the loss at q* + --solve-tol x (median random loss - loss at q*));
+  --loss fkl replaces the MMD by the forward KL(target || design) of Gaussian KDEs (linear in the weights);
   * barrier : MBAR loss along the straight line from each spurious minimum to the nearer of +-q*;
   * --confirm: the line scans of the best spurious minima re-simulated directly (no reweighting) and scored by the
               same MMD, energy distance and basin TV: direct evidence of the barrier.
@@ -235,6 +236,8 @@ def run(a):
     hs = [m * med for m in a.bw_mult]
     rff = RFF(mean, std, hs, a.rff_dim, seed=a.seed, device=dev)
     Psi = torch.cat([rff(rw.Y[c:c + 200000]) for c in range(0, rw.Y.shape[0], 200000)])     # [n, D]
+    Z = ((F - mean) / std).to(dev) if a.loss == "fkl" else None
+    LF = [None]                    # the loss of the current target: log weights [B, n] -> [B]
     sqnorm = (Psi * Psi).sum(1)
     codes = None
     names = common.basin_classes(design.n_beads)[1]
@@ -248,7 +251,7 @@ def run(a):
     def loss_of(X, muT, sqT, chunk=a.chunk):
         out = []
         for c in range(0, X.shape[0], chunk):
-            out.append(weighted_loss(rw.logw(X[c:c + chunk].to(dev)), Psi, sqnorm, muT, sqT))
+            out.append(LF[0](rw.logw(X[c:c + chunk].to(dev))))
         return torch.cat(out)
 
     ids = list(range(tens["eps"].shape[0])) if a.target_ids is None else \
@@ -263,6 +266,17 @@ def run(a):
         qs = tens["eps"][tid].float()
         psiT = rff(T)
         muT, sqT = mmd_u_target(psiT)
+        if a.loss == "mmd":
+            LF[0] = lambda lw, muT=muT, sqT=sqT: weighted_loss(lw, Psi, sqnorm, muT, sqT)
+        else:
+            # forward KL(target || design) with Gaussian KDEs of bandwidth --kde-h on the standardized features:
+            # -mean_t log p_q(y_t) + mean_t log p_T(y_t) (leave-one-out); p_q(y_t) = sum_n w_n K(y_t, y_n) is linear in w
+            zt = ((common.raw_to_feat(T[torch.randperm(T.shape[0], generator=gt)[:a.kde_n]]) - mean) / std).to(dev)
+            Kt = torch.cat([torch.exp(-torch.cdist(Z[c:c + 100000], zt) ** 2 / (2 * a.kde_h ** 2))
+                            for c in range(0, Z.shape[0], 100000)])                              # [n, m]
+            KTT = torch.exp(-torch.cdist(zt, zt) ** 2 / (2 * a.kde_h ** 2))
+            logpT = torch.log((KTT.sum(1) - 1).clamp_min(0) / (zt.shape[0] - 1) + 1e-30).mean()
+            LF[0] = lambda lw, Kt=Kt, logpT=logpT: -torch.log(torch.exp(lw) @ Kt + 1e-30).mean(1) + logpT
         h = T.shape[0] // 2
         perm = torch.randperm(T.shape[0], generator=gt)
         mu1, sq1 = mmd_u_target(rff(T[perm[:h]]))
@@ -287,7 +301,7 @@ def run(a):
             opt.zero_grad()
             Ls = []
             for c in range(0, X.shape[0], a.chunk):          # backward per chunk: the graph of one chunk at a time
-                Lc = weighted_loss(rw.logw(X[c:c + a.chunk]), Psi, sqnorm, muT, sqT)
+                Lc = LF[0](rw.logw(X[c:c + a.chunk]))
                 Lc.sum().backward()
                 Ls.append(Lc.detach())
             L = torch.cat(Ls)
@@ -303,7 +317,7 @@ def run(a):
         ends_c, Lend_c = ends.cpu(), Lend.cpu()
         dstar = sign_dist(ends_c, qs[None])
         medR = float(LR.median())
-        thr = min(L_star) + a.solve_tol * medR
+        thr = min(L_star) + a.solve_tol * (medR - min(L_star))
         solved = (Lend_c <= thr)
         cl = cluster(ends_c, Lend_c, a.radius)
         clusters = []
@@ -459,13 +473,17 @@ def main():
     p.add_argument("--max-frames", type=int, default=2000, help="pool frames per design used")
     p.add_argument("--bw-mult", type=float, nargs="*", default=[0.25, 0.5, 1.0, 2.0])
     p.add_argument("--rff-dim", type=int, default=256, help="random features per bandwidth")
+    p.add_argument("--loss", default="mmd", choices=["mmd", "fkl"], help="mmd: MMD^2 (MLGD's loss); fkl: forward KL "
+                   "(target || design) with Gaussian KDEs (the convex direction of GB-FESO's symmetric KDE-KL)")
+    p.add_argument("--kde-h", type=float, default=0.5, help="fkl: KDE bandwidth on standardized features")
+    p.add_argument("--kde-n", type=int, default=1000, help="fkl: target frames")
     p.add_argument("--n-random", type=int, default=1000)
     p.add_argument("--n-starts", type=int, default=128)
     p.add_argument("--steps", type=int, default=300)
     p.add_argument("--lr", type=float, default=0.02)
     p.add_argument("--radius", type=float, default=0.2, help="clustering radius of endpoints (raw design units)")
     p.add_argument("--min-count", type=int, default=2, help="a local minimum must collect this many starts")
-    p.add_argument("--solve-tol", type=float, default=0.05, help="solved: L <= L(q*) + tol x median random L")
+    p.add_argument("--solve-tol", type=float, default=0.05, help="solved: L <= L(q*) + tol x (median random L - L(q*))")
     p.add_argument("--line-points", type=int, default=41)
     p.add_argument("--pert-radius", type=float, default=0.05)
     p.add_argument("--chunk", type=int, default=32)
