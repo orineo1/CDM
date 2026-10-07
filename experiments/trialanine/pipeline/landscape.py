@@ -28,6 +28,7 @@ ap.add_argument("--l2", type=float, default=0.0, help="optional Gaussian-prior p
 ap.add_argument("--seed", type=int, default=1)
 ap.add_argument("--tag", default="")
 ap.add_argument("--losses", default="kl,mmd,klcount")
+ap.add_argument("--max_bands", type=int, default=30)
 ap.add_argument("--box", type=float, default=0.0, help="L-BFGS-B bounds |x_j| <= box * kT (0 = none)")
 ap.add_argument("--xstar_npy", default=None, help="(T, 12) hidden designs in kJ/mol instead of prior draws")
 ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "results"))
@@ -142,16 +143,18 @@ for ti in range(a.targets):
                 bars.append(b)
                 if b <= tol:
                     parent[find(j)] = find(i)
-        reps = sorted({find(i) for i in idx})
+        # elastic bands between line-components: greedy, each representative first against the component of
+        # the best minimizer, then against the others; at most --max_bands bands per loss
+        reps = sorted({find(i) for i in idx}, key=lambda i: Ls[i])
         for ii, i in enumerate(reps):
-            for j in reps[ii + 1:]:
-                if find(i) == find(j):
+            for j in reps[:ii]:
+                if find(i) == find(j) or len(bands) >= a.max_bands:
                     continue
-                bp = band_path(obj, sols[i]["x"], sols[j]["x"], kT, n=24, springs=(1e-3, 1e-1), maxiter=1000)
+                bp = band_path(obj, sols[j]["x"], sols[i]["x"], kT, n=24, springs=(1e-3, 1e-1), maxiter=1000)
                 bb = bp["band_max_dense"] - max(sols[i]["L"], sols[j]["L"])
                 bands.append(dict(Li=sols[i]["L"], Lj=sols[j]["L"], band_barrier=bb, **bp))
                 if bb <= tol:
-                    parent[find(j)] = find(i)
+                    parent[find(i)] = find(j)
         comps = {}
         for i in idx:
             comps.setdefault(find(i), []).append(i)
