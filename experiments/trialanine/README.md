@@ -31,9 +31,20 @@ Python env: `pip install openmm pymbar numpy scipy matplotlib PeptideBuilder bio
 
 ## Results (2026-10-07)
 
-See the report in the commit message history / `results/*.json`. Short version:
-- Unbiased MD at x0 is not ergodic (20 ns: 5 phi flips, 2 of 8 states visited).
-- Frozen-bias production at x0 covers all 8 states (per-state Kish ESS 406 to 12,486; total 26,576 of 800k).
-- Reweighting validated against independent runs up to |x| = 10.7 kT (TV <= 0.02).
-- State-population loss (labeled 8 states): one connected, curved, ~5-dim zero-loss set; no separated minima.
-  Dihedral MMD: unique minimizer (x is identifiable). Label-free count target: one separated mode per residue.
+- Unbiased MD at x0 is not ergodic: 20 ns, 5 phi flips, 2 of 8 states visited.
+- WT metadynamics (6 walkers x 12 ns): every walker visits all 8 states (~1600 phi flips each).
+- Frozen-bias production at x0 (16 x 50 ns, 800k frames): all 8 states, per-state Kish ESS 406 (+++) to 12,486;
+  total ESS 26,576. x0 populations: --- 0.606, +-- 0.222, -+- 0.156, --+ 0.0098, -++ 0.0034, +-+ 0.0015,
+  ++- 0.0008, +++ 0.0001.
+- ESS vs prior sd sigma (kT per coefficient; median ESS(x)/ESS(x0)): 0.25: 1.01, 0.5: 0.92, 1: 0.70, 1.5: 0.48,
+  2: 0.31, 3: 0.20; median of the smallest per-state ESS stays ~400 for every sigma, >= 100 in all 1200 draws.
+- Validation (populations of the 8 states, reweighted from x0 vs independent walkers simulated at x):
+  |x| = 2.7 kT TV 0.003 (max |z| 0.65); 7.3 kT TV 0.0005 (0.97); 10.7 kT TV 0.021 (1.63) against walkers with their
+  own metadynamics bias at x. With the x0 bias, the 10.7 kT walkers were trapped (7 of 8 never visited phi1 '+').
+- Landscape, labeled 8-state target G = P(.|x*) (KL(G || P_x)): every L-BFGS start (24-48 per target, 9 targets)
+  reaches L ~ 1e-15; the minimizers spread 3-9 kT and form one connected zero-loss set (straight lines between them
+  rise up to 0.36 nats, relaxed elastic bands <= 2e-5). Non-identifiable, not multimodal.
+- Dihedral MMD (6 dihedrals, von Mises kernel): one minimizer (= x*), all 16 starts.
+- Label-free target (distribution of the number of '+' residues): separated minima, one per residue carrying the '+'
+  (3 components; band barriers 0.03-0.28 nats vs a random-x median loss ~0.5), both for engineered and for
+  prior-drawn x*.
