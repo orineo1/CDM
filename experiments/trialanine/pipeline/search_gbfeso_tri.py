@@ -78,7 +78,7 @@ def main():
     else:
         J = json.load(open(a.init_json))
         rs = J["best"].get("restarts") or J["attempts"][0]["restarts"]
-        key = lambda q: q.get("select_loss", q["final_loss"]) if q.get("select_loss") is not None else q["final_loss"]  # noqa: E731
+        key = lambda q: (0, q["select_loss"]) if q.get("select_loss") is not None else (1, q["final_loss"])  # noqa: E731
         rs = sorted(rs, key=key)[:a.init_top]
         starts = [torch.tensor(q["x_hat"], device=dev).view(1, c).float() for q in rs]
     runs, t_all = [], time.time()
