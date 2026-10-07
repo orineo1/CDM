@@ -5,6 +5,7 @@
 #   STAGE=check  sbatch ...                  sampler accuracy (count distribution) at the targets and prior draws
 #   STAGE=search sbatch --array=0-K ...      task k = target k: MLGD-KL, MLGD-MMD, GB-FESO (x0 start; 4 random
 #                                            starts), MLGD-KL + GB-FESO polish, MLGD-MMD + GB-FESO polish
+# Every loss is computed on the label-free count statistic (pipeline/count_feature.py).
 # Outputs: runs/trialanine/cdm/{data.pt, prior_data.pt, targets/, meta.json, models/, results/<method>_tXXX.json}
 #SBATCH --job-name=tri-cdm
 #SBATCH --partition=salmon        # all methods on one GPU type (L40S) so wall times compare
@@ -44,10 +45,10 @@ case "${STAGE:?set STAGE}" in
           --select-top 5 --select-n 2000 --select-repeats 5 --x-box -2 2 --seed $((42 + k)) --device cuda"
     for L in kde-kl mmd; do
       N=MLGD-$([ $L = kde-kl ] && echo KL || echo MMD)
-      [ -f $O/${N}_t$tid.json ] || python experiments/synthetic/pipeline/search_mog.py --prior $PR --sampler $S \
+      [ -f $O/${N}_t$tid.json ] || python $P/search_mlgd_tri.py --prior $PR --sampler $S --count-meta $R/meta.json \
         --target $TG --loss $L --kde-bandwidth 0.5 $MLGD --out $O/${N}_t$tid.json
     done
-    G="python $P/search_gbfeso_tri.py --sampler $S --target $TG --loss kl --seed $((42 + k)) --device cuda"
+    G="python $P/search_gbfeso_tri.py --sampler $S --target $TG --loss kl --count-meta $R/meta.json --seed $((42 + k)) --device cuda"
     [ -f $O/GBFESO-x0_t$tid.json ] || $G --init zero --method-name GBFESO-x0 --out $O/GBFESO-x0_t$tid.json
     [ -f $O/GBFESO-rand4_t$tid.json ] || $G --init randn --n-starts 4 --method-name GBFESO-rand4 --out $O/GBFESO-rand4_t$tid.json
     for N in MLGD-KL MLGD-MMD; do

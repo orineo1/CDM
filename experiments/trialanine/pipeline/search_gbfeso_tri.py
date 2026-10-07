@@ -51,6 +51,8 @@ def main():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--method-name", default=None)
+    p.add_argument("--count-meta", default=None, help="meta.json: compute the loss on the count statistic (count_feature.py)")
+    p.add_argument("--count-kappa", type=float, default=8.0)
     p.add_argument("--out", required=True)
     a = p.parse_args()
     dev = a.device
@@ -63,6 +65,10 @@ def main():
     lo, hi = -a.box * torch.ones(1, c, device=dev), a.box * torch.ones(1, c, device=dev)
     loss_fn = (KDEKLLoss(bandwidth=a.kde_bandwidth, kl_lambda=a.kl_lambda) if a.loss == "kl"
                else MMDLoss(kernel=RBF(n_kernels=5, mul_factor=2.0, device=dev)))
+    if a.count_meta:
+        sys.path.insert(0, HERE)
+        from count_feature import CountFeature, CountLoss
+        loss_fn = CountLoss(loss_fn, CountFeature.from_meta(a.count_meta, a.count_kappa))
     cfg = lambda n: SimpleNamespace(n_cond=n, repeat_condition=True, device=dev, cond_sample_kwargs={},   # noqa: E731
                                     condition_on_slice=(arch == "diffusion"), cond_output_transform=None)
     torch.manual_seed(a.seed)
