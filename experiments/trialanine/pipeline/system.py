@@ -8,9 +8,12 @@ States: s_i = 1 ('+', the phi ~ +60 basin) if 0 < phi_i < 120 deg, else 0 ('-', 
 state index = 4 s_1 + 2 s_2 + s_3 (8 states, Tang/Chen/Roux/Chipot arXiv:2609.04449 Fig. 2B).
 """
 import numpy as np
-import openmm as mm
-import openmm.app as app
-import openmm.unit as u
+try:   # openmm is needed only to build / simulate; the analysis helpers below are numpy-only
+    import openmm as mm
+    import openmm.app as app
+    import openmm.unit as u
+except ImportError:
+    mm = app = u = None
 
 KB = 0.0083144626  # kJ/mol/K
 NBASIS_PER_RES = 4
@@ -116,3 +119,18 @@ def dihedral(pos, q):
     xx = (v * w).sum(1)
     yy = (np.cross(b1n, v) * w).sum(1)
     return np.arctan2(yy, xx)
+
+
+def canonical_features(phi, psi):
+    """Label-free representation of a frame: the three residues' (phi, psi) pairs sorted by phi (ascending in
+    (-pi, pi]), each as (cos phi, sin phi, cos psi, sin psi) -> (N, 12). Invariant to relabeling the residues,
+    so the ensemble of these features is the label-free ensemble."""
+    order = np.argsort(phi, axis=1)
+    ph = np.take_along_axis(phi, order, 1); ps = np.take_along_axis(psi, order, 1)
+    return np.stack([np.cos(ph), np.sin(ph), np.cos(ps), np.sin(ps)], 2).reshape(len(phi), 12)
+
+
+def count_plus(phi):
+    """Number of residues in the phi ~ +60 basin (0..3)."""
+    d = np.degrees(phi)
+    return ((d > 0) & (d < 120)).sum(1)
