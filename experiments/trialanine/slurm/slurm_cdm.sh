@@ -2,6 +2,7 @@
 # Trialanine CDM benchmark (label-free count targets), from the repo root. STAGE selects the step:
 #   STAGE=data   sbatch -p glacier --gres=none experiments/trialanine/slurm/slurm_cdm.sh   (CPU, reweighting)
 #   STAGE=train  sbatch --array=0-1 ...      0: conditional diffusion P(y | x)   1: prior over x
+#   STAGE=check  sbatch ...                  sampler accuracy (count distribution) at the targets and prior draws
 #   STAGE=search sbatch --array=0-K ...      task k = target k: MLGD-KL, MLGD-MMD, GB-FESO (x0 start; 4 random
 #                                            starts), MLGD-KL + GB-FESO polish, MLGD-MMD + GB-FESO polish
 # Outputs: runs/trialanine/cdm/{data.pt, prior_data.pt, targets/, meta.json, models/, results/<method>_tXXX.json}
@@ -32,6 +33,8 @@ case "${STAGE:?set STAGE}" in
       python $T --data $R/prior_data.pt --model unconditional --nunits 128 --nblocks 3 \
         --epochs 50 --batch-size 512 --seed 0 --output-dir $R/models/prior
     fi ;;
+  check)
+    python $P/sampler_check.py --root $R --frames "runs/trialanine/prod_x0_w*.npz" ;;
   search)
     python -c "import torch; print(torch.cuda.get_device_name())"
     tid=$(printf %03d $k); TG=$R/targets/target_$tid.npy; [ -f $TG ] || { echo "no $TG"; exit 0; }
