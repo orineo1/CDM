@@ -48,7 +48,8 @@ reps = {m: min([s for s in sols if s["mode"] == m], key=lambda s: s["L"]) for m 
 
 res = dict(G_count=G.tolist(), xstar_kT=(xstar / kT).tolist(), n_starts=a.starts,
            modes={str(m): dict(count=sum(s["mode"] == m for s in sols), L_best=reps[m]["L"],
-                               plus_marginals=reps[m]["plus"].tolist(), x_kT=(reps[m]["x"] / kT).round(2).tolist())
+                               plus_marginals=reps[m]["plus"].tolist(), ess=float(F.ess(reps[m]["x"])[0]), N=F.N,
+                               x_kT=(reps[m]["x"] / kT).round(2).tolist())
                   for m in modes}, bands={})
 fig, ax = plt.subplots(1, 2, figsize=(11, 4.2))
 for i, m1 in enumerate(modes):
@@ -65,7 +66,9 @@ if len(modes) >= 2:
     if len(modes) >= 3:
         xc = reps[modes[2]]["x"]; e2 = (xc - xa) - ((xc - xa) @ e1) * e1; e2 /= np.linalg.norm(e2)
     L0 = np.linalg.norm(xb - xa) / kT
-    u = np.linspace(-0.4 * L0, 1.4 * L0, 61); v = np.linspace(-0.7 * L0, 0.9 * L0, 61)
+    pr = np.array([[(reps[m]["x"] - xa) @ e1, (reps[m]["x"] - xa) @ e2] for m in modes]) / kT
+    u = np.linspace(pr[:, 0].min() - 0.3 * L0, pr[:, 0].max() + 0.3 * L0, 61)
+    v = np.linspace(pr[:, 1].min() - 0.3 * L0, pr[:, 1].max() + 0.3 * L0, 61)
     Z = np.array([[obj(xa + kT * (uu * e1 + vv * e2))[0] for uu in u] for vv in v])
     cs = ax[1].contourf(u, v, np.log10(Z + 1e-6), 30, cmap="viridis"); plt.colorbar(cs, ax=ax[1], label="log10 loss")
     for m in modes:
