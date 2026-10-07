@@ -127,10 +127,13 @@ def cmd_metrics(a):
         assert ev["protocol"][k] == te["protocol"][k], f"evaluation and target protocols differ in {k}"
     g = torch.Generator().manual_seed(0)
     dev = "cuda" if torch.cuda.is_available() else "cpu"
+    flip = np.array([-1.0 if p.startswith("charge") else 1.0 for p in design.free])
     for i, r in enumerate(runs):
         T, G = te["Y"][r["target_id"]], ev["Y"][i]
         r.update(score_pair(T, G, design, basins, a.kl_n, scaler, g, dev))
-        r["eps_err"] = float(np.linalg.norm(np.array(r["eps_eval"]) - np.array(r["eps_star"])))
+        e, es = np.array(r["eps_eval"]), np.array(r["eps_star"])
+        # charges: q and -q (all charges flipped) have the same energy, so the error is up to that flip
+        r["eps_err"] = float(min(np.linalg.norm(e - es), np.linalg.norm(e - es * flip)))
         r["basins"] = basins
     os.makedirs(a.out, exist_ok=True)
     json.dump(runs, open(os.path.join(a.out, f"per_run{a.suffix}.json"), "w"), indent=0)
