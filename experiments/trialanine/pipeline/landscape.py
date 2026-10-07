@@ -13,6 +13,7 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import system as S
 from rw import Frames
+from paths import band_path
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--frames", default="/mnt/c/Code/Github/CDM/runs/trialanine/prod_x0_w*.npz")
@@ -88,27 +89,6 @@ def make_obj(kind, tgt):
     return f
 
 
-def band_barrier(obj, xa, xb, n=16, k=1e-3):
-    """Elastic band between two minimizers: minimize sum_k L(x_k) + k/2 sum |x_{k+1} - x_k|^2 / kT^2 over the
-    interior points (endpoints fixed), from the straight line. Returns the max loss along the relaxed band
-    minus the larger endpoint loss (about 0 when both lie in one connected low-loss set)."""
-    t = np.linspace(0, 1, n)[1:-1, None]
-    z0 = ((1 - t) * xa + t * xb).ravel()
-
-    def f(z):
-        X = np.vstack([xa, z.reshape(-1, D), xb])
-        vals, grads = zip(*[obj(x) for x in X[1:-1]])
-        dX = np.diff(X, axis=0) / kT
-        E = sum(vals) + 0.5 * k * (dX ** 2).sum()
-        g = np.array(grads) + k * (dX[:-1] - dX[1:]) / kT
-        return E, g.ravel()
-    bnd = [(-a.box * kT, a.box * kT)] * len(z0) if a.box > 0 else None
-    r = minimize(f, z0, jac=True, method="L-BFGS-B", bounds=bnd, options=dict(maxiter=500))
-    X = np.vstack([xa, r.x.reshape(-1, D), xb])
-    L = np.array([obj(x)[0] for x in X])
-    return float(L.max() - max(L[0], L[-1]))
-
-
 def path_barrier(obj, xa, xb, n=25):
     t = np.linspace(0, 1, n)
     L = np.array([obj((1 - s) * xa + s * xb)[0] for s in t])
@@ -167,8 +147,9 @@ for ti in range(a.targets):
             for j in reps[ii + 1:]:
                 if find(i) == find(j):
                     continue
-                bb = band_barrier(obj, sols[i]["x"], sols[j]["x"])
-                bands.append(dict(Li=sols[i]["L"], Lj=sols[j]["L"], band_barrier=bb))
+                bp = band_path(obj, sols[i]["x"], sols[j]["x"], kT, n=24, springs=(1e-3, 1e-1), maxiter=1000)
+                bb = bp["band_max_dense"] - max(sols[i]["L"], sols[j]["L"])
+                bands.append(dict(Li=sols[i]["L"], Lj=sols[j]["L"], band_barrier=bb, **bp))
                 if bb <= tol:
                     parent[find(j)] = find(i)
         comps = {}
