@@ -32,7 +32,7 @@ echo "parity N=$N $V target $tid on $(hostname): $(python -c 'import torch; prin
 python experiments/peptide/pipeline/search_peptide.py --prior $D/models/prior/model_unconditional.pt \
   --sampler $D/models/gbfeso.pt --target $D/targets/target_$tid.npy \
   --algo lgd --n-attempts 1 --n-cond 250 --guidance-optim adam --step-size 0.05 --guide-grad zo \
-  --n-restarts ${R:-10} --refine-steps 100 --refine-lr 0.02 --refine-n-cond 3000 --refine-keep-best \
+  --n-restarts ${R:-10} --refine-steps ${RSTEPS:-100} --refine-lr ${RLR:-0.02} --refine-n-cond ${RNC:-3000} --refine-keep-best \
   --refine-grad ${REFG:-pathwise} --select-top 5 --select-n ${SELN:-2000} --select-repeats 5 \
   $LF $BF --seed $((42 + t)) --device cuda --out "$F" ${EXTRA:-}
 echo "done $(date)"
