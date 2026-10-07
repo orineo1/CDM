@@ -52,7 +52,7 @@ def score_all(Ys, T, gen):
 
 
 def run(a):
-    design = Design.from_args(a.n_beads, a.free, a.fixed, a.box, a.prior)
+    design = Design.from_args(a.n_beads, a.free, a.fixed, a.box, a.prior, a.temp, a.elec)
     common.set_design(design)
     g = torch.Generator().manual_seed(a.seed)
     xstars = design.sample(a.n_targets, generator=g)
@@ -141,6 +141,7 @@ def main():
     p.add_argument("--box", default=None)
     p.add_argument("--prior", default="uniform")
     p.add_argument("--temp", type=float, default=None)
+    p.add_argument("--elec", default=None, help="screened Coulomb of charged designs, e.g. A=1,debye=2,rcut=6")
     p.add_argument("--n-targets", type=int, default=5)
     p.add_argument("--target-id", type=int, default=0)
     p.add_argument("--n-random", type=int, default=500)

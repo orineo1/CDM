@@ -63,6 +63,7 @@ def main():
     p.add_argument("--n-base", type=int, default=3)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--temp", type=float, default=None)
+    p.add_argument("--elec", default=None, help="screened Coulomb of charged designs, e.g. A=1,debye=2,rcut=6")
     p.add_argument("--n-rep", type=int, default=64)
     p.add_argument("--n-steps", type=int, default=4_000_000)
     p.add_argument("--burn", type=int, default=400_000)
@@ -70,7 +71,7 @@ def main():
     p.add_argument("--device", default=None)
     p.add_argument("--out", required=True)
     a = p.parse_args()
-    design = Design.from_args(a.n_beads, a.free, a.fixed, a.box, a.prior)
+    design = Design.from_args(a.n_beads, a.free, a.fixed, a.box, a.prior, a.temp, a.elec)
     common.set_design(design)
     assert a.param in design.free, f"{a.param} is not free in {design}"
     k = design.free.index(a.param)

@@ -42,7 +42,9 @@ def main():
                    help="values of the others, e.g. 3=0.5 or eps=0.5,eta4=2 (default: N = 4 -> 3=0.5)")
     p.add_argument("--box", default=None, help="ranges, e.g. sigma=0.8:1.3,eta=0.5:1.5 (default simulate.BOXES)")
     p.add_argument("--prior", default="uniform", help="design prior for --n-eps draws: uniform | band:<w>")
-    p.add_argument("--temp", type=float, default=None, help="Langevin temperature (default simulate.TEMP = 0.09)")
+    p.add_argument("--temp", type=float, default=None, help="Langevin temperature (default simulate.TEMP = 0.09); "
+                   "a non-legacy design keeps it, so later scripts (--design-from) simulate at the same temperature")
+    p.add_argument("--elec", default=None, help="screened Coulomb of charged designs, e.g. A=1,debye=2,rcut=6 (simulate.ELEC)")
     p.add_argument("--design-from", default=None, help="take the design from this ensemble .pt (overrides the three above)")
     p.add_argument("--no-subsample", action="store_true",
                    help="keep all frames in replica-major time order (for the equilibration checks)")
@@ -58,7 +60,9 @@ def main():
     if a.design_from:
         design = Design.from_dict(torch.load(a.design_from, weights_only=False).get("design"))
     else:
-        design = Design.from_args(a.n_beads, a.free_eps, a.fixed_eps, a.box, a.prior)
+        legacy = Design.from_args(a.n_beads, a.free_eps, a.fixed_eps, a.box, a.prior).is_legacy
+        # the temperature joins the design except for the legacy (eps-only) designs, whose files stay as before
+        design = Design.from_args(a.n_beads, a.free_eps, a.fixed_eps, a.box, a.prior, None if legacy else a.temp, a.elec)
     K, dy = design.dim_x, design.dim_y
 
     if a.eps_file:
