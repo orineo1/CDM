@@ -1,5 +1,7 @@
 #!/bin/bash
 # Frozen-bias production walkers for trialanine (one CPU per array task; OpenMM Reference platform).
+# MODE=metad: multiple-walker well-tempered metadynamics at design X instead (shared bias dir
+#   runs/trialanine/metad_${TAG}_dir; combine with pipeline/combine_bias.py into metad_${TAG}_bias.npz).
 #   TAG=x0 NS=50 BIAS=runs/trialanine/metad_bias.npz sbatch --array=0-15 experiments/trialanine/slurm/slurm_prod.sh
 #   TAG=val1 X=runs/trialanine/x_val1.npy ... (design as .npy or comma list; default x0 = 0)
 # Output: runs/trialanine/prod_${TAG}_w${TASK}.npz/.json (phi, psi, frozen-bias energy V; diagnostics).
@@ -16,5 +18,10 @@ cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/../../..}"
 VENV=${VENV:-$CDM_LAB/venvs/trialanine-venv}; . $VENV/bin/activate
 export PYTHONUNBUFFERED=1 OPENMM_CPU_THREADS=1
 W=${SLURM_ARRAY_TASK_ID:-0}; TAG=${TAG:-x0}; NS=${NS:-50}; R=runs/trialanine; mkdir -p $R
-python experiments/trialanine/pipeline/sample.py prod ${X:+--x $X} ${BIAS:+--bias $BIAS} --ns $NS --seed $((1000 + W)) \
-  --out $R/prod_${TAG}_w${W}.npz
+if [ "${MODE:-prod}" = metad ]; then
+  python experiments/trialanine/pipeline/sample.py metad ${X:+--x $X} --ns $NS --seed $((2000 + W)) \
+    --bias_dir $R/metad_${TAG}_dir --out $R/metad_${TAG}_w${W}.npz
+else
+  python experiments/trialanine/pipeline/sample.py prod ${X:+--x $X} ${BIAS:+--bias $BIAS} --ns $NS --seed $((1000 + W)) \
+    --out $R/prod_${TAG}_w${W}.npz
+fi
