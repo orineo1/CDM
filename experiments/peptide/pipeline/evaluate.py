@@ -234,6 +234,8 @@ def best_of_starts(runs):
             fixed = "corner starts" if all("-" in q["start"] and not q["start"].startswith("all") for q in corners) else "fixed starts"
             for rs, what in ([(corners, fixed), (rs_all, "starts")] if len(corners) < len(rs_all)
                              else [(rs_all, "starts")]):
+                if not rs:          # only random starts: no corner row
+                    continue
                 b = dict(min(rs, key=lambda q: q["surrogate_loss"]))
                 name = f"{fam}, best of {len(rs)} {what}"
                 b.update({"method": name, "family": name, "time_s": sum(q["time_s"] for q in rs)})
