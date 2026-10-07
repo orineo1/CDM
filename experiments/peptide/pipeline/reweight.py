@@ -55,13 +55,38 @@ def positions(Y, n):
     return x
 
 
-def pair_kernel(Y, design):
-    """[m, P] phi(r_ij) of every pair (design.pairs() order): the electrostatic energy per unit A q_i q_j"""
+def pair_dist(Y, design):
+    """[m, P] distance of every pair (design.pairs() order)"""
     x = positions(Y.double(), design.n_beads)
     P = design.pairs()
-    r = (x[:, [j for _, j, _ in P]] - x[:, [i for i, _, _ in P]]).norm(dim=-1)
+    return (x[:, [j for _, j, _ in P]] - x[:, [i for i, _, _ in P]]).norm(dim=-1).float()
+
+
+def pair_kernel(Y, design):
+    """[m, P] phi(r_ij) of every pair (design.pairs() order): the electrostatic energy per unit A q_i q_j"""
+    r = pair_dist(Y, design)
     el = design.elec
-    return (torch.exp(-r / el["debye"]) / r * (r < el["rcut"])).float()
+    return torch.exp(-r / el["debye"]) / r * (r < el["rcut"])
+
+
+def pair_energy(X, R, design):
+    """[B, n] design-dependent non-bonded + electrostatic energy (LJ on all pairs, screened Coulomb) of frames with pair
+    distances R [n, P] under designs X [B, dim_x]; the bonds do not depend on the design (generic reweighting path)"""
+    from simulate import RCUT
+    eps = design.pair_eps(X)[:, None, :]                                   # [B, 1, P]
+    sig = design.pair_sigma(X)
+    r = R[None]
+    if sig is None:
+        s2 = 1.0 / (r * r); inside = (r < RCUT).float()
+    else:
+        sig = sig[:, None, :]; s2 = sig * sig / (r * r); inside = (r < RCUT * sig).float()
+    s6 = s2 ** 3
+    U = (4 * eps * (s6 * s6 - s6) * inside).sum(-1)
+    qq = design.pair_charge(X)
+    if qq is not None:
+        el = design.elec
+        U = U + el["A"] * ((qq[:, None, :] * torch.exp(-r / el["debye"]) / r * (r < el["rcut"]).float()).sum(-1))
+    return U
 
 
 class Reweighter:
@@ -80,10 +105,15 @@ class Reweighter:
         self.Y = Y.reshape(K * M, dy)
         self.Xk = pool["eps"].float()
         self.beta = 1.0 / (design.temp if design.temp is not None else TEMP)
-        self.Phi = pair_kernel(self.Y, design).to(device)                   # [n, P]
-        self.coef = self.beta * design.elec["A"]
+        # charges only: the energy is linear in q_i q_j (fast path); otherwise the full LJ + Coulomb energy per frame
+        self.linear = all(p.startswith("charge") for p in design.free)
+        if self.linear:
+            self.Phi = pair_kernel(self.Y, design).to(device)               # [n, P]
+            self.coef = self.beta * design.elec["A"]
+        else:
+            self.R = pair_dist(self.Y, design).to(device)
         t0 = time.time()
-        uk = self._u(self.Xk.to(device))                                    # [K, n]
+        uk = torch.cat([self._u(self.Xk[c:c + 16].to(device)) for c in range(0, K, 16)])   # [K, n]
         logN = math.log(M)
         f = torch.zeros(K, dtype=torch.float64, device=device)
         hist = []
@@ -105,6 +135,8 @@ class Reweighter:
 
     def _u(self, X):
         """reduced electrostatic energies [B, n] of all pool frames under designs X [B, p]"""
+        if not self.linear:
+            return self.beta * pair_energy(X, self.R, self.design)
         qq = self.design.pair_charge(X)                                    # [B, P]
         return self.coef * qq @ self.Phi.T
 
@@ -160,9 +192,13 @@ def basin_probs_weighted(w, codes, n_classes):
     return torch.zeros(n_classes, dtype=w.dtype, device=w.device).index_add_(0, codes, w)
 
 
+FLIP = None      # [dim_x] +-1: -1 on the charge coordinates (set in run())
+
+
 def sign_dist(a, b):
     """distance between designs up to the global charge flip (q and -q have the same energy)"""
-    return torch.minimum((a - b).norm(dim=-1), (a + b).norm(dim=-1))
+    f = torch.ones(a.shape[-1]) if FLIP is None else FLIP
+    return torch.minimum((a - b).norm(dim=-1), (a - b * f).norm(dim=-1))
 
 
 def cluster(ends, losses, radius):
@@ -185,7 +221,8 @@ def run(a):
     tens = torch.load(a.targets, weights_only=False)
     design = Design.from_dict(pool["design"])
     assert Design.from_dict(tens["design"]).to_dict() == design.to_dict(), "pool and targets designs differ"
-    assert all(p.startswith("charge") for p in design.free), "reweighting needs a design whose free parameters are charges"
+    global FLIP
+    FLIP = torch.tensor([-1.0 if p.startswith("charge") else 1.0 for p in design.free])
     common.set_design(design)
     t0 = time.time()
     rw = Reweighter(pool, design, dev, max_frames=a.max_frames, seed=a.seed)
@@ -233,7 +270,7 @@ def run(a):
         floor = float(sq1 + sq2 - 2 * mu1 @ mu2)
         pT = common.basin_probs(T).to(dev)
         # MBAR at q* (and -q*: the same energy)
-        Xs = torch.stack([qs, -qs]).to(dev)
+        Xs = torch.stack([qs, qs * FLIP]).to(dev)
         L_star = loss_of(Xs, muT, sqT).tolist()
         w_star = torch.exp(rw.logw(qs[None].to(dev)))[0]
         tv_star = 0.5 * float((basin_probs_weighted(w_star, codes, len(names)) - pT).abs().sum())
@@ -248,8 +285,12 @@ def run(a):
         traj = []
         for it in range(a.steps):
             opt.zero_grad()
-            L = loss_of(X, muT, sqT)
-            L.sum().backward()
+            Ls = []
+            for c in range(0, X.shape[0], a.chunk):          # backward per chunk: the graph of one chunk at a time
+                Lc = weighted_loss(rw.logw(X[c:c + a.chunk]), Psi, sqnorm, muT, sqT)
+                Lc.sum().backward()
+                Ls.append(Lc.detach())
+            L = torch.cat(Ls)
             opt.step()
             with torch.no_grad():
                 X.copy_(torch.max(torch.min(X, hi_t), lo_t))
@@ -269,7 +310,7 @@ def run(a):
         for ci, (c, mem) in enumerate(cl):
             q0 = ends_c[c]
             # straight line from the cluster centre to the nearer of +-q*, MBAR loss
-            tgt = qs if (q0 - qs).norm() <= (q0 + qs).norm() else -qs
+            tgt = qs if (q0 - qs).norm() <= (q0 - qs * FLIP).norm() else qs * FLIP
             lam = torch.linspace(0, 1, a.line_points)
             line = (1 - lam[:, None]) * q0[None] + lam[:, None] * tgt[None]
             with torch.no_grad():
@@ -320,7 +361,7 @@ def confirm(a, res, design, tens, rff, dev):
         qs = torch.tensor(rec["x_star"])
         for k, c in enumerate(sp):
             q0 = torch.tensor(c["center"])
-            tgt = qs if (q0 - qs).norm() <= (q0 + qs).norm() else -qs
+            tgt = qs if (q0 - qs).norm() <= (q0 - qs * FLIP).norm() else qs * FLIP
             lam = torch.linspace(0, 1, a.confirm_points)
             X.append((1 - lam[:, None]) * q0[None] + lam[:, None] * tgt[None])
             meta.append((rec["target_id"], k, lam.tolist()))

@@ -2,6 +2,7 @@
 # Step 1: simulate the training ensembles (300 random eps) and the 40 held-out targets, then build
 # data.pt / prior_data.pt / targets/*.npy for our pipeline.   sbatch experiments/peptide/slurm/slurm_data.sh
 # N beads: N=5 sbatch ... (all N - 1 eps_d free; FREE=1,2 FIXED=3=0.5,4=0.5 for another design); runs/peptide_N<N>.
+# Charged residues: N=4 FREE=charge FIXED=eps=0.5 ELEC=A=3,debye=2 R=runs/rugged2/data sbatch ... (TEMP= sets the temperature).
 # N = 4 defaults: 300 eps x 4000 frames; N >= 5: 600 eps x 2000 frames (the same 1.2M rows, denser in the 4-5-D box).
 #SBATCH --job-name=pep-data
 #SBATCH --partition=salmon,catfish
@@ -20,7 +21,7 @@ if [ "$N" = 4 ]; then N_EPS=${N_EPS:-300}; FRAMES=${FRAMES:-4000}; else N_EPS=${
 if [ "$N" = 4 ]; then STEPS=${STEPS:-4000000}; BURN=${BURN:-50000}; STRIDE=${STRIDE:-200}
 else STEPS=${STEPS:-16000000}; BURN=${BURN:-1000000}; STRIDE=${STRIDE:-800}; fi
 SIM="--n-steps $STEPS --burn $BURN --stride $STRIDE"
-D="--n-beads $N ${FREE:+--free-eps $FREE} ${FIXED:+--fixed-eps $FIXED}"
+D="--n-beads $N ${FREE:+--free-eps $FREE} ${FIXED:+--fixed-eps $FIXED} ${ELEC:+--elec $ELEC} ${TEMP:+--temp $TEMP}"
 python $P/sim_ensembles.py $D --n-eps $N_EPS --seed 1 --keep $((2 * FRAMES)) $SIM --out $R/train_ens.pt
 python $P/sim_ensembles.py $D --n-eps 40 --seed 2 --n-rep 64 --chunk 200 --keep 20000 $SIM --out $R/targets_ens.pt
 python $P/make_data.py --train $R/train_ens.pt --targets $R/targets_ens.pt --frames-per-eps $FRAMES --out $R
