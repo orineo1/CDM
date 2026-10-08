@@ -28,7 +28,7 @@ import system as S      # noqa: E402
 
 
 class ExactCountLoss:
-    def __init__(self, frames_glob, G_count, x_scale, device="cpu", thin=1):
+    def __init__(self, frames_glob, G_count, x_scale, device="cpu", thin=1, k=None, p_star=None, wP=0.0):
         F = Frames(glob.glob(frames_glob), thin=thin)
         dt = torch.float64
         self.B = torch.tensor(F.B, dtype=dt, device=device)
@@ -36,6 +36,11 @@ class ExactCountLoss:
         self.cls = torch.tensor(S.count_plus(F.phi), device=device)
         self.G = torch.tensor(G_count, dtype=dt, device=device)
         self.kT, self.scale, self.N, self.device = F.kT, x_scale, F.N, device
+        # optional residue-specific restraint (deceptive-target benchmark): + wP * (P(phi_k '+' | x) - p_star)^2
+        self.k, self.p_star, self.wP = k, p_star, wP
+        if k is not None:
+            d = np.degrees(F.phi[:, k])
+            self.plus_k = torch.tensor(((d > 0) & (d < 120)).astype(float), dtype=dt, device=device)
         self.n_evals = 0
 
     def counts(self, x_std):
@@ -46,10 +51,13 @@ class ExactCountLoss:
 
     def __call__(self, x_std):
         self.n_evals += 1
-        P, _ = self.counts(x_std)
+        P, w = self.counts(x_std)
         G = self.G
         m = G > 0
-        return (G[m] * (torch.log(G[m]) - torch.log(P[m].clamp_min(1e-300)))).sum().float()
+        L = (G[m] * (torch.log(G[m]) - torch.log(P[m].clamp_min(1e-300)))).sum()
+        if self.k is not None and self.wP > 0:
+            L = L + self.wP * (w @ self.plus_k - self.p_star) ** 2
+        return L.float()
 
     def ess(self, x_std):
         with torch.no_grad():
@@ -57,16 +65,23 @@ class ExactCountLoss:
             return float(1.0 / (w ** 2).sum())
 
 
-def target_info(meta, target_npy):
-    tid = int(os.path.basename(target_npy).split("_")[1].split(".")[0])
+def target_info(meta, target_npy, target_id=None):
+    tid = target_id if target_id is not None else int(os.path.basename(target_npy).split("_")[1].split(".")[0])
     t = [q for q in meta["targets"] if q["id"] == tid][0]
     return tid, t
 
 
+def make_loss(a, meta, t):
+    if a.wP > 0:   # restraint on the '+' population of the x*-mode residue
+        k = t["mode_star"]
+        return ExactCountLoss(a.frames, t["G_count"], meta["x_scale_kJ"], a.device, k=k, p_star=t["plus_marginals"][k], wP=a.wP)
+    return ExactCountLoss(a.frames, t["G_count"], meta["x_scale_kJ"], a.device)
+
+
 def run_mlgd(a, rest):
     import search_mog
-    meta = json.load(open(a.meta)); tid, t = target_info(meta, a.target)
-    L = ExactCountLoss(a.frames, t["G_count"], meta["x_scale_kJ"], a.device)
+    meta = json.load(open(a.meta)); tid, t = target_info(meta, a.target, a.target_id)
+    L = make_loss(a, meta, t)
     _load = search_mog.load_target
 
     def load_target(path, device):
@@ -106,8 +121,8 @@ def adam_phase(L, x0, steps, lr, noise, box):
 
 
 def run_gbfeso(a):
-    meta = json.load(open(a.meta)); tid, t = target_info(meta, a.target)
-    L = ExactCountLoss(a.frames, t["G_count"], meta["x_scale_kJ"], a.device)
+    meta = json.load(open(a.meta)); tid, t = target_info(meta, a.target, a.target_id)
+    L = make_loss(a, meta, t)
     torch.manual_seed(a.seed)
     c = S.D
     n = a.n_starts
@@ -166,6 +181,8 @@ def main():
     p.add_argument("--init-json", default=None)
     p.add_argument("--init-top", type=int, default=3)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--target-id", type=int, default=None, help="target id in --meta (else parsed from --target's name)")
+    p.add_argument("--wP", type=float, default=0.0, help="weight of the residue-specific '+' restraint (0: count only)")
     a, rest = p.parse_known_args()
     torch.set_num_threads(int(os.environ.get("SLURM_CPUS_PER_TASK", "4")))
     if a.mode == "mlgd":
