@@ -9,7 +9,7 @@ import system as S
 from rw import Frames
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--runs", default="/mnt/c/Code/Github/CDM/runs/trialanine")
+ap.add_argument("--runs", default="runs/trialanine")
 ap.add_argument("--vals", default="val1,val2,val3")
 ap.add_argument("--direct_pattern", default="prod_{v}_w*.npz")
 ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "results"))

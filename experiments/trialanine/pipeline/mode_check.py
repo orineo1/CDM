@@ -11,9 +11,9 @@ from rw import Frames
 from paths import band_path
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--frames", default="/mnt/c/Code/Github/CDM/runs/trialanine/prod_x0_w*.npz")
+ap.add_argument("--frames", default="runs/trialanine/prod_x0_w*.npz")
 ap.add_argument("--thin", type=int, default=4)
-ap.add_argument("--xstar_npy", default="/mnt/c/Code/Github/CDM/runs/trialanine/xstar_eng2.npy")
+ap.add_argument("--xstar_npy", default="runs/trialanine/xstar_eng2.npy")
 ap.add_argument("--index", type=int, default=1)
 ap.add_argument("--starts", type=int, default=32)
 ap.add_argument("--box", type=float, default=6.0)

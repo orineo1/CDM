@@ -10,7 +10,7 @@ from rw import Frames
 from paths import band_path
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--frames", default="/mnt/c/Code/Github/CDM/runs/trialanine/prod_x0_w*.npz")
+ap.add_argument("--frames", default="runs/trialanine/prod_x0_w*.npz")
 ap.add_argument("--thin", type=int, default=4)
 ap.add_argument("--seed", type=int, default=7)
 ap.add_argument("--box", type=float, default=4.0)

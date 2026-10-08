@@ -9,7 +9,7 @@ import system as S
 from rw import Frames
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--frames", default="/mnt/c/Code/Github/CDM/runs/trialanine/prod_x0_w*.npz")
+ap.add_argument("--frames", default="runs/trialanine/prod_x0_w*.npz")
 ap.add_argument("--thin", type=int, default=4)
 ap.add_argument("--xstar_npy", required=True)
 ap.add_argument("--starts", type=int, default=24)

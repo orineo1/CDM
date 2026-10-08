@@ -8,7 +8,7 @@ import system as S
 from rw import Frames
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--frames", default="/mnt/c/Code/Github/CDM/runs/trialanine/prod_x0_w*.npz")
+ap.add_argument("--frames", default="runs/trialanine/prod_x0_w*.npz")
 ap.add_argument("--n", type=int, default=200)
 ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "results"))
 a = ap.parse_args()

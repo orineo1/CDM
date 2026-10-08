@@ -1,13 +1,13 @@
 {
  "args": {
-  "frames": "/mnt/c/Code/Github/CDM/runs/trialanine/prod_x0_w*.npz",
+  "frames": "runs/trialanine/prod_x0_w*.npz",
   "thin": 8,
-  "xstar_npy": "/mnt/c/Code/Github/CDM/runs/trialanine/xstar_canon_test.npy",
+  "xstar_npy": "runs/trialanine/xstar_canon_test.npy",
   "starts": 12,
   "box": 4.0,
   "sigma": 2.0,
   "R": 300,
-  "out": "/mnt/c/Code/Github/CDM/runs/trialanine/canon_check.json"
+  "out": "runs/trialanine/canon_check.json"
  },
  "targets": [
   {

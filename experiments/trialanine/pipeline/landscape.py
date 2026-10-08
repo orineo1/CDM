@@ -16,7 +16,7 @@ from rw import Frames
 from paths import band_path
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--frames", default="/mnt/c/Code/Github/CDM/runs/trialanine/prod_x0_w*.npz")
+ap.add_argument("--frames", default="runs/trialanine/prod_x0_w*.npz")
 ap.add_argument("--thin", type=int, default=2)
 ap.add_argument("--sigma", type=float, default=1.0, help="prior sd in kT (hidden designs and starts)")
 ap.add_argument("--targets", type=int, default=3)
