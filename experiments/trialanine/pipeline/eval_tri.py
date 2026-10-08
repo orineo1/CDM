@@ -34,6 +34,9 @@ def main():
     p.add_argument("--thin", type=int, default=2)
     p.add_argument("--tv-solved", type=float, default=0.05)
     p.add_argument("--out", default="experiments/trialanine/results/cdm")
+    p.add_argument("--results", default="results", help="subdirectory of --root with the run JSONs")
+    p.add_argument("--tv-strict", type=float, default=0.02)
+    p.add_argument("--ess-flag", type=float, default=500.0)
     a = p.parse_args()
     meta = json.load(open(os.path.join(a.root, "meta.json")))
     F = Frames(glob.glob(a.frames), thin=a.thin); kT = F.kT; scale = meta["x_scale_kJ"]
@@ -60,40 +63,45 @@ def main():
         rows.append(dict(method="oracle (x*)", target=i, kind=t["kind"], time_s=0.0, samples=0,
                          **score(np.array(t["x_star_kJ"]), t)))
     times = {}
-    for f in sorted(glob.glob(os.path.join(a.root, "results", "*_t*.json"))):
+    for f in sorted(glob.glob(os.path.join(a.root, a.results, "*_t*.json"))):
         m = re.match(r"(.+)_t(\d+)\.json", os.path.basename(f))
         name, i = m.group(1), int(m.group(2))
         J = json.load(open(f))
         if name.startswith("MLGD") and "+polish" not in name:
             att = J["attempts"][0]
-            x_std, t_s, ns = np.array(att["x_hat"]), att["time_s"], samples_mlgd(J["args"], J["budget"])
+            x_std, t_s = np.array(att["x_hat"]), att["time_s"]
+            ns = 0 if J["args"].get("sampler") == "exactloss" else samples_mlgd(J["args"], J["budget"])
         else:
             x_std, t_s, ns = np.array(J["best"]["x_hat"]), J["time_s"], J["n_conditional_samples"]
-        times[(name, i)] = (t_s, ns)
-        rows.append(dict(method=name, target=i, kind=tg[i]["kind"], time_s=t_s, samples=ns, x_hat_std=x_std.tolist(),
+        ev = J.get("n_loss_evals", 0)
+        times[(name, i)] = (t_s, ns, ev)
+        rows.append(dict(method=name, target=i, kind=tg[i]["kind"], time_s=t_s, samples=ns, loss_evals=ev,
+                         n_starts=J.get("n_starts"), x_hat_std=x_std.tolist(),
                          **score(x_std * scale, tg[i])))
     for r in rows:   # the hybrid's compute includes the MLGD run it starts from
         if r["method"].endswith("+polish"):
-            t0, n0 = times.get((r["method"][:-7], r["target"]), (np.nan, 0))
+            t0, n0, e0 = times.get((r["method"][:-7], r["target"]), (np.nan, 0, 0))
             r["time_s_polish"], r["time_s"], r["samples"] = r["time_s"], r["time_s"] + t0, r["samples"] + n0
+            r["loss_evals"] = r.get("loss_evals", 0) + e0
     os.makedirs(a.out, exist_ok=True)
     json.dump(dict(meta={k: v for k, v in meta.items() if k != "targets"}, tv_solved=a.tv_solved, rows=rows),
               open(os.path.join(a.out, "per_run.json"), "w"), indent=1)
 
-    order = ["oracle (x*)", "GBFESO-x0", "GBFESO-rand4", "MLGD-KL", "MLGD-MMD", "MLGD-KL+polish", "MLGD-MMD+polish"]
+    order = ["oracle (x*)", "GBFESO-x0", "GBFESO-rand4", "MLGD-KL", "MLGD-MMD", "MLGD-KL+polish", "MLGD-MMD+polish",
+             "GBFESO-exact-x0", "GBFESO-exact-rand4", "GBFESO-exact-randEq", "MLGD-exact", "MLGD-exact+polish"]
     names = [n for n in order if any(r["method"] == n for r in rows)] + sorted({r["method"] for r in rows} - set(order))
-    lines = ["| method | targets | solved (count TV <= %.2f) | solved, random / engineered | median count TV | mean count TV | "
+    lines = ["| method | targets | solved (count TV <= %.2f) | solved (TV <= %.2f) | solved, random / engineered | median count TV | mean count TV | "
              "median count KL | median exact MMD | median labeled-state TV | mode = x*'s mode | median abs(x - x*) (kT) | "
-             "median time (s) | median samples (M) |" % a.tv_solved, "|" + "---|" * 13]
+             "median time (s) | median samples (M) | median loss evals | ESS < %d |" % (a.tv_solved, a.tv_strict, a.ess_flag), "|" + "---|" * 16]
     for n in names:
         R = [r for r in rows if r["method"] == n]
         tv = np.array([r["count_tv"] for r in R]); sol = tv <= a.tv_solved
         rnd = [r["count_tv"] <= a.tv_solved for r in R if r["kind"] == "random"]
         eng = [r["count_tv"] <= a.tv_solved for r in R if r["kind"] != "random"]
         med = lambda k: float(np.median([r[k] for r in R]))   # noqa: E731
-        lines.append(f"| {n} | {len(R)} | {sol.mean():.0%} | {np.mean(rnd) if rnd else np.nan:.0%} / {np.mean(eng) if eng else np.nan:.0%} | "
+        lines.append(f"| {n} | {len(R)} | {sol.mean():.0%} | {np.mean(tv <= a.tv_strict):.0%} | {np.mean(rnd) if rnd else np.nan:.0%} / {np.mean(eng) if eng else np.nan:.0%} | "
                      f"{np.median(tv):.3f} | {tv.mean():.3f} | {med('count_kl'):.4f} | {med('mmd_exact'):.2e} | {med('state_tv'):.3f} | "
-                     f"{np.mean([r['mode_match'] for r in R]):.0%} | {med('dist_kT'):.2f} | {med('time_s'):.0f} | {med('samples') / 1e6:.2f} |")
+                     f"{np.mean([r['mode_match'] for r in R]):.0%} | {med('dist_kT'):.2f} | {med('time_s'):.0f} | {med('samples') / 1e6:.2f} | {np.median([r.get('loss_evals', 0) for r in R]):.0f} | {sum(r['ess'] < a.ess_flag for r in R)} |")
     # per-mode: success by the target's mode, and which mode the solved runs found
     lines += ["", "Per target mode (residue carrying the most '+' at x*): solved share, and among solved runs the share that "
               "found x*'s mode / another residue's mode", "",
