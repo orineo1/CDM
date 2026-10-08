@@ -48,3 +48,51 @@ Python env: `pip install openmm pymbar numpy scipy matplotlib PeptideBuilder bio
 - Label-free target (distribution of the number of '+' residues): separated minima, one per residue carrying the '+'
   (3 components; band barriers 0.03-0.28 nats vs a random-x median loss ~0.5), both for engineered and for
   prior-drawn x*.
+
+## CDM benchmark on label-free count targets: MLGD vs GB-FESO (2026-10-08)
+
+Setup (`pipeline/make_data_tri.py`, `slurm/slurm_cdm.sh`; data in `runs/trialanine/cdm/`):
+- Design prior for training, for MLGD's prior and for GB-FESO's random starts: x = 2 kT * x_std, with
+  x_std ~ N(0, I) truncated to [-2, 2]^12 (|x_j| <= 4 kT). MLGD's prior is the trained unconditional diffusion
+  model on 200k draws, as in the other experiments; the exact Gaussian score was not used.
+- Conditional sampler, shared by all methods: conditional diffusion (256 units, 4 blocks, 40 epochs) of
+  y | x. Here y = the label-free dihedral features (the residues' (phi, psi) sorted by phi, as cos/sin, 12
+  dims, standardized). Training data: 1,000 designs x 1,500 frames resampled from the x0 reference frames with
+  the importance weights. Per-design ESS: median 10,019, minimum 765.
+- Targets: 30 in total, 24 random x* ~ N(0, (1.25 kT)^2) and 6 engineered: -3.5 kT on sin(phi_i) for one
+  or two residues. The target ensemble is 20k resampled frames. ESS at x* >= 2,104, so none was dropped.
+- Loss feature: the full label-free dihedral ensemble identifies x* exactly (`results/cdm/canon_check.json`:
+  all starts converge to x*), so it has one mode. Every search loss is therefore computed on the soft count of
+  '+' residues c(y) = sum_i sigmoid(8 sin phi_i) (`pipeline/count_feature.py`). This depends only on the count
+  distribution, so the three residue choices are equally good.
+- Methods: all ran on L40S GPUs (salmon).
+  - GB-FESO: `search_gbfeso_tri.py`, their optimizer loop with their defaults (201 Adam steps, lr 0.05,
+    3,500 samples, KDE-KL bandwidth 0.5, phase 1 only if KL > 0.2, which never happened). Run from
+    x0 = ff14SB, and as the best of 4 starts from the prior.
+  - MLGD: `search_mlgd_tri.py` = search_mog with the LGD preset, pathwise gradient, Adam guidance step 0.05,
+    10 restarts, n_cond 250, refinement of 100 steps x 3,000 samples with keep-best, and top-5 re-selection.
+    Run with the count KDE-KL and with the count MMD.
+  - Hybrid: GB-FESO run from MLGD's top-3 restarts.
+- Evaluation (`pipeline/eval_tri.py`): exact, by reweighting the reference frames. Solved = count TV <= 0.05.
+
+Results: `results/cdm/results_table.md`, `results/cdm/per_run.json`. Summary:
+
+| method | solved (TV <= 0.05) | solved (TV <= 0.10) | median count TV | x*'s mode | median time (s) | samples (M) |
+|---|---|---|---|---|---|---|
+| GB-FESO, x0 start | 43% | 90% | 0.059 | 43% | 30 | 0.7 |
+| GB-FESO, best of 4 | 50% | 67% | 0.051 | 57% | 111 | 2.8 |
+| MLGD-KL | 33% | 60% | 0.084 | 30% | 595 | 3.3 |
+| MLGD-MMD | 33% | 73% | 0.073 | 40% | 614 | 3.3 |
+| MLGD-KL + polish | 40% | 60% | 0.088 | 37% | 678 | 5.4 |
+| MLGD-MMD + polish | 37% | 67% | 0.064 | 30% | 701 | 5.4 |
+
+**The sampler limits every method.** Its count distribution at x* is off by a median TV of 0.062 (max 0.30;
+`results/cdm/sampler_check.json`), which is larger than the solve threshold. Every method's result correlates
+with the sampler's error at the target (r = 0.12-0.62). On the 14 targets where the sampler is accurate
+(TV <= 0.05 at x*), the methods solve 36-64%; on the other 16 they solve 19-44%.
+
+**The methods do not separate.** Paired on the count TV, MLGD-MMD beats GB-FESO best-of-4 on 19 of 30 targets
+but GB-FESO-x0 on only 13.
+
+**The count loss is multimodal.** Solved runs often land on a residue other than x*'s: 10-80% depending on the
+method and the target's mode.
