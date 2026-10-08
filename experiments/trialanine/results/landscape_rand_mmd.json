@@ -1,6 +1,6 @@
 {
  "args": {
-  "frames": "/sci/labs/orzuk/orzuk/github/CDM_trialanine/runs/trialanine/prod_x0_w*.npz",
+  "frames": "runs/trialanine/prod_x0_w*.npz",
   "thin": 4,
   "sigma": 1.0,
   "targets": 2,

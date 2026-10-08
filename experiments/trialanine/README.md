@@ -27,7 +27,7 @@ Prior: x ~ N(0, (sigma kT)^2 I); sigma = 1 kT per coefficient (|x| ~ 3.5 kT) is 
 | label-free (count) target modes | `mode_check.py` | `results/mode_check_1.{json,png}` |
 
 Python env: `pip install openmm pymbar numpy scipy matplotlib PeptideBuilder biopython`
-(cluster: `/sci/labs/orzuk/orzuk/venvs/trialanine-venv`; locally a separate venv, not the cdm venv).
+(cluster: `$CDM_LAB/venvs/trialanine-venv`; locally a separate venv, not the cdm venv).
 
 ## Results (2026-10-07)
 

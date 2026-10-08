@@ -1,6 +1,6 @@
 {
  "args": {
-  "frames": "/sci/labs/orzuk/orzuk/github/CDM_trialanine/runs/trialanine/prod_x0_w*.npz",
+  "frames": "runs/trialanine/prod_x0_w*.npz",
   "thin": 2,
   "sigma": 2.0,
   "targets": 2,
@@ -13,7 +13,7 @@
   "tag": "_eng2_kl",
   "losses": "klcount,kl",
   "box": 6.0,
-  "xstar_npy": "/sci/labs/orzuk/orzuk/github/CDM_trialanine/runs/trialanine/xstar_eng2.npy",
+  "xstar_npy": "runs/trialanine/xstar_eng2.npy",
   "out": "../results"
  },
  "N": 400000,
