@@ -96,3 +96,36 @@ but GB-FESO-x0 on only 13.
 
 **The count loss is multimodal.** Solved runs often land on a residue other than x*'s: 10-80% depending on the
 method and the target's mode.
+
+## Exact-sampler comparison on the same 30 count targets (2026-10-08)
+
+`pipeline/search_exact_tri.py` and `slurm/slurm_exact.sh` (CPU, job 46333084); results in `results/cdm_exact/`.
+
+**Setup.** The trained sampler is replaced by the exact conditional, obtained by reweighting the 800k reference
+frames. Every method minimizes the same deterministic loss, L(x) = KL(G_count || P_count(x)), with gradients
+from autograd through the weights.
+- MLGD: search_mog's loss-oracle mode (IdentitySampler). L is evaluated at the Tweedie estimate inside the
+  guidance steps, the refinement and the re-selection; no frames are resampled. Prior, box (|x_j| <= 4 kT),
+  10 restarts, keep-best refinement and top-5 re-selection are as before.
+- GB-FESO: their Adam settings on L, started from ff14SB, as the best of 4 prior starts, and with 20 prior
+  starts. The 20-start row (randEq) matches MLGD's number of loss evaluations (about 4,000).
+- Hybrid: Adam polish from MLGD's top 3 restarts.
+
+| method | solved (TV <= 0.05) | solved (TV <= 0.02) | median count TV | x*'s mode | median abs(x - x*) (kT) | loss evals | median time (s, CPU) |
+|---|---|---|---|---|---|---|---|
+| GB-FESO, x0 start | 100% | 100% | 0.002 | 47% | 4.9 | 202 | 7 |
+| GB-FESO, best of 4 | 100% | 100% | 0.002 | 60% | 6.4 | 808 | 28 |
+| GB-FESO, 20 starts (equal evals) | 100% | 100% | 0.002 | 50% | 7.3 | 4,040 | 138 |
+| MLGD | 100% | 100% | 0.001 | 47% | 7.7 | 3,995 | 157 |
+| MLGD + polish | 100% | 100% | 0.001 | 47% | 7.7 | 4,601 | 178 |
+
+**Finding.** With an exact sampler every method solves every target, including a single local Adam run from
+ff14SB (202 evaluations). The count loss is multimodal: across methods, 24 of 30 targets were answered with at
+least two different residue modes, and about half of all answers use a residue other than x*'s. But every mode
+reaches zero loss, and there are essentially no bad local minima:
+- 94% of the 600 individual GB-FESO random starts end below KL 1e-3, and the worst ends at 0.02.
+- 99% of MLGD's 300 restarts end below 1e-3.
+
+MLGD's global search therefore brings no benefit here and costs 20 times the evaluations of a single local run.
+The earlier gaps came from sampler error. ESS stays above 500 at every returned design except MLGD on the two
+double-'+' targets 27 and 28 (ESS 487 and 376); both are still solved.
