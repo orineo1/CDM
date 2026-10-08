@@ -129,3 +129,47 @@ reaches zero loss, and there are essentially no bad local minima:
 MLGD's global search therefore brings no benefit here and costs 20 times the evaluations of a single local run.
 The earlier gaps came from sampler error. ESS stays above 500 at every returned design except MLGD on the two
 double-'+' targets 27 and 28 (ESS 487 and 376); both are still solved.
+
+## Deceptive (bad local minima) targets on the exact loss (2026-10-08)
+
+**Construction.** Count targets are made asymmetric with a weak residue-specific restraint. The target summary
+is the label-free count distribution G_count plus the '+' population p_k* of the x*-mode residue k. The loss is
+L(x) = KL(G_count || P_count(x)) + wP (p_k(x) - p_k*)^2 with wP = 0.05.
+- The two other residue modes still match the count distribution, but they leave the restraint residual (loss
+  about 0.04). Leaving them requires crossing the count-loss barrier between modes, so they become strictly
+  worse local minima.
+- Stronger summaries do not work. Joint (count, sign_k) KL pulls every start into the right basin, and wP = 0.2
+  or 1 gives fewer traps. A J-coupling restraint (Karplus) can be matched within the wrong mode.
+- Candidates (`make_decoy_candidates.py`): 48 hidden designs, x* ~ N(0, (1.5 kT)^2) truncated to the box, kept
+  when one residue carries most of the '+' population, plus the engineered single-'+' designs.
+- Deceptiveness check (`decoy_explore.py`, `slurm/slurm_decoy.sh`): x0 plus 20 random prior starts of
+  GB-FESO-style Adam per candidate. Only the first 30 candidates were checked, because the explore range defaulted
+  to ids 0-29.
+- Selection (`select_decoy.py`): 24 of the 30 have the global optimum reached (D <= 0.02) and 30-75% of the
+  random starts ending with summary distance D > 0.05 (median 55%). x0 fails on 7 of the 24. ESS at x* >= 2,250.
+- Barriers (`barrier_decoy.py`, elastic bands with dense checking, 47 bands between the global and the worst
+  minima of the equal-compute multistart): the bad minima sit at loss 0.04 (median) against 0 at the global one.
+  62% of the bands have a barrier > 0.005 above the bad minimum (median 0.012, max 0.25). The other trapped
+  endpoints are slow, not walled in.
+
+**Comparison** (`slurm/slurm_decoy_bench.sh`, job 46335799; `eval_decoy.py` -> `results/decoy/`). All methods use
+the same exact loss. Solved means D = max(count TV, |p_k - p_k*|) <= 0.02 / 0.05.
+
+| method | solved (D <= 0.02) | solved (D <= 0.05) | global basin found | loss evals | median time (s, CPU) |
+|---|---|---|---|---|---|
+| GB-FESO, x0 start | 42% | 75% | 96% | 202 | 7 |
+| GB-FESO, best of 4 | 71% | 83% | 100% | 808 | 23 |
+| GB-FESO, 20 random starts (equal evals) | 96% | 100% | 100% | 4,040 | 112 |
+| MLGD | 96% | 100% | 100% | 3,995 | 134 |
+| MLGD + polish | 100% | 100% | 100% | 4,601 | 152 |
+
+Per trajectory (`results/decoy/per_start.json`):
+
+| trajectory | n | ends in global basin | D <= 0.02 |
+|---|---|---|---|
+| MLGD guided restart, after refinement (~400 evals each) | 240 | 85% | 58% |
+| GB-FESO random start (~202 evals each) | 480 | 71% | 35% |
+
+**Result.** MLGD's prior and guidance bias each trajectory toward the global basin. At equal loss evaluations,
+though, random multistart solves as many targets (96% / 100% vs 96% / 100%). With about 29% of single starts
+trapped, 20 independent starts almost never all fail. MLGD does not beat equal-compute random multistart here.
