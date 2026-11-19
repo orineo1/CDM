@@ -32,6 +32,12 @@ instead a random row of X from the training data (--init data): a real design, a
 valid eps values, drawn without any part of our method (--init randn: x0 ~ N(0, I), the
 distribution of MLGD's x_T). The box is the range of X in the data.
 
+--grad zo   (with --grad-phase1) replaces backpropagation through the sampler by the finite-difference
+            gradient of MLGD* (cdm.guidance.core._zo_grad: central differences of the sample loss along the
+            coordinate directions of x, step --zo-eps, common random numbers), so that the search can be
+            compared with MLGD* at the same gradient estimator. MLGD* uses finite differences in the guided
+            steps and backpropagation in the refinement: --grad zo --grad-phase1 pathwise mirrors it.
+
 --loss kl   their KDE-KL (cdm/losses/kde_kl.py, copied from their loss.py), Euclidean coordinates
 --loss mmd  the multi-bandwidth RBF MMD of Table 1 (detached bandwidth), same samples and optimizer
 
@@ -55,7 +61,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)   # sibling pipeline modules
 
 from cdm.guidance.config import GuidanceConfig                      # noqa: E402
-from cdm.guidance.core import _draw_conditional                     # noqa: E402
+from cdm.guidance.core import _draw_conditional, _zo_grad           # noqa: E402
 from cdm.guidance.search import select                              # noqa: E402
 from cdm.losses.functions import MMDLoss, RBF                        # noqa: E402
 from cdm.losses.kde_kl import KDEKLLoss                              # noqa: E402
@@ -88,6 +94,11 @@ def parse_args():
     g.add_argument("--final-n", type=int, default=None, help="samples scoring each start's answer (default the phase-1 count)")
     g.add_argument("--fixed-target", type=int, default=0,
                    help="N > 0: their scheme, one fixed set of N target samples per run (their 4,496) instead of fresh draws")
+    g.add_argument("--grad", choices=["pathwise", "zo"], default="pathwise",
+                   help="phase-0 gradient: backpropagation through the sampler (theirs), or MLGD*'s finite differences "
+                        "(central, coordinate directions, common random numbers: 2 dim(x) + 1 loss values per step)")
+    g.add_argument("--grad-phase1", choices=["pathwise", "zo"], default=None, help="phase-1 gradient (default: --grad)")
+    g.add_argument("--zo-eps", type=float, default=0.05, help="finite-difference step (MLGD*'s default)")
     g.add_argument("--no-clamp", action="store_true", help="do not clamp x to the box (their CLI clamps)")
     g.add_argument("--init", choices=["data", "randn"], default="data",
                    help="start of each search: data = a random row of X from the training data (a real design, as "
@@ -106,15 +117,19 @@ def parse_args():
     a, unknown = p.parse_known_args()
     a.num_samples_phase1 = a.num_samples_phase1 or a.num_samples
     a.final_n = a.final_n or a.num_samples_phase1
+    a.grad_phase1 = a.grad_phase1 or a.grad
     if unknown:   # make_table1.py passes MLGD flags that have no meaning here
         print(f"[search_gbfeso] ignoring flags not used by GB-FESO: {' '.join(unknown)}")
     return a
 
 
-def run_phase(sampler, cfg, loss_fn, target, x_start, steps, lr, noise_std, lo, hi):
+def run_phase(sampler, cfg, loss_fn, target, x_start, steps, lr, noise_std, lo, hi, grad="pathwise", seed=0):
     """Port of their run_phase: Adam on x through the sampler, optional decaying noise, clamping,
     best iterate kept. `target(n)` returns the target samples of a step (fresh, or their fixed set);
-    cfg.n_cond is the number of generated samples. Returns (best_x, best_loss, trace)."""
+    cfg.n_cond is the number of generated samples. grad="zo": the gradient of each step is the
+    finite-difference estimate of MLGD* (`_zo_grad`, seeded by `seed` and the step) instead of
+    backpropagation; the loss, optimizer, noise, clamping and best-iterate rule are unchanged.
+    Returns (best_x, best_loss, trace)."""
     x = x_start.clone().detach()
     if lo is not None:
         x = torch.max(torch.min(x, hi), lo)
@@ -123,10 +138,14 @@ def run_phase(sampler, cfg, loss_fn, target, x_start, steps, lr, noise_std, lo, 
     best_loss, best_x, trace = float("inf"), x.detach().clone(), []
     for step in range(steps + 1):
         opt.zero_grad(set_to_none=True)
-        generated = _draw_conditional(sampler, x, cfg)
-        loss = loss_fn(generated, target(cfg.n_cond))
-        if step < steps:
-            loss.backward()
+        if grad == "zo":
+            loss, g = _zo_grad(sampler, loss_fn, cfg, cfg, x.detach(), cfg.n_cond, seed=seed * 100003 + step)
+            x.grad = g.to(x.dtype).view_as(x)
+        else:
+            generated = _draw_conditional(sampler, x, cfg)
+            loss = loss_fn(generated, target(cfg.n_cond))
+            if step < steps:
+                loss.backward()
         value = float(loss.detach())
         trace.append(value)
         if value < best_loss:
@@ -149,7 +168,9 @@ def main():
     sampler_type = arch if args.sampler_type == "auto" else args.sampler_type
     for prm in sampler.parameters():
         prm.requires_grad_(False)
-    method = f"GBFESO-{args.loss.upper()}" + ("-F" if sampler_type == "cm" else "")
+    method = (f"GBFESO-{args.loss.upper()}" + ("-F" if sampler_type == "cm" else "")
+              + ("" if args.grad == args.grad_phase1 == "pathwise" else
+                 "-ZO" if args.grad == args.grad_phase1 == "zo" else f"-{args.grad}-{args.grad_phase1}"))
     target_gen, info = load_target(args.target, dev)
     data = torch.load(args.target, map_location="cpu", weights_only=False)
     c = int(data["condition_on"])
@@ -159,7 +180,8 @@ def main():
                else MMDLoss(kernel=RBF(n_kernels=args.rbf_kernels, mul_factor=args.rbf_mul, device=dev)))
     def sampling(n):
         return SimpleNamespace(n_cond=n, repeat_condition=True, device=dev, cond_sample_kwargs={},
-                               condition_on_slice=(sampler_type == "diffusion"), cond_output_transform=None)
+                               condition_on_slice=(sampler_type == "diffusion"), cond_output_transform=None,
+                               zo_eps=args.zo_eps, zo_dirs=0, target_generator=None)   # last three: --grad zo
     cfg0, cfg1, cfg_f = sampling(args.num_samples), sampling(args.num_samples_phase1), sampling(args.final_n)
     print(f"[search_gbfeso] {method} | loss={args.loss}"
           + (f" h={args.kde_bandwidth} lambda={args.kl_lambda}" if args.loss == "kl" else "")
@@ -167,6 +189,7 @@ def main():
           + f" | samples/step {args.num_samples} (phase 0), {args.num_samples_phase1} (phase 1), {args.final_n} (score)"
           + f", target {'fixed ' + str(args.fixed_target) if args.fixed_target else 'fresh, same count'}"
           + f" | box={'off' if lo is None else 'data range'} | init={args.init}"
+          + f" | grad={args.grad}/{args.grad_phase1}" + (f" (zo step {args.zo_eps})" if "zo" in (args.grad, args.grad_phase1) else "")
           + f" | R={args.n_restarts} starts, attempts={args.n_attempts}, device={dev}"
           + (f" | select top {args.select_top} on {args.select_n} x {args.select_repeats}" if args.select_top else ""))
 
@@ -180,6 +203,8 @@ def main():
             target = lambda n, f=fixed: f                                      # noqa: E731
         else:                      # fresh target samples at every step, as many as generated (as MLGD)
             target = lambda n: target_gen(n, dev).float()                      # noqa: E731
+        for cfg in (cfg0, cfg1):   # the finite-difference gradient draws its target samples through the config
+            cfg.target_generator = lambda n, d, t=target: t(n)
         runs = []
         for r in range(args.n_restarts):
             seed = args.seed * 1000 + a * args.n_restarts + r
@@ -189,10 +214,12 @@ def main():
                 x0 = X[torch.randint(0, X.shape[0], (1,))].to(dev)
             else:
                 x0 = torch.randn(1, c, device=dev)
-            b0, l0, tr0 = run_phase(sampler, cfg0, loss_fn, target, x0, args.steps, args.lr, args.noise_std, lo, hi)
+            b0, l0, tr0 = run_phase(sampler, cfg0, loss_fn, target, x0, args.steps, args.lr, args.noise_std, lo, hi,
+                                    grad=args.grad, seed=seed)
             do_p1 = args.phase1 == "always" or (args.phase1 == "threshold" and l0 > args.phase1_threshold)
             if do_p1:
-                b1, l1, tr1 = run_phase(sampler, cfg1, loss_fn, target, b0, args.steps, args.lr_refine, 0.0, lo, hi)
+                b1, l1, tr1 = run_phase(sampler, cfg1, loss_fn, target, b0, args.steps, args.lr_refine, 0.0, lo, hi,
+                                        grad=args.grad_phase1, seed=seed + 500009)
             # score on fresh samples, the selection criterion (as MLGD's final loss). Both phases' answers are
             # scored on the same --final-n samples, since their search losses can come from different sample
             # counts (the minimum of many noisy small-batch losses is biased low).
