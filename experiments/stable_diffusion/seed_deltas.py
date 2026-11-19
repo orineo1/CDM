@@ -63,6 +63,30 @@ for loss in ("mmd", "swd"):
             sd = lambda v: st.stdev(v) if len(v) > 1 else float("nan")   # sample SD (n - 1)
             print(f"| {s} | {meth} | {len(rows)} | {st.mean(d):.4f} ± {sd(d):.4f} | {st.mean(dp):.1f} ± {sd(dp):.1f} "
                   f"| {st.mean(src):.4f} | {st.mean(met):.4f} |")
+print("\n## MLGD-F: mean ± std over seeds, and the seed selected by MMD alone (lowest MLGD-F MMD)\n")
+print("| scenario | n seeds | MMD | Δ MMD % | SWD | Δ SWD % | p(male) | selected seed | its MMD | its Δ MMD % | its SWD | its p(male) |")
+print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+for s in scen:
+    res = {k: json.load(open(runs[(s, k)][1]))["results"] for sc, k in runs if sc == s}
+    res = {k: r for k, r in res.items() if "mlgd_f" in r and "source" in r}
+    if not res:
+        continue
+    def col(f, fmt=".4f"):
+        v = [f(r) for r in res.values()]
+        v = [x for x in v if x is not None]
+        if not v:
+            return "-"
+        return f"{st.mean(v):{fmt}} ± {st.stdev(v):{fmt}}" if len(v) > 1 else f"{v[0]:{fmt}}"
+    def pct(loss):
+        return lambda r: 100 * (r["source"][loss] - r["mlgd_f"][loss]) / r["source"][loss]
+    pm = lambda r: r["mlgd_f"].get("p_male")
+    k = min(res, key=lambda k: res[k]["mlgd_f"]["mmd"])
+    r = res[k]
+    sel_pm = f"{pm(r):.3f}" if pm(r) is not None else "-"
+    print(f"| {s} | {len(res)} | {col(lambda r: r['mlgd_f']['mmd'])} | {col(pct('mmd'), '.1f')} | {col(lambda r: r['mlgd_f']['swd'])} "
+          f"| {col(pct('swd'), '.1f')} | {col(pm, '.3f')} | {k} | {r['mlgd_f']['mmd']:.4f} | {pct('mmd')(r):+.1f} "
+          f"| {r['mlgd_f']['swd']:.4f} | {sel_pm} |")
+
 if skipped:
     print("\nskipped (optimization not deterministic, or not recorded):")
     for d in sorted(skipped):
