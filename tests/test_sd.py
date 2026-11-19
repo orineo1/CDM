@@ -89,6 +89,17 @@ def test_eval_numbers_match_the_papers_json(ev):
     assert "| mlgd_f | 0.352 | +27.2% |" in table and "p(male)" not in table
 
 
+def test_eval_sampler_flags(ev):
+    turbo = ev.parse_args(["--output_dir", "x"])
+    assert turbo.eval_sampler == "turbo" and ev.sampler_kwargs(turbo) == {} and ev.sampler_label(turbo) is None
+    base = ev.parse_args(["--output_dir", "x", "--eval_sampler", "base", "--base_steps", "40"])
+    kw = ev.sampler_kwargs(base)
+    assert kw["num_inference_steps"] == 40 and kw["guidance_scale"] == 5.0 and kw["height"] == 1024
+    assert kw["negative_prompt"] is None
+    table = ev.results_table({"source": {"mmd": 0.5, "swd": 0.01, "n": 10}}, "S", 10, False, ev.sampler_label(base))
+    assert "eval sampler: SDXL Base" in table.splitlines()[0]
+
+
 # ---------------------------------------------------------------------------
 # interpolation: axes and picks
 # ---------------------------------------------------------------------------

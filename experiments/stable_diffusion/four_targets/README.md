@@ -164,6 +164,28 @@ and the p(male) CI plot, `run_info.txt` and `pip_freeze.txt`. **The 2,000 photos
 are not saved.** Logged to W&B (`sdxl-eval`): the table, previews, plots and every number.
 Deterministic and pinned like the run (`--seed 42` is the notebook's).
 
+
+### Evaluating with the multi-step model: `run.sh eval_base`
+
+`run.sh eval` samples the target and every method from SDXL Turbo + ControlNet-Scribble (2
+steps), the same sampler MLGD-F optimised against. `run.sh eval_base` runs the identical
+protocol with the **multi-step** sampler instead: SDXL Base (the Architect's weights) + the same
+ControlNet-Scribble, 30 Euler steps, CFG 5, 1024 px. The optimisation never saw this sampler, so
+a lower MMD here says the optimised scribble transfers beyond the few-step model. Target *and*
+methods use the chosen sampler, so the numbers are comparable within a table, not with the
+Turbo table.
+
+```
+bash run.sh eval_base balanced --n_eval 500                                   # -> <run dir>/eval_base/
+bash run.sh eval_base balanced --n_eval 500 --base_steps 50 --base_guidance_scale 7 --base_scheduler dpm
+```
+
+It is ~15-20x slower per image than Turbo (CFG doubles the batch, 30 steps vs 2, 1024 px):
+N = 500 is a few hours on an A100/L40S, N = 2,000 most of a day. Flags: `--base_steps`,
+`--base_guidance_scale`, `--base_scheduler euler|dpm|ddim`, `--base_resolution`,
+`--base_negative_prompt`, `--batch_size`. W&B project `sdxl-eval-base`; `export_results.py`
+copies `eval_base/` next to `eval/`.
+
 ## Saliency: `run.sh saliency`
 
 Where MLGD-F edited the scribble, and why there, for a finished gender run:

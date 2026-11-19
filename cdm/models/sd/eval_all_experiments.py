@@ -16,6 +16,15 @@ For one scenario:
 Same protocol, seeds and prompts as the notebook, so its numbers are reproducible; runs
 under the deterministic settings and the pinned model revisions of run_mlgd_f.
 
+--eval_sampler picks the conditional sampler Y | X that generates BOTH the target and every
+method's images:
+    turbo  (default, the paper's)  SDXL Turbo + ControlNet-Scribble, 2 steps, no CFG -- the
+                                   sampler MLGD-F optimised against.
+    base                           SDXL Base + the same ControlNet-Scribble, --base_steps steps
+                                   with CFG --base_guidance_scale (the multi-step model). A
+                                   transfer check: the optimisation never saw this sampler.
+                                   ~15-20x slower per image than turbo; use --n_eval 500 first.
+
 Saved to --output_dir: eval_results.json, eval_table.md, embeddings.npz (target + every
 method, so the metrics can be recomputed without a GPU), preview_<method>.png and
 target_preview_<group>.png (5 images each), and the three plots. The 2,000 photos per
@@ -47,6 +56,7 @@ from cdm.models.sd.models import (
     DEFAULT_CONTROLNET_MODEL_ID,
     DEFAULT_SPRINTER_MODEL_ID,
     HED_ANNOTATOR_ID,
+    build_base_controlnet_pipeline,
     load_models,
     make_deterministic,
     resolved_revision,
@@ -83,6 +93,18 @@ def parse_args(argv=None):
     p.add_argument("--no_deterministic", action="store_true")
     p.add_argument("--controlnet_scale", type=float, default=0.5)
     p.add_argument("--eval_prompt", type=str, default=NEUTRAL_PROMPT)
+    p.add_argument("--batch_size", type=int, default=2, help="images per pipeline call")
+
+    p.add_argument("--eval_sampler", type=str, default="turbo", choices=["turbo", "base"],
+                   help="turbo: the Sprinter (2 steps, the paper's protocol); base: multi-step SDXL "
+                        "Base + the same ControlNet, for target and methods alike")
+    p.add_argument("--base_steps", type=int, default=30, help="--eval_sampler base: denoising steps")
+    p.add_argument("--base_guidance_scale", type=float, default=5.0, help="--eval_sampler base: CFG scale")
+    p.add_argument("--base_scheduler", type=str, default="euler", choices=["euler", "dpm", "ddim"])
+    p.add_argument("--base_negative_prompt", type=str, default="",
+                   help="--eval_sampler base: negative prompt (default none)")
+    p.add_argument("--base_resolution", type=int, default=1024,
+                   help="--eval_sampler base: image side in pixels (SDXL Base is trained at 1024)")
 
     p.add_argument("--mode", type=str, default="gender", choices=["gender", "age"])
     p.add_argument("--target_prompts", type=str, nargs="+", default=None, metavar="NAME:PROMPT:N",
@@ -163,11 +185,19 @@ def add_deltas(results):
     return results
 
 
-def results_table(results, scenario, n_eval, gender):
+def sampler_label(args):
+    if args.eval_sampler == "turbo":
+        return None
+    return (f"SDXL Base + ControlNet, {args.base_steps} steps {args.base_scheduler}, "
+            f"CFG {args.base_guidance_scale}, {args.base_resolution}px")
+
+
+def results_table(results, scenario, n_eval, gender, sampler=None):
     """Markdown table in the shape of the paper's results tables."""
     head = "| Method | MMD ↓ | ΔMMD (%) | SWD ↓ | ΔSWD (%) |" + (" p(male) | 95% CI | n_male / n_female |" if gender else "")
     sep = "|---|---|---|---|---|" + ("---|---|---|" if gender else "")
-    lines = [f"# {scenario}: N = {n_eval}", "", head, sep]
+    title = f"# {scenario}: N = {n_eval}" + (f" (eval sampler: {sampler})" if sampler else "")
+    lines = [title, "", head, sep]
     for name, r in results.items():
         row = (f"| {name} | {r['mmd']:.3f} | {r.get('mmd_improvement_pct', 0):+.1f}% | "
                f"{r['swd']:.4f} | {r.get('swd_improvement_pct', 0):+.1f}% |")
@@ -217,11 +247,22 @@ def ci_plot(results, target_frac, title, path):
 # GPU part
 # ---------------------------------------------------------------------------
 
-def gen_images(sprinter, scribble, prompt, n, cn_scale, seed):
-    """n Sprinter portraits of `scribble`, own generator (the notebook's gen_images)."""
-    gen = torch.Generator(device=sprinter.device).manual_seed(seed)
-    imgs, _ = generate_and_store_cs(sprinter, prompt, scribble, n, batch_size=2,
-                                    cn_scale=cn_scale, generator=gen)
+def sampler_kwargs(args):
+    """generate_and_store_cs settings of the chosen evaluation sampler."""
+    if args.eval_sampler == "turbo":
+        return {}   # the Sprinter's own: 2 steps, no CFG, its default size
+    return dict(num_inference_steps=args.base_steps, guidance_scale=args.base_guidance_scale,
+                negative_prompt=args.base_negative_prompt or None,
+                height=args.base_resolution, width=args.base_resolution)
+
+
+def gen_images(pipe, scribble, prompt, n, cn_scale, seed, batch_size=2, **sampler_kw):
+    """n portraits of `scribble`, own generator (the notebook's gen_images)."""
+    gen = torch.Generator(device=pipe.device).manual_seed(seed)
+    if sampler_kw.get("height"):   # ControlNet conditioning at the generation size
+        scribble = scribble.resize((sampler_kw["width"], sampler_kw["height"]), Image.BICUBIC)
+    imgs, _ = generate_and_store_cs(pipe, prompt, scribble, n, batch_size=batch_size,
+                                    cn_scale=cn_scale, generator=gen, **sampler_kw)
     return imgs
 
 
@@ -263,11 +304,23 @@ def main(argv=None):
         device, controlnet_model_id=args.controlnet_model_id, sprinter_model_id=args.sprinter_model_id,
         architect_model_id=args.architect_model_id, controlnet_revision=args.controlnet_revision,
         sprinter_revision=args.sprinter_revision, architect_revision=args.architect_revision)
-    del architect   # only the Sprinter generates here
+    if args.eval_sampler == "base":
+        # SDXL Base + the Sprinter's ControlNet; the Turbo U-Net/VAE/text encoders are not needed
+        pipe = build_base_controlnet_pipeline(architect, sprinter.controlnet, args.base_scheduler)
+        del sprinter
+        print(f"Eval sampler: SDXL Base + ControlNet, {args.base_steps} steps ({args.base_scheduler}), "
+              f"CFG {args.base_guidance_scale}, {args.base_resolution}px", flush=True)
+    else:
+        pipe = sprinter
+        del architect   # only the Sprinter generates here
+        print("Eval sampler: SDXL Turbo + ControlNet (Sprinter), 2 steps", flush=True)
+    skw = sampler_kwargs(args)
     torch.cuda.empty_cache()
     clip_model, clip_processor = load_clip_model(device, revision=args.clip_revision)
+    gen_model_id, gen_rev = ((args.architect_model_id, args.architect_revision) if args.eval_sampler == "base"
+                             else (args.sprinter_model_id, args.sprinter_revision))
     model_revisions = {
-        args.sprinter_model_id:   resolved_revision(args.sprinter_model_id, args.sprinter_revision),
+        gen_model_id:             resolved_revision(gen_model_id, gen_rev),
         args.controlnet_model_id: resolved_revision(args.controlnet_model_id, args.controlnet_revision),
         CLIP_MODEL_ID:            resolved_revision(CLIP_MODEL_ID, args.clip_revision),
     }
@@ -291,7 +344,8 @@ def main(argv=None):
         for i, (name, prompt, frac) in enumerate(groups):
             n_i = max(1, int(args.n_eval * frac))
             print(f"Target [{name}] n={n_i} ...", flush=True)
-            imgs = gen_images(sprinter, source, prompt, n_i, args.controlnet_scale, args.seed + i * 1000)
+            imgs = gen_images(pipe, source, prompt, n_i, args.controlnet_scale, args.seed + i * 1000,
+                              args.batch_size, **skw)
             e = clip_embed(imgs, clip_model, clip_processor, device)
             target_embs.append(e); embeddings[f"target_{name}"] = e.cpu().numpy()
             target_groups.append((name, n_i))
@@ -307,7 +361,8 @@ def main(argv=None):
         for age in ages:
             prompt = (f"a superrealistic portrait photograph of a {age}-year-old {args.age_gender}, "
                       "studio lighting, sharp focus, photographic")
-            imgs = gen_images(sprinter, source, prompt, n_per_age, args.controlnet_scale, args.seed + age * 7)
+            imgs = gen_images(pipe, source, prompt, n_per_age, args.controlnet_scale, args.seed + age * 7,
+                              args.batch_size, **skw)
             e = clip_embed(imgs, clip_model, clip_processor, device)
             target_embs.append(e); embeddings[f"target_age{age}"] = e.cpu().numpy()
             target_groups.append((str(age), n_per_age))
@@ -324,7 +379,8 @@ def main(argv=None):
     for name, scr in scribble_imgs.items():
         t1 = time.time()
         print(f"[{name}] generating {args.n_eval} images ...", flush=True)
-        imgs = gen_images(sprinter, scr, args.eval_prompt, args.n_eval, args.controlnet_scale, args.seed)
+        imgs = gen_images(pipe, scr, args.eval_prompt, args.n_eval, args.controlnet_scale, args.seed,
+                          args.batch_size, **skw)
         embs = clip_embed(imgs, clip_model, clip_processor, device)
         embeddings[f"method_{name}"] = embs.cpu().numpy()
         with torch.no_grad():
@@ -352,7 +408,7 @@ def main(argv=None):
 
     # ── 3. save ─────────────────────────────────────────────────────────────
     np.savez_compressed(os.path.join(args.output_dir, "embeddings.npz"), **embeddings)
-    table = results_table(results, scenario, args.n_eval, gender)
+    table = results_table(results, scenario, args.n_eval, gender, sampler_label(args))
     with open(os.path.join(args.output_dir, "eval_table.md"), "w") as f:
         f.write(table)
     bar_plot(results, "mmd", "MMD", f"{scenario}: MMD vs target (N={args.n_eval})",
@@ -366,6 +422,11 @@ def main(argv=None):
         "scenario": scenario, "mode": args.mode, "n_eval": args.n_eval, "seed": args.seed,
         "deterministic": not args.no_deterministic, "eval_prompt": args.eval_prompt,
         "controlnet_scale": args.controlnet_scale,
+        "eval_sampler": args.eval_sampler,
+        "eval_sampler_settings": ({k: getattr(args, k) for k in ("base_steps", "base_guidance_scale",
+                                   "base_scheduler", "base_negative_prompt", "base_resolution")}
+                                  if args.eval_sampler == "base" else {"num_inference_steps": 2,
+                                                                       "guidance_scale": 0.0}),
         "target_groups": target_groups, "target_n": int(target_clip.shape[0]),
         "scribbles": scribbles, "results": results,
         "model_revisions": model_revisions, "versions": library_versions(),

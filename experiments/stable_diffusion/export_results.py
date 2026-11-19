@@ -103,6 +103,8 @@ def export_run(run_dir, dest):
         shutil.copy2(os.path.join(run_dir, "scribble.png"), os.path.join(dest, "scribble_source.png"))
     copy_sub(os.path.join(run_dir, "baselines"), os.path.join(dest, "baselines"), BASELINE_FILES, ())
     copy_sub(os.path.join(run_dir, "eval"), os.path.join(dest, "eval"), EVAL_FILES, ("*preview_*.png",))
+    copy_sub(os.path.join(run_dir, "eval_base"), os.path.join(dest, "eval_base"), EVAL_FILES + ["eval_table.md"],
+             ("*preview_*.png",))   # run.sh eval_base: the multi-step SDXL Base evaluation
     copy_sub(os.path.join(run_dir, "saliency"), os.path.join(dest, "saliency"), SALIENCY_FILES, ())
 
 

@@ -23,10 +23,13 @@ from cdm.models.sd.metrics import compute_mmd, compute_witness_scores
 
 
 def generate_and_store_cs(
-    pipe, prompt, cond_pil, num_samples, batch_size=2, cn_scale=0.5, generator=None
+    pipe, prompt, cond_pil, num_samples, batch_size=2, cn_scale=0.5, generator=None,
+    num_inference_steps=2, guidance_scale=0.0, negative_prompt=None, height=None, width=None,
 ):
     """generate_and_store with configurable controlnet_conditioning_scale.
-    `generator`: optional torch.Generator for the noise (None = the global RNG)."""
+    `generator`: optional torch.Generator for the noise (None = the global RNG).
+    The defaults (2 steps, no CFG) are the Sprinter's; the multi-step evaluation sampler
+    (models.build_base_controlnet_pipeline) passes e.g. 30 steps and CFG 5."""
     original_vae_dtype = pipe.vae.dtype
     pipe.vae.to(dtype=torch.float16)
     all_images, all_lats = [], []
@@ -42,8 +45,11 @@ def generate_and_store_cs(
             result = pipe(
                 prompt=[prompt] * curr,
                 image=[cond_pil] * curr,
-                num_inference_steps=2,
-                guidance_scale=0.0,
+                num_inference_steps=num_inference_steps,
+                guidance_scale=guidance_scale,
+                negative_prompt=([negative_prompt] * curr) if negative_prompt else None,
+                height=height,
+                width=width,
                 controlnet_conditioning_scale=cn_scale,
                 callback_on_step_end=latents_callback,
                 generator=generator,

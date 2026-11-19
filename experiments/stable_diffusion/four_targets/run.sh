@@ -21,6 +21,13 @@
 #                                                  vs a 2,000-image target, MMD / SWD / p(male),
 #                                                  of every scribble of a run, into
 #                                                  <run dir>/eval/. No photos are saved.
+#   bash run.sh eval_base <scenario> [flags...]    GPU, many hours at N = 2,000 (start with
+#                                                  --n_eval 500). The same evaluation, but target
+#                                                  and methods are sampled from the MULTI-STEP
+#                                                  SDXL Base + ControlNet-Scribble (30 steps, CFG 5;
+#                                                  --base_steps, --base_guidance_scale,
+#                                                  --base_scheduler, --base_resolution) instead of
+#                                                  Turbo, into <run dir>/eval_base/.
 #   bash run.sh saliency <scenario> [flags...]     GPU, ~10 min. Where MLGD-F edited the scribble
 #                                                  and why there: scribble change,
 #                                                  gender saliency, their correlation, the latent
@@ -77,7 +84,7 @@ source "$HERE/../env.sh"      # REPO, PY, caches kept out of $HOME, the helpers 
 SCENARIOS=(balanced skewed gender_interpolation age_interpolation)
 TIER="${1:-check}"
 
-usage() { echo "usage: bash run.sh [check | help | smoke|full|baselines|eval|saliency <balanced|skewed|gender_interpolation|age_interpolation|all> [flags...]]" >&2; exit 64; }
+usage() { echo "usage: bash run.sh [check | help | smoke|full|baselines|eval|eval_base|saliency <balanced|skewed|gender_interpolation|age_interpolation|all> [flags...]]" >&2; exit 64; }
 
 baselines_one() {   # baselines_one <scenario> [extra flags...]: sdedit_best + avg_prompt
   local name="$1"; shift
@@ -140,8 +147,10 @@ saliency_one() {   # saliency_one <scenario> [extra flags...]: scribble change a
   )
 }
 
-eval_one() {   # eval_one <scenario> [extra flags...]: the N=2000 final evaluation
-  local name="$1"; shift
+eval_one() {   # eval_one <turbo|base> <scenario> [extra flags...]: the N=2000 final evaluation
+  local sampler="$1" name="$2"; shift 2
+  local sub=eval prefix=eval project_default=sdxl-eval
+  [ "$sampler" = base ] && { sub=eval_base; prefix=evalbase; project_default=sdxl-eval-base; }
   local cfg="$HERE/config/${name}.env"
   [ -f "$cfg" ] || { echo "no such scenario: $name (config/$name.env)" >&2; usage; }
   (
@@ -150,23 +159,23 @@ eval_one() {   # eval_one <scenario> [extra flags...]: the N=2000 final evaluati
     source "$cfg"
     set +a
     local rundir; rundir="$(resolve_run_dir "$SCENARIO" "$@")" || exit $?
-    local outdir; outdir="$(flag_value --output_dir "$rundir/eval" "$@")"
+    local outdir; outdir="$(flag_value --output_dir "$rundir/$sub" "$@")"
     local args=( --mode "$MODE" --controlnet_scale "$CONTROLNET_SCALE"
-                 --run_dir "$rundir" --n_eval 2000 --seed 42 )
+                 --run_dir "$rundir" --n_eval 2000 --seed 42 --eval_sampler "$sampler" )
     if [ "$MODE" = age ]; then
       args+=( --age_min "$AGE_MIN" --age_max "$AGE_MAX" --age_step "$AGE_STEP" --age_gender "$AGE_GENDER" )
     else
       local tp; IFS='|' read -r -a tp <<< "$TARGET_PROMPTS"
       args+=( --target_prompts "${tp[@]}" )
     fi
-    args+=( $(revision_args) --output_dir "$outdir" --wandb_project "${WANDB_PROJECT:-sdxl-eval}" )
+    args+=( $(revision_args) --output_dir "$outdir" --wandb_project "${WANDB_PROJECT:-$project_default}" )
     [ -n "${WANDB_ENTITY:-}" ] && args+=( --wandb_entity "$WANDB_ENTITY" )
     args+=( "$@" )
-    export WANDB_NAME="${WANDB_NAME:-eval_$(basename "$rundir")}"
+    export WANDB_NAME="${WANDB_NAME:-${prefix}_$(basename "$rundir")}"
     export WANDB_RUN_GROUP="${WANDB_RUN_GROUP:-$(basename "$rundir")}"
-    export WANDB_TAGS="${WANDB_TAGS:-eval,$name}"
+    export WANDB_TAGS="${WANDB_TAGS:-$sub,$name}"
     local cmd=( "$PY" -m cdm.models.sd.eval_all_experiments "${args[@]}" )
-    echo "=== eval | $name | wandb ${WANDB_PROJECT:-sdxl-eval}/$WANDB_NAME ==="
+    echo "=== $sub | $name | $outdir | wandb ${WANDB_PROJECT:-$project_default}/$WANDB_NAME ==="
     printf '%q ' "${cmd[@]}"; echo
     [ -n "${DRY_RUN:-}" ] && exit 0
     write_run_info "$outdir" "config/$name.env  overrides: ${*:-none}" "${cmd[@]}"
@@ -254,7 +263,8 @@ case "$TIER" in
     [ -n "${DRY_RUN:-}" ] || echo "next: bash experiments/stable_diffusion/four_targets/run.sh eval $SCEN"
     ;;
 
-  eval)
+  eval|eval_base)
+    SAMPLER=turbo; [ "$TIER" = eval_base ] && SAMPLER=base
     SCEN="${2:-}"; [ -n "$SCEN" ] || usage
     shift 2
     require_gpu
@@ -262,9 +272,9 @@ case "$TIER" in
       SCEN="${SCENARIOS[$SLURM_ARRAY_TASK_ID]:?array index must be 0-3}"
     fi
     if [ "$SCEN" = all ]; then
-      for s in "${SCENARIOS[@]}"; do eval_one "$s" "$@"; done
+      for s in "${SCENARIOS[@]}"; do eval_one "$SAMPLER" "$s" "$@"; done
     else
-      eval_one "$SCEN" "$@"
+      eval_one "$SAMPLER" "$SCEN" "$@"
     fi
     [ -n "${DRY_RUN:-}" ] || echo "save into results/: python experiments/stable_diffusion/export_results.py"
     ;;

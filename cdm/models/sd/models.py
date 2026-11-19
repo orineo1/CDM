@@ -21,6 +21,8 @@ import torch
 from diffusers import (
     ControlNetModel,
     DDIMScheduler,
+    DPMSolverMultistepScheduler,
+    EulerDiscreteScheduler,
     StableDiffusionXLControlNetPipeline,
     StableDiffusionXLPipeline,
     UNet2DConditionModel,
@@ -222,6 +224,39 @@ def load_models(
     )
 
     return architect, sprinter
+
+
+BASE_SCHEDULERS = {
+    "euler": EulerDiscreteScheduler,          # SDXL Base's own default
+    "dpm":   DPMSolverMultistepScheduler,     # DPM-Solver++(2M), good at 20-30 steps
+    "ddim":  DDIMScheduler,
+}
+
+
+def build_base_controlnet_pipeline(architect, controlnet, scheduler="euler"):
+    """
+    The multi-step conditional sampler Y | X used to *evaluate* a scribble: SDXL Base
+    (the Architect's weights) + the same ControlNet-Scribble as the Sprinter, sampled with
+    a full schedule and CFG instead of SDXL Turbo's 2 steps. The optimisation never sees
+    this sampler, so a target matched under it is a check that the scribble transfers
+    beyond the few-step model it was optimised against.
+
+    Shares the Architect's modules (no second copy of the weights); the scheduler is a
+    fresh instance so the Architect's DDIM state is not touched.
+    """
+    sched = BASE_SCHEDULERS[scheduler].from_config(architect.scheduler.config)
+    pipe = StableDiffusionXLControlNetPipeline(
+        vae=architect.vae,
+        text_encoder=architect.text_encoder,
+        text_encoder_2=architect.text_encoder_2,
+        tokenizer=architect.tokenizer,
+        tokenizer_2=architect.tokenizer_2,
+        unet=architect.unet,
+        controlnet=controlnet,
+        scheduler=sched,
+    )
+    pipe.set_progress_bar_config(disable=True)
+    return pipe
 
 
 def freeze_module(module):
