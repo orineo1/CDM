@@ -7,7 +7,7 @@ than the start), and delta % = 100 * delta / loss(source). If a seed has several
     python experiments/stable_diffusion/seed_deltas.py --outputs experiments/stable_diffusion/four_targets/outputs
 """
 import argparse, glob, json, os, re
-import numpy as np
+import statistics as st
 
 p = argparse.ArgumentParser()
 p.add_argument("--outputs", nargs="+", required=True, help="one or more four_targets/outputs directories")
@@ -43,11 +43,12 @@ for loss in ("mmd", "swd"):
             rows = [(r["source"][loss], r[meth][loss]) for r in res.values() if meth in r and "source" in r]
             if not rows:
                 continue
-            src, met = np.array(rows).T
-            d, dp = src - met, 100 * (src - met) / src
-            sd = lambda x: x.std(ddof=1) if len(x) > 1 else float("nan")
-            print(f"| {s} | {meth} | {len(rows)} | {d.mean():.4f} ± {sd(d):.4f} | {dp.mean():.1f} ± {sd(dp):.1f} "
-                  f"| {src.mean():.4f} | {met.mean():.4f} |")
+            src, met = [r[0] for r in rows], [r[1] for r in rows]
+            d = [x - y for x, y in rows]
+            dp = [100 * (x - y) / x for x, y in rows]
+            sd = lambda v: st.stdev(v) if len(v) > 1 else float("nan")   # sample SD (n - 1)
+            print(f"| {s} | {meth} | {len(rows)} | {st.mean(d):.4f} ± {sd(d):.4f} | {st.mean(dp):.1f} ± {sd(dp):.1f} "
+                  f"| {st.mean(src):.4f} | {st.mean(met):.4f} |")
 print("\nruns used:")
 for (s, k), (job, f) in sorted(runs.items()):
     print(f"  {s} seed {k}: {os.path.dirname(os.path.dirname(f))}")
