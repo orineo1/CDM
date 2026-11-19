@@ -18,13 +18,13 @@ needs_gbfeso = pytest.mark.skipif(not os.path.isfile(os.path.join(GBFESO, "run_f
 
 def test_design_defaults():
     d4 = Design(4)
-    assert d4.free == (1, 2) and d4.fixed == {3: 0.5} and d4.dim_x == 2 and d4.dim_y == 5
+    assert d4.free == ("eps1", "eps2") and d4.fixed == {"eps3": 0.5} and d4.dim_x == 2 and d4.dim_y == 5
     assert [(i, j) for i, j, _ in d4.pairs()] == [(0, 1), (1, 2), (2, 3), (0, 2), (1, 3), (0, 3)]
     assert torch.equal(d4.pair_eps(torch.tensor([[0.3, 0.7]])), torch.tensor([[0.3, 0.3, 0.3, 0.7, 0.7, 0.5]]))
     d6 = Design(6)
-    assert d6.free == (1, 2, 3, 4, 5) and d6.fixed == {} and d6.dim_y == 9 and len(d6.pairs()) == 15
+    assert d6.free == ("eps1", "eps2", "eps3", "eps4", "eps5") and d6.fixed == {} and d6.dim_y == 9 and len(d6.pairs()) == 15
     assert Design.from_dict(d6.to_dict()).to_dict() == d6.to_dict()
-    assert Design.from_args(5, "1,2", "3=0.5,4=0.2").fixed == {3: 0.5, 4: 0.2}
+    assert Design.from_args(5, "1,2", "3=0.5,4=0.2").fixed == {"eps3": 0.5, "eps4": 0.2}
 
 
 def test_internal_coords_n4_matches_four_bead_formula():
