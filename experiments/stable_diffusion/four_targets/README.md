@@ -296,5 +296,15 @@ The code in `cdm/models/sd/` is ported from `orineo1/conditional-matching-paper`
 (branch `claude/sd-shared-controlnet-hvt-uniform`, `SD_cond_SD_controlnet/`);
 `cdm/models/sd/README.md` lists what is carried there and what is shared.
 
+`results/mlgdf_10_seeds.md` reports MLGD-F over the ten seeds of each scenario (mean ± std, and
+the seed selected by MMD alone), once with all seeds and once without age-interpolation seeds 6
+and 9, the two runs that end above their source sketch's MMD:
+
+```
+python3 experiments/stable_diffusion/seed_deltas.py --outputs experiments/stable_diffusion/four_targets/outputs \
+    --zeta 7.5 --mlgdf-report --without AgeInterpolation:6 AgeInterpolation:9 \
+    > experiments/stable_diffusion/four_targets/results/mlgdf_10_seeds.md
+```
+
 `outputs/` is for local runs and ships empty; `export_results.py` is what copies a run
 into `results/`.
