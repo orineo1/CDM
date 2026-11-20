@@ -55,7 +55,7 @@ order = ["BalancedTarget", "SkewedTarget", "GenderInterpolation", "AgeInterpolat
 scen = sorted({s for s, _ in runs}, key=lambda s: order.index(s) if s in order else 99)
 for loss in (() if a.mlgdf_report else ("mmd", "swd")):
     print(f"\n## {loss.upper()}: delta = {loss}(source) - {loss}(method), mean ± SD over seeds (positive = improvement)\n")
-    print("| scenario | method | n seeds | Δ | Δ % | source | method |")
+    print(f"| scenario | method | n seeds | {loss.upper()} (method) | Δ | Δ % | {loss.upper()} (source) |")
     print("|---|---|---|---|---|---|---|")
     for s in scen:
         seeds = sorted(k for sc, k in runs if sc == s)
@@ -68,8 +68,8 @@ for loss in (() if a.mlgdf_report else ("mmd", "swd")):
             d = [x - y for x, y in rows]
             dp = [100 * (x - y) / x for x, y in rows]
             sd = lambda v: st.stdev(v) if len(v) > 1 else float("nan")   # sample SD (n - 1)
-            print(f"| {s} | {meth} | {len(rows)} | {st.mean(d):.4f} ± {sd(d):.4f} | {st.mean(dp):.1f} ± {sd(dp):.1f} "
-                  f"| {st.mean(src):.4f} | {st.mean(met):.4f} |")
+            print(f"| {s} | {meth} | {len(rows)} | {st.mean(met):.4f} ± {sd(met):.4f} | {st.mean(d):.4f} ± {sd(d):.4f} "
+                  f"| {st.mean(dp):.1f} ± {sd(dp):.1f} | {st.mean(src):.4f} ± {sd(src):.4f} |")
 def mlgdf_table(title, drop=()):
   print(f"\n## {title}\n")
   print("| scenario | n seeds | MMD | Δ MMD % | SWD | Δ SWD % | p(male) | selected seed | its MMD | its Δ MMD % | its SWD | its p(male) |")
