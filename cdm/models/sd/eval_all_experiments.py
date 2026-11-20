@@ -40,6 +40,7 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 
 from cdm.models.sd.clip_utils import CLIP_MODEL_ID, encode_images_clip, load_clip_model
+from cdm.models.sd.extra_scorers import Embedder, GenderClassifier, short_name
 from cdm.models.sd.generation import generate_and_store_cs
 from cdm.models.sd.metrics import compute_mmd, compute_swd
 from cdm.models.sd.models import (
@@ -100,6 +101,14 @@ def parse_args(argv=None):
     p.add_argument("--architect_revision",  type=str, default=None)
     p.add_argument("--hed_revision",        type=str, default=None, help="unused here; accepted so run.sh can pass it")
     p.add_argument("--clip_revision",       type=str, default=None)
+
+    g = p.add_argument_group("non-CLIP scorers (cdm.models.sd.extra_scorers): the same portraits, scored again")
+    g.add_argument("--extra_embedder", type=str, default=None, metavar="MODEL_ID",
+                   help="a second image embedding for MMD / SWD, e.g. facebook/dinov2-base")
+    g.add_argument("--extra_embedder_revision", type=str, default=None)
+    g.add_argument("--gender_classifier", type=str, default=None, metavar="MODEL_ID",
+                   help="a face-attribute classifier for p(male), e.g. dima806/fairface_gender_image_detection")
+    g.add_argument("--gender_classifier_revision", type=str, default=None)
 
     p.add_argument("--wandb_project", type=str, default="sdxl-eval")
     p.add_argument("--wandb_entity",  type=str, default="")
@@ -271,6 +280,16 @@ def main(argv=None):
         args.controlnet_model_id: resolved_revision(args.controlnet_model_id, args.controlnet_revision),
         CLIP_MODEL_ID:            resolved_revision(CLIP_MODEL_ID, args.clip_revision),
     }
+    emb2 = clf2 = None
+    if args.extra_embedder:
+        emb2 = Embedder(args.extra_embedder, device, revision=args.extra_embedder_revision)
+        k2 = short_name(args.extra_embedder)
+        model_revisions[args.extra_embedder] = resolved_revision(args.extra_embedder, args.extra_embedder_revision)
+    if args.gender_classifier and args.mode == "gender":
+        clf2 = GenderClassifier(args.gender_classifier, device, revision=args.gender_classifier_revision)
+        kc = short_name(args.gender_classifier)
+        model_revisions[args.gender_classifier] = resolved_revision(args.gender_classifier, args.gender_classifier_revision)
+        print(f"{args.gender_classifier}: labels {clf2.labels} (male={clf2.male}, female={clf2.female})", flush=True)
     print("Models loaded.", flush=True)
 
     run = None
@@ -286,6 +305,7 @@ def main(argv=None):
     gender = args.mode == "gender"
     source = scribble_imgs["source"]
     target_embs, target_groups, embeddings = [], [], {}
+    target_embs2 = []
     if gender:
         groups = parse_groups(args.target_prompts)
         for i, (name, prompt, frac) in enumerate(groups):
@@ -294,6 +314,8 @@ def main(argv=None):
             imgs = gen_images(sprinter, source, prompt, n_i, args.controlnet_scale, args.seed + i * 1000)
             e = clip_embed(imgs, clip_model, clip_processor, device)
             target_embs.append(e); embeddings[f"target_{name}"] = e.cpu().numpy()
+            if emb2:
+                e2 = emb2.embed(imgs); target_embs2.append(e2); embeddings[f"{k2}_target_{name}"] = e2.cpu().numpy()
             target_groups.append((name, n_i))
             plot_row(imgs, f"Target: {name}", count=N_PREVIEW,
                      save_path=os.path.join(args.output_dir, f"target_preview_{name}.png"))
@@ -310,6 +332,8 @@ def main(argv=None):
             imgs = gen_images(sprinter, source, prompt, n_per_age, args.controlnet_scale, args.seed + age * 7)
             e = clip_embed(imgs, clip_model, clip_processor, device)
             target_embs.append(e); embeddings[f"target_age{age}"] = e.cpu().numpy()
+            if emb2:
+                e2 = emb2.embed(imgs); target_embs2.append(e2); embeddings[f"{k2}_target_age{age}"] = e2.cpu().numpy()
             target_groups.append((str(age), n_per_age))
             if age in anchors:
                 plot_row(imgs, f"Target: age {age}", count=N_PREVIEW,
@@ -317,6 +341,7 @@ def main(argv=None):
             del imgs
         target_frac = None
     target_clip = torch.cat(target_embs, dim=0)
+    target2 = torch.cat(target_embs2, dim=0).to(target_clip.device) if emb2 else None
     print(f"Target CLIP: {tuple(target_clip.shape)}  ({(time.time() - t0) / 60:.1f} min)", flush=True)
 
     # ── 2. every method ─────────────────────────────────────────────────────
@@ -342,6 +367,22 @@ def main(argv=None):
             print(f"    MMD={mmd:.5f}  SWD={swd:.5f}  p(male)={p:.3f}  95%CI=[{lo:.3f},{hi:.3f}]", flush=True)
         else:
             print(f"    MMD={mmd:.5f}  SWD={swd:.5f}", flush=True)
+        if emb2:   # the same portraits in the second embedding
+            e2 = emb2.embed(imgs).to(target2.device)
+            embeddings[f"{k2}_method_{name}"] = e2.cpu().numpy()
+            with torch.no_grad():
+                r[f"mmd_{k2}"] = compute_mmd(e2, target2).item()
+                r[f"swd_{k2}"] = compute_swd(e2, target2, seed=args.seed).item()
+            print(f"    {args.extra_embedder}: MMD={r[f'mmd_{k2}']:.5f}  SWD={r[f'swd_{k2}']:.5f}", flush=True)
+        if clf2:   # p(male) from the face-attribute classifier, and how often it agrees with CLIP's label
+            pm = clf2.p_male(imgs)
+            n2 = sum(1 for x in pm if x > 0.5)
+            p2, lo2, hi2 = binomial_ci(n2, args.n_eval)
+            agree = sum(1 for x, c in zip(pm, sr) if (x > 0.5) == (c["label"] == "male")) / args.n_eval
+            r.update({f"p_male_{kc}": p2, f"ci_lo_{kc}": lo2, f"ci_hi_{kc}": hi2, f"n_male_{kc}": n2,
+                      f"agreement_with_clip_{kc}": agree})
+            print(f"    {args.gender_classifier}: p(male)={p2:.3f}  95%CI=[{lo2:.3f},{hi2:.3f}]  "
+                  f"agrees with CLIP on {agree:.1%}", flush=True)
         r["seconds"] = time.time() - t1
         results[name] = r
         plot_row(imgs, f"{name}  (MMD={mmd:.4f})", count=N_PREVIEW,
@@ -349,12 +390,37 @@ def main(argv=None):
         del imgs, embs
         torch.cuda.empty_cache()
     add_deltas(results)
+    if emb2 and "source" in results:
+        for loss in ("mmd", "swd"):
+            s0 = results["source"][f"{loss}_{k2}"]
+            for r in results.values():
+                r[f"{loss}_{k2}_improvement_pct"] = (s0 - r[f"{loss}_{k2}"]) / s0 * 100
 
     # ── 3. save ─────────────────────────────────────────────────────────────
     np.savez_compressed(os.path.join(args.output_dir, "embeddings.npz"), **embeddings)
     table = results_table(results, scenario, args.n_eval, gender)
     with open(os.path.join(args.output_dir, "eval_table.md"), "w") as f:
         f.write(table)
+    if emb2 or clf2:
+        f2 = [f"# {scenario}: non-CLIP scores of the same portraits (N = {args.n_eval})", ""]
+        head, sep = "| Method | CLIP MMD |", "|---|---|"
+        if emb2:
+            head += f" {k2} MMD ↓ | Δ (%) | {k2} SWD ↓ | Δ (%) |"; sep += "---|---|---|---|"
+        if clf2:
+            head += f" CLIP p(male) | {kc} p(male) | 95% CI | agreement |"; sep += "---|---|---|---|"
+        f2 += [head, sep]
+        for n, r in results.items():
+            row = f"| {n} | {r['mmd']:.3f} |"
+            if emb2:
+                row += (f" {r[f'mmd_{k2}']:.3f} | {r.get(f'mmd_{k2}_improvement_pct', 0):+.1f}% |"
+                        f" {r[f'swd_{k2}']:.4f} | {r.get(f'swd_{k2}_improvement_pct', 0):+.1f}% |")
+            if clf2:
+                row += (f" {r['p_male']:.3f} | {r[f'p_male_{kc}']:.3f} | [{r[f'ci_lo_{kc}']:.3f}, {r[f'ci_hi_{kc}']:.3f}] |"
+                        f" {r[f'agreement_with_clip_{kc}']:.1%} |")
+            f2.append(row)
+        with open(os.path.join(args.output_dir, "eval_table_nonclip.md"), "w") as f:
+            f.write("\n".join(f2) + "\n")
+        print("\n" + "\n".join(f2), flush=True)
     bar_plot(results, "mmd", "MMD", f"{scenario}: MMD vs target (N={args.n_eval})",
              os.path.join(args.output_dir, "mmd_bar.png"))
     bar_plot(results, "swd", "SWD", f"{scenario}: SWD vs target (N={args.n_eval})",
