@@ -17,6 +17,9 @@ its 95% CI. Every number is read from eval_results.json; nothing is recomputed.
     python experiments/stable_diffusion/final_table.py                       # status + table
     python experiments/stable_diffusion/final_table.py --out final_table.md  # also save it
     python experiments/stable_diffusion/final_table.py --run-dir <one run directory>
+    python experiments/stable_diffusion/final_table.py --check               # before running:
+        every scenario has a finished run with all four scribbles? prints the sbatch
+        commands for what is missing (baselines, eval, eval_base), nothing else
 No GPU, no model downloads; standard library only.
 """
 
@@ -30,6 +33,80 @@ OUTPUTS = os.path.join(HERE, "four_targets", "outputs")
 ORDER = ["BalancedTarget", "SkewedTarget", "GenderInterpolation", "AgeInterpolation"]
 SAMPLERS = [("eval", "Turbo (2 steps)"), ("eval_base", "Base (multi-step)")]
 METHODS = ["source", "avg_prompt", "sdedit_best", "mlgd_f"]
+# the files eval_all_experiments looks for (its SCRIBBLE_FILES), so the check sees what it will see
+SCRIBBLE_FILES = {
+    "source":      ["scribble.png", "scribble_source.png"],
+    "avg_prompt":  ["baselines/scribble_avg_prompt.png", "scribble_avg_prompt.png"],
+    "sdedit_best": ["baselines/scribble_sdedit_best.png", "scribble_sdedit_best.png"],
+    "mlgd_f":      ["final_scribble_mlgd_f.png", "scribble_mlgdd.png"],
+}
+SCENARIO_ARG = {"BalancedTarget": "balanced", "SkewedTarget": "skewed",
+                "GenderInterpolation": "gender_interpolation", "AgeInterpolation": "age_interpolation"}
+RUN_SH = "experiments/stable_diffusion/four_targets/run.sh"
+SBATCH = "sbatch --partition=salmon --gres=gpu:1 --cpus-per-task=8 --mem=64G"
+
+
+def scribbles(run_dir):
+    return {m: any(os.path.exists(os.path.join(run_dir, f)) for f in fs) for m, fs in SCRIBBLE_FILES.items()}
+
+
+def scenario_of(name):
+    return next((sc for sc in ORDER if f"_{sc}_" in name + "_"), None)
+
+
+def check(runs, n_eval):
+    """Per scenario: the newest finished run, its scribbles, eval / eval_base; the commands for the gaps."""
+    finished = [d for d in runs if os.path.exists(os.path.join(d, "metrics.json"))]
+    newest = {}
+    for d in sorted(finished, key=os.path.getmtime):          # later wins = what run.sh picks by default
+        sc = scenario_of(os.path.basename(d))
+        if sc:
+            newest[sc] = d
+    todo, ok = [], True
+    print("Readiness, per scenario (the newest finished full run, which run.sh uses by default):\n")
+    for sc in ORDER:
+        arg = SCENARIO_ARG[sc]
+        d = newest.get(sc)
+        if d is None:
+            ok = False
+            unfinished = [os.path.basename(r) for r in runs if scenario_of(os.path.basename(r)) == sc]
+            print(f"  {sc:<20} NO finished run" + (f" (unfinished: {', '.join(unfinished)})" if unfinished else ""))
+            todo.append(f'{SBATCH} --time=24:00:00 --output=logs/sd-%j.out --wrap "bash {RUN_SH} full {arg}"')
+            continue
+        have = scribbles(d)
+        st = {s: status(os.path.join(d, s)) for s, _ in SAMPLERS}
+        marks = "  ".join(f"{m} {'ok' if v else 'MISSING'}" for m, v in have.items())
+        print(f"  {sc:<20} {os.path.basename(d)}\n  {'':<20} scribbles: {marks}\n"
+              f"  {'':<20} eval {st['eval']}   eval_base {st['eval_base']}")
+        rd = f"--run_dir {d}"
+        if not (have["source"] and have["mlgd_f"]):
+            ok = False
+            print(f"  {'':<20} -> source/mlgd_f scribble missing: the run is incomplete, rerun `full {arg}`")
+            continue
+        if not (have["avg_prompt"] and have["sdedit_best"]):
+            ok = False
+            todo.append(f'{SBATCH} --time=24:00:00 --output=logs/sd-base-%j.out --wrap "bash {RUN_SH} baselines {arg} {rd}"')
+        if st["eval_base"] != "done":
+            todo.append(("# still running? check squeue first:  " if st["eval_base"] == "unfinished" else "")
+                        + f'{SBATCH} --time=12:00:00 --output=logs/sd-evalbase-%j.out '
+                        f'--wrap "bash {RUN_SH} eval_base {arg} {rd} --n_eval {n_eval}"')
+        if st["eval"] != "done":
+            todo.append(("# still running? check squeue first:  " if st["eval"] == "unfinished" else "")
+                        + f'{SBATCH} --time=03:00:00 --output=logs/sd-eval-%j.out --wrap "bash {RUN_SH} eval {arg} {rd}"')
+    print()
+    if any(status(os.path.join(d, s)) == "unfinished" for d in newest.values() for s, _ in SAMPLERS):
+        print("Note: 'unfinished' = started, no results: check `squeue -u $USER` before resubmitting.\n")
+    if ok:
+        print("All four scenarios have a finished run with all four scribbles.")
+    else:
+        print("NOT ready: some scenarios lack a finished run or baseline scribbles (an eval would skip those methods).")
+    if todo:
+        print("\nTo run (from the repo root, venv active; baselines must finish before that scenario's eval;"
+              " chain with --dependency=afterok:<jobid>):\n")
+        print("mkdir -p logs")
+        print("\n".join(todo))
+    else:
+        print("Nothing left to run: python experiments/stable_diffusion/final_table.py --out final_table.md")
 
 
 def status(sub_dir):
@@ -99,12 +176,16 @@ def main():
     p.add_argument("--tier", default="full", help="runs named <tier>_* (default full)")
     p.add_argument("--run-dir", nargs="*", default=None, help="these run directories instead")
     p.add_argument("--out", default=None, help="also write the table (markdown) here")
+    p.add_argument("--check", action="store_true", help="only check readiness and print the commands to run")
+    p.add_argument("--n_eval", type=int, default=500, help="--check: the --n_eval of the eval_base commands")
     args = p.parse_args()
 
     runs = args.run_dir or [d for d in glob.glob(os.path.join(args.outputs, f"{args.tier}_*")) if os.path.isdir(d)]
     runs = sorted((os.path.abspath(d) for d in runs), key=lambda d: scenario_key(os.path.basename(d)))
     if not runs:
         raise SystemExit(f"no run directories {args.tier}_* in {args.outputs}")
+    if args.check:
+        return check(runs, args.n_eval)
 
     print("Status (done = eval_results.json written):")
     tables, pending = [], 0

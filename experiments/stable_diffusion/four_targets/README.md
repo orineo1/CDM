@@ -189,6 +189,9 @@ copies `eval_base/` next to `eval/`.
 When the jobs are done, `python experiments/stable_diffusion/final_table.py` (CPU, seconds)
 reports which `eval/` and `eval_base/` finished (`eval_results.json` written) and prints one
 table per run with both samplers side by side; `--out final_table.md` saves it.
+Run it with `--check` *before* submitting: it says, per scenario, whether there is a finished
+run with all four scribbles (source, mlgd_f, and the baselines' avg_prompt and sdedit_best), and
+prints the `sbatch` commands for what is missing.
 
 ## Saliency: `run.sh saliency`
 
