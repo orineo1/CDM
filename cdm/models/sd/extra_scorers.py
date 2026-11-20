@@ -75,6 +75,74 @@ class GenderClassifier:
         return torch.cat(out).tolist()
 
 
+AGE_BRACKETS = ("0-2", "3-9", "10-19", "20-29", "30-39", "40-49", "50-59", "60-69", "70+")
+
+
+class FairFace3Task:
+    """The FairFace race / gender / age classifiers of wesjos/fairface-*-cnano-3task-224 (timm ConvNeXt-Nano,
+    three linear heads on the 640-d pooled feature), rebuilt here from the repository's inference.py
+    so that only the weights (model.pt) are loaded, never the repository's code. Gender logits are
+    ordered (Male, Female); age is 8 ordinal thresholds, the bracket being the number of positive ones."""
+
+    ARCH, FEATURE_DIM, SIZE = "convnext_nano.in12k_ft_in1k", 640, 224
+    MEAN, STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+
+    def __init__(self, model_id, device, revision=None):
+        import os
+        import timm
+        import torch.nn as nn
+        from torchvision import transforms
+        from torchvision.transforms import InterpolationMode
+        self.model_id, self.device = model_id, device
+        if os.path.isdir(model_id):
+            path = os.path.join(model_id, "model.pt")
+        else:
+            from huggingface_hub import hf_hub_download
+            path = hf_hub_download(model_id, "model.pt", revision=revision)
+
+        class Student(nn.Module):
+            def __init__(s):
+                super().__init__()
+                s.backbone = timm.create_model(self.ARCH, pretrained=False, num_classes=0)
+                s.race_head = nn.Linear(self.FEATURE_DIM, 7)
+                s.gender_head = nn.Linear(self.FEATURE_DIM, 2)
+                s.age_head = nn.Linear(self.FEATURE_DIM, 8)
+
+            def forward(s, x):
+                f = s.backbone(x)
+                return {"gender": s.gender_head(f), "age": s.age_head(f)}
+
+        try:   # tensors only, when the checkpoint allows it
+            ckpt = torch.load(path, map_location="cpu", weights_only=True)
+        except Exception:
+            ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        self.model = Student()
+        self.model.load_state_dict(ckpt["ema"] if ckpt.get("selected_ema") else ckpt["model"])
+        self.model.eval()
+        self.transform = transforms.Compose([
+            transforms.Resize((self.SIZE, self.SIZE), interpolation=InterpolationMode.BICUBIC),
+            transforms.ToTensor(), transforms.Normalize(mean=self.MEAN, std=self.STD)])
+
+    @torch.no_grad()
+    def predict(self, images, batch=64):
+        """(p_male per image, age bracket index 0..8 per image)."""
+        self.model.to(self.device)
+        pm, age = [], []
+        for s in range(0, len(images), batch):
+            x = torch.stack([self.transform(im.convert("RGB")) for im in images[s:s + batch]]).to(self.device)
+            out = self.model(x)
+            pm += out["gender"].float().softmax(dim=1)[:, 0].cpu().tolist()
+            age += (out["age"] > 0).sum(dim=1).cpu().tolist()
+        self.model.to("cpu")
+        return pm, age
+
+
+def bracket_hist(brackets):
+    """Fraction of images per FairFace age bracket (9 values)."""
+    n = max(len(brackets), 1)
+    return [sum(1 for b in brackets if b == i) / n for i in range(len(AGE_BRACKETS))]
+
+
 def short_name(model_id):
     """Key suffix for the results: facebook/dinov2-base -> dinov2_base."""
     return model_id.split("/")[-1].replace("-", "_").replace(".", "_").lower()

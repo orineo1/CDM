@@ -40,7 +40,7 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 
 from cdm.models.sd.clip_utils import CLIP_MODEL_ID, encode_images_clip, load_clip_model
-from cdm.models.sd.extra_scorers import Embedder, GenderClassifier, short_name
+from cdm.models.sd.extra_scorers import AGE_BRACKETS, Embedder, FairFace3Task, bracket_hist, short_name
 from cdm.models.sd.generation import generate_and_store_cs
 from cdm.models.sd.metrics import compute_mmd, compute_swd
 from cdm.models.sd.models import (
@@ -106,9 +106,11 @@ def parse_args(argv=None):
     g.add_argument("--extra_embedder", type=str, default=None, metavar="MODEL_ID",
                    help="a second image embedding for MMD / SWD, e.g. facebook/dinov2-base")
     g.add_argument("--extra_embedder_revision", type=str, default=None)
-    g.add_argument("--gender_classifier", type=str, default=None, metavar="MODEL_ID",
-                   help="a face-attribute classifier for p(male), e.g. dima806/fairface_gender_image_detection")
-    g.add_argument("--gender_classifier_revision", type=str, default=None)
+    g.add_argument("--face_classifier", type=str, default=None, metavar="MODEL_ID",
+                   help="FairFace race/gender/age classifier (extra_scorers.FairFace3Task), e.g. "
+                        "wesjos/fairface-papercarousel-cnano-3task-224: p(male) in the gender scenarios, "
+                        "the age-bracket distribution in the age scenario")
+    g.add_argument("--face_classifier_revision", type=str, default=None)
 
     p.add_argument("--wandb_project", type=str, default="sdxl-eval")
     p.add_argument("--wandb_entity",  type=str, default="")
@@ -285,11 +287,11 @@ def main(argv=None):
         emb2 = Embedder(args.extra_embedder, device, revision=args.extra_embedder_revision)
         k2 = short_name(args.extra_embedder)
         model_revisions[args.extra_embedder] = resolved_revision(args.extra_embedder, args.extra_embedder_revision)
-    if args.gender_classifier and args.mode == "gender":
-        clf2 = GenderClassifier(args.gender_classifier, device, revision=args.gender_classifier_revision)
-        kc = short_name(args.gender_classifier)
-        model_revisions[args.gender_classifier] = resolved_revision(args.gender_classifier, args.gender_classifier_revision)
-        print(f"{args.gender_classifier}: labels {clf2.labels} (male={clf2.male}, female={clf2.female})", flush=True)
+    if args.face_classifier:
+        clf2 = FairFace3Task(args.face_classifier, device, revision=args.face_classifier_revision)
+        kc = "fairface"
+        model_revisions[args.face_classifier] = resolved_revision(args.face_classifier, args.face_classifier_revision)
+    face_target = {}   # the classifier on the target portraits: p(male) per group, or the age brackets
     print("Models loaded.", flush=True)
 
     run = None
@@ -316,6 +318,10 @@ def main(argv=None):
             target_embs.append(e); embeddings[f"target_{name}"] = e.cpu().numpy()
             if emb2:
                 e2 = emb2.embed(imgs); target_embs2.append(e2); embeddings[f"{k2}_target_{name}"] = e2.cpu().numpy()
+            if clf2:
+                tpm, _ = clf2.predict(imgs)
+                face_target[name] = sum(1 for x in tpm if x > 0.5) / len(tpm)
+                print(f"    {kc}: p(male) of target [{name}] = {face_target[name]:.3f}", flush=True)
             target_groups.append((name, n_i))
             plot_row(imgs, f"Target: {name}", count=N_PREVIEW,
                      save_path=os.path.join(args.output_dir, f"target_preview_{name}.png"))
@@ -334,6 +340,8 @@ def main(argv=None):
             target_embs.append(e); embeddings[f"target_age{age}"] = e.cpu().numpy()
             if emb2:
                 e2 = emb2.embed(imgs); target_embs2.append(e2); embeddings[f"{k2}_target_age{age}"] = e2.cpu().numpy()
+            if clf2:
+                face_target.setdefault("brackets", []).extend(clf2.predict(imgs)[1])
             target_groups.append((str(age), n_per_age))
             if age in anchors:
                 plot_row(imgs, f"Target: age {age}", count=N_PREVIEW,
@@ -374,15 +382,19 @@ def main(argv=None):
                 r[f"mmd_{k2}"] = compute_mmd(e2, target2).item()
                 r[f"swd_{k2}"] = compute_swd(e2, target2, seed=args.seed).item()
             print(f"    {args.extra_embedder}: MMD={r[f'mmd_{k2}']:.5f}  SWD={r[f'swd_{k2}']:.5f}", flush=True)
-        if clf2:   # p(male) from the face-attribute classifier, and how often it agrees with CLIP's label
-            pm = clf2.p_male(imgs)
+        if clf2 and gender:   # p(male) from the FairFace classifier, and how often it agrees with CLIP's label
+            pm, _ = clf2.predict(imgs)
             n2 = sum(1 for x in pm if x > 0.5)
             p2, lo2, hi2 = binomial_ci(n2, args.n_eval)
             agree = sum(1 for x, c in zip(pm, sr) if (x > 0.5) == (c["label"] == "male")) / args.n_eval
             r.update({f"p_male_{kc}": p2, f"ci_lo_{kc}": lo2, f"ci_hi_{kc}": hi2, f"n_male_{kc}": n2,
                       f"agreement_with_clip_{kc}": agree})
-            print(f"    {args.gender_classifier}: p(male)={p2:.3f}  95%CI=[{lo2:.3f},{hi2:.3f}]  "
-                  f"agrees with CLIP on {agree:.1%}", flush=True)
+            print(f"    {kc}: p(male)={p2:.3f}  95%CI=[{lo2:.3f},{hi2:.3f}]  agrees with CLIP on {agree:.1%}", flush=True)
+        elif clf2:            # the age-bracket distribution, and its total-variation distance to the target's
+            h = bracket_hist(clf2.predict(imgs)[1])
+            ht = bracket_hist(face_target["brackets"])
+            r.update({f"age_brackets_{kc}": h, f"age_tv_{kc}": 0.5 * sum(abs(a - b) for a, b in zip(h, ht))})
+            print(f"    {kc}: age brackets {[round(x, 3) for x in h]}  TV to target {r[f'age_tv_{kc}']:.3f}", flush=True)
         r["seconds"] = time.time() - t1
         results[name] = r
         plot_row(imgs, f"{name}  (MMD={mmd:.4f})", count=N_PREVIEW,
@@ -406,18 +418,28 @@ def main(argv=None):
         head, sep = "| Method | CLIP MMD |", "|---|---|"
         if emb2:
             head += f" {k2} MMD ↓ | Δ (%) | {k2} SWD ↓ | Δ (%) |"; sep += "---|---|---|---|"
-        if clf2:
+        if clf2 and gender:
             head += f" CLIP p(male) | {kc} p(male) | 95% CI | agreement |"; sep += "---|---|---|---|"
+        elif clf2:
+            head += f" {kc} age TV to target ↓ | <40 | " + " | ".join(AGE_BRACKETS[5:]) + " |"; sep += "---|" * 6
         f2 += [head, sep]
         for n, r in results.items():
             row = f"| {n} | {r['mmd']:.3f} |"
             if emb2:
                 row += (f" {r[f'mmd_{k2}']:.3f} | {r.get(f'mmd_{k2}_improvement_pct', 0):+.1f}% |"
                         f" {r[f'swd_{k2}']:.4f} | {r.get(f'swd_{k2}_improvement_pct', 0):+.1f}% |")
-            if clf2:
+            if clf2 and gender:
                 row += (f" {r['p_male']:.3f} | {r[f'p_male_{kc}']:.3f} | [{r[f'ci_lo_{kc}']:.3f}, {r[f'ci_hi_{kc}']:.3f}] |"
                         f" {r[f'agreement_with_clip_{kc}']:.1%} |")
+            elif clf2:
+                h = r[f"age_brackets_{kc}"]
+                row += f" {r[f'age_tv_{kc}']:.3f} | {sum(h[:5]):.2f} | " + " | ".join(f"{x:.2f}" for x in h[5:]) + " |"
             f2.append(row)
+        if clf2 and gender:
+            f2 += ["", f"{kc} p(male) of the target groups: " + ", ".join(f"{g} {v:.3f}" for g, v in face_target.items())]
+        elif clf2:
+            f2 += ["", f"{kc} age brackets of the target: " + ", ".join(
+                f"{b} {v:.2f}" for b, v in zip(AGE_BRACKETS, bracket_hist(face_target["brackets"])))]
         with open(os.path.join(args.output_dir, "eval_table_nonclip.md"), "w") as f:
             f.write("\n".join(f2) + "\n")
         print("\n" + "\n".join(f2), flush=True)
@@ -434,6 +456,8 @@ def main(argv=None):
         "controlnet_scale": args.controlnet_scale,
         "target_groups": target_groups, "target_n": int(target_clip.shape[0]),
         "scribbles": scribbles, "results": results,
+        **({"face_classifier_on_target": face_target if gender else
+            {"age_brackets": dict(zip(AGE_BRACKETS, bracket_hist(face_target["brackets"])))}} if clf2 else {}),
         "model_revisions": model_revisions, "versions": library_versions(),
         "total_minutes": (time.time() - t0) / 60,
         "wandb": ({"project": run.project, "entity": run.entity, "name": run.name, "id": run.id, "url": run.url}
