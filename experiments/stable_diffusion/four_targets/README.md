@@ -186,6 +186,10 @@ N = 500 is a few hours on an A100/L40S, N = 2,000 most of a day. Flags: `--base_
 `--base_negative_prompt`, `--batch_size`. W&B project `sdxl-eval-base`; `export_results.py`
 copies `eval_base/` next to `eval/`.
 
+When the jobs are done, `python experiments/stable_diffusion/final_table.py` (CPU, seconds)
+reports which `eval/` and `eval_base/` finished (`eval_results.json` written) and prints one
+table per run with both samplers side by side; `--out final_table.md` saves it.
+
 ## Saliency: `run.sh saliency`
 
 Where MLGD-F edited the scribble, and why there, for a finished gender run:
