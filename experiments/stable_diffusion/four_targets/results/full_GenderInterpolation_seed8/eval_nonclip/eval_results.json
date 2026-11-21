@@ -1,0 +1,169 @@
+{
+  "scenario": "eval_nonclip",
+  "mode": "gender",
+  "n_eval": 2000,
+  "seed": 42,
+  "deterministic": true,
+  "eval_prompt": "a superrealistic professional photograph of",
+  "controlnet_scale": 0.5,
+  "target_groups": [
+    [
+      "Woman",
+      500
+    ],
+    [
+      "WomanMasc",
+      500
+    ],
+    [
+      "ManFem",
+      500
+    ],
+    [
+      "Man",
+      500
+    ]
+  ],
+  "target_n": 2000,
+  "scribbles": {
+    "source": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/scribble.png",
+    "avg_prompt": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/baselines/scribble_avg_prompt.png",
+    "sdedit_best": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/baselines/scribble_sdedit_best.png",
+    "mlgd_f": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_GenderInterpolation_seed8_zeta7.5_46284633/final_scribble_mlgd_f.png"
+  },
+  "results": {
+    "source": {
+      "mmd": 0.5354598760604858,
+      "swd": 0.01329230610281229,
+      "n": 2000,
+      "p_male": 0.9855,
+      "ci_lo": 0.9802609397980172,
+      "ci_hi": 0.9907390602019829,
+      "n_male": 1971,
+      "n_female": 29,
+      "mmd_dinov2_base": 0.4764026403427124,
+      "swd_dinov2_base": 0.014697792939841747,
+      "p_male_fairface": 0.996,
+      "ci_lo_fairface": 0.9932336906897457,
+      "ci_hi_fairface": 0.9987663093102543,
+      "n_male_fairface": 1992,
+      "agreement_with_clip_fairface": 0.9875,
+      "seconds": 1039.878940820694,
+      "mmd_improvement": 0.0,
+      "mmd_improvement_pct": 0.0,
+      "swd_improvement": 0.0,
+      "swd_improvement_pct": 0.0,
+      "mmd_dinov2_base_improvement_pct": 0.0,
+      "swd_dinov2_base_improvement_pct": 0.0
+    },
+    "avg_prompt": {
+      "mmd": 0.4372464716434479,
+      "swd": 0.010018770582973957,
+      "n": 2000,
+      "p_male": 0.778,
+      "ci_lo": 0.7597859149886689,
+      "ci_hi": 0.7962140850113312,
+      "n_male": 1556,
+      "n_female": 444,
+      "mmd_dinov2_base": 0.37176045775413513,
+      "swd_dinov2_base": 0.010219909250736237,
+      "p_male_fairface": 0.985,
+      "ci_lo_fairface": 0.9796727286534287,
+      "ci_hi_fairface": 0.9903272713465713,
+      "n_male_fairface": 1970,
+      "agreement_with_clip_fairface": 0.792,
+      "seconds": 1036.9357204437256,
+      "mmd_improvement": 0.09821340441703796,
+      "mmd_improvement_pct": 18.341879346706406,
+      "swd_improvement": 0.003273535519838333,
+      "swd_improvement_pct": 24.627295628903266,
+      "mmd_dinov2_base_improvement_pct": 21.96507192178873,
+      "swd_dinov2_base_improvement_pct": 30.466368028407704
+    },
+    "sdedit_best": {
+      "mmd": 0.454963356256485,
+      "swd": 0.010847164317965508,
+      "n": 2000,
+      "p_male": 0.7455,
+      "ci_lo": 0.7264098741806138,
+      "ci_hi": 0.7645901258193863,
+      "n_male": 1491,
+      "n_female": 509,
+      "mmd_dinov2_base": 0.3621181547641754,
+      "swd_dinov2_base": 0.011293834075331688,
+      "p_male_fairface": 0.9315,
+      "ci_lo_fairface": 0.9204292310023197,
+      "ci_hi_fairface": 0.9425707689976803,
+      "n_male_fairface": 1863,
+      "agreement_with_clip_fairface": 0.786,
+      "seconds": 1036.711364030838,
+      "mmd_improvement": 0.08049651980400085,
+      "mmd_improvement_pct": 15.033156246222251,
+      "swd_improvement": 0.0024451417848467827,
+      "swd_improvement_pct": 18.395166090325418,
+      "mmd_dinov2_base_improvement_pct": 23.9890537752527,
+      "swd_dinov2_base_improvement_pct": 23.15965994651378
+    },
+    "mlgd_f": {
+      "mmd": 0.34916937351226807,
+      "swd": 0.0082261823117733,
+      "n": 2000,
+      "p_male": 0.5385,
+      "ci_lo": 0.5166515928681288,
+      "ci_hi": 0.5603484071318712,
+      "n_male": 1077,
+      "n_female": 923,
+      "mmd_dinov2_base": 0.28834837675094604,
+      "swd_dinov2_base": 0.00748317688703537,
+      "p_male_fairface": 0.646,
+      "ci_lo_fairface": 0.6250415595236669,
+      "ci_hi_fairface": 0.6669584404763331,
+      "n_male_fairface": 1292,
+      "agreement_with_clip_fairface": 0.8625,
+      "seconds": 1042.3498368263245,
+      "mmd_improvement": 0.18629050254821777,
+      "mmd_improvement_pct": 34.79074920025834,
+      "swd_improvement": 0.00506612379103899,
+      "swd_improvement_pct": 38.11320437442481,
+      "mmd_dinov2_base_improvement_pct": 39.47380800754688,
+      "swd_dinov2_base_improvement_pct": 49.08639060528266
+    }
+  },
+  "face_classifier_on_target": {
+    "Woman": 0.052,
+    "WomanMasc": 0.234,
+    "ManFem": 1.0,
+    "Man": 1.0
+  },
+  "model_revisions": {
+    "stabilityai/sdxl-turbo": "71153311d3dbb46851df1931d3ca6e939de83304",
+    "xinsir/controlnet-scribble-sdxl-1.0": "0bed4973b80c2329f76e0abf4196c51dfbf9108c",
+    "openai/clip-vit-large-patch14": "32bd64288804d66eefd0ccbe215aa642df71cc41",
+    "facebook/dinov2-base": "f9e44c814b77203eaa57a6bdbbd535f21ede1415",
+    "wesjos/fairface-papercarousel-cnano-3task-224": "3a54ea3058014d360090b78740693faf5d148de4"
+  },
+  "versions": {
+    "python": "3.13.5",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8",
+    "cudnn": 92400,
+    "gpu": "NVIDIA L40S",
+    "diffusers": "0.40.0",
+    "transformers": "5.17.0",
+    "controlnet_aux": "0.0.10",
+    "peft": "0.21.1",
+    "accelerate": "1.15.0",
+    "numpy": "2.4.6",
+    "sklearn": "1.9.1",
+    "PIL": "12.3.0",
+    "huggingface_hub": "1.33.0"
+  },
+  "total_minutes": 86.38571429252625,
+  "wandb": {
+    "project": "sdxl-eval",
+    "entity": "conditional-matching",
+    "name": "nonclip_full_GenderInterpolation_seed8_zeta7.5_46284633",
+    "id": "9qa6091c",
+    "url": "https://wandb.ai/conditional-matching/sdxl-eval/runs/9qa6091c"
+  }
+}

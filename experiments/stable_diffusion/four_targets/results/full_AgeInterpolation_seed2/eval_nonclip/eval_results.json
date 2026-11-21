@@ -1,0 +1,328 @@
+{
+  "scenario": "eval_nonclip",
+  "mode": "age",
+  "n_eval": 2000,
+  "seed": 42,
+  "deterministic": true,
+  "eval_prompt": "a superrealistic professional photograph of",
+  "controlnet_scale": 0.5,
+  "target_groups": [
+    [
+      "40",
+      50
+    ],
+    [
+      "41",
+      50
+    ],
+    [
+      "42",
+      50
+    ],
+    [
+      "43",
+      50
+    ],
+    [
+      "44",
+      50
+    ],
+    [
+      "45",
+      50
+    ],
+    [
+      "46",
+      50
+    ],
+    [
+      "47",
+      50
+    ],
+    [
+      "48",
+      50
+    ],
+    [
+      "49",
+      50
+    ],
+    [
+      "50",
+      50
+    ],
+    [
+      "51",
+      50
+    ],
+    [
+      "52",
+      50
+    ],
+    [
+      "53",
+      50
+    ],
+    [
+      "54",
+      50
+    ],
+    [
+      "55",
+      50
+    ],
+    [
+      "56",
+      50
+    ],
+    [
+      "57",
+      50
+    ],
+    [
+      "58",
+      50
+    ],
+    [
+      "59",
+      50
+    ],
+    [
+      "60",
+      50
+    ],
+    [
+      "61",
+      50
+    ],
+    [
+      "62",
+      50
+    ],
+    [
+      "63",
+      50
+    ],
+    [
+      "64",
+      50
+    ],
+    [
+      "65",
+      50
+    ],
+    [
+      "66",
+      50
+    ],
+    [
+      "67",
+      50
+    ],
+    [
+      "68",
+      50
+    ],
+    [
+      "69",
+      50
+    ],
+    [
+      "70",
+      50
+    ],
+    [
+      "71",
+      50
+    ],
+    [
+      "72",
+      50
+    ],
+    [
+      "73",
+      50
+    ],
+    [
+      "74",
+      50
+    ],
+    [
+      "75",
+      50
+    ],
+    [
+      "76",
+      50
+    ],
+    [
+      "77",
+      50
+    ],
+    [
+      "78",
+      50
+    ],
+    [
+      "79",
+      50
+    ]
+  ],
+  "target_n": 2000,
+  "scribbles": {
+    "source": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_AgeInterpolation_seed2_zeta7.5_46276541/scribble.png",
+    "avg_prompt": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_AgeInterpolation_seed2_zeta7.5_46276541/baselines/scribble_avg_prompt.png",
+    "sdedit_best": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_AgeInterpolation_seed2_zeta7.5_46276541/baselines/scribble_sdedit_best.png",
+    "mlgd_f": "/sci/labs/orzuk/ori_m/GlobalConditional-master/experiments/stable_diffusion/four_targets/outputs/full_AgeInterpolation_seed2_zeta7.5_46276541/final_scribble_mlgd_f.png"
+  },
+  "results": {
+    "source": {
+      "mmd": 0.5193091630935669,
+      "swd": 0.013121307827532291,
+      "n": 2000,
+      "mmd_dinov2_base": 0.582567036151886,
+      "swd_dinov2_base": 0.012840689159929752,
+      "age_brackets_fairface": [
+        0.0,
+        0.0,
+        0.0,
+        0.059,
+        0.1605,
+        0.3825,
+        0.352,
+        0.0425,
+        0.0035
+      ],
+      "age_tv_fairface": 0.5145000000000001,
+      "seconds": 983.066225528717,
+      "mmd_improvement": 0.0,
+      "mmd_improvement_pct": 0.0,
+      "swd_improvement": 0.0,
+      "swd_improvement_pct": 0.0,
+      "mmd_dinov2_base_improvement_pct": 0.0,
+      "swd_dinov2_base_improvement_pct": 0.0
+    },
+    "avg_prompt": {
+      "mmd": 0.44633039832115173,
+      "swd": 0.009299764409661293,
+      "n": 2000,
+      "mmd_dinov2_base": 0.5303138494491577,
+      "swd_dinov2_base": 0.013859233818948269,
+      "age_brackets_fairface": [
+        0.0,
+        0.0,
+        0.0005,
+        0.029,
+        0.042,
+        0.1725,
+        0.467,
+        0.2365,
+        0.0525
+      ],
+      "age_tv_fairface": 0.243,
+      "seconds": 983.3038721084595,
+      "mmd_improvement": 0.07297876477241516,
+      "mmd_improvement_pct": 14.053047771711697,
+      "swd_improvement": 0.0038215434178709984,
+      "swd_improvement_pct": 29.12471430517236,
+      "mmd_dinov2_base_improvement_pct": 8.96947191655123,
+      "swd_dinov2_base_improvement_pct": -7.932165060088478
+    },
+    "sdedit_best": {
+      "mmd": 0.4803221523761749,
+      "swd": 0.011744040064513683,
+      "n": 2000,
+      "mmd_dinov2_base": 0.4632982909679413,
+      "swd_dinov2_base": 0.010796363465487957,
+      "age_brackets_fairface": [
+        0.0,
+        0.0,
+        0.001,
+        0.098,
+        0.1265,
+        0.2585,
+        0.3395,
+        0.142,
+        0.0345
+      ],
+      "age_tv_fairface": 0.401,
+      "seconds": 982.8565404415131,
+      "mmd_improvement": 0.03898701071739197,
+      "mmd_improvement_pct": 7.507475986971455,
+      "swd_improvement": 0.001377267763018608,
+      "swd_improvement_pct": 10.496421401902504,
+      "mmd_dinov2_base_improvement_pct": 20.472964960696665,
+      "swd_dinov2_base_improvement_pct": 15.920685167126802
+    },
+    "mlgd_f": {
+      "mmd": 0.3449464738368988,
+      "swd": 0.007686032447963953,
+      "n": 2000,
+      "mmd_dinov2_base": 0.34559398889541626,
+      "swd_dinov2_base": 0.008392334915697575,
+      "age_brackets_fairface": [
+        0.0,
+        0.0005,
+        0.003,
+        0.025,
+        0.0105,
+        0.0315,
+        0.3365,
+        0.4905,
+        0.1025
+      ],
+      "age_tv_fairface": 0.1225,
+      "seconds": 983.3965601921082,
+      "mmd_improvement": 0.1743626892566681,
+      "mmd_improvement_pct": 33.57589306107664,
+      "swd_improvement": 0.005435275379568338,
+      "swd_improvement_pct": 41.42327465379299,
+      "mmd_dinov2_base_improvement_pct": 40.67738690156277,
+      "swd_dinov2_base_improvement_pct": 34.6426440888669
+    }
+  },
+  "face_classifier_on_target": {
+    "age_brackets": {
+      "0-2": 0.0,
+      "3-9": 0.0,
+      "10-19": 0.0,
+      "20-29": 0.0,
+      "30-39": 0.0,
+      "40-49": 0.0875,
+      "50-59": 0.403,
+      "60-69": 0.4795,
+      "70+": 0.03
+    }
+  },
+  "model_revisions": {
+    "stabilityai/sdxl-turbo": "71153311d3dbb46851df1931d3ca6e939de83304",
+    "xinsir/controlnet-scribble-sdxl-1.0": "0bed4973b80c2329f76e0abf4196c51dfbf9108c",
+    "openai/clip-vit-large-patch14": "32bd64288804d66eefd0ccbe215aa642df71cc41",
+    "facebook/dinov2-base": "f9e44c814b77203eaa57a6bdbbd535f21ede1415",
+    "wesjos/fairface-papercarousel-cnano-3task-224": "3a54ea3058014d360090b78740693faf5d148de4"
+  },
+  "versions": {
+    "python": "3.13.5",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8",
+    "cudnn": 92400,
+    "gpu": "NVIDIA L40S",
+    "diffusers": "0.40.0",
+    "transformers": "5.17.0",
+    "controlnet_aux": "0.0.10",
+    "peft": "0.21.1",
+    "accelerate": "1.15.0",
+    "numpy": "2.4.6",
+    "sklearn": "1.9.1",
+    "PIL": "12.3.0",
+    "huggingface_hub": "1.33.0"
+  },
+  "total_minutes": 83.17741473515828,
+  "wandb": {
+    "project": "sdxl-eval",
+    "entity": "conditional-matching",
+    "name": "nonclip_full_AgeInterpolation_seed2_zeta7.5_46276541",
+    "id": "150cfer2",
+    "url": "https://wandb.ai/conditional-matching/sdxl-eval/runs/150cfer2"
+  }
+}
