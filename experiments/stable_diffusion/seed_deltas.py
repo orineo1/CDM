@@ -53,6 +53,12 @@ for d in a.outputs:
 
 order = ["BalancedTarget", "SkewedTarget", "GenderInterpolation", "AgeInterpolation"]
 scen = sorted({s for s, _ in runs}, key=lambda s: order.index(s) if s in order else 99)
+if not a.mlgdf_report:
+    print("# Methods over seeds (Stable Diffusion, base_zeta " + a.zeta + ")\n")
+    print("Each seed is a different source sketch. Per scenario and method: the final MMD and SWD to the target (CLIP")
+    print("embeddings, N = 2,000 evaluation) and their improvement over the source sketch, as mean ± SD over the seeds;")
+    print("and the method's seed with the lowest MMD alone, with its value (the SWD table uses the same seed). Only")
+    print("deterministic runs are used. Written by `experiments/stable_diffusion/seed_deltas.py`.")
 for loss in (() if a.mlgdf_report else ("mmd", "swd")):
     print(f"\n## {loss.upper()}: delta = {loss}(source) - {loss}(method), mean ± SD over seeds (positive = improvement)\n")
     print(f"| scenario | method | n seeds | {loss.upper()} (method) | Δ | Δ % | {loss.upper()} (source) "

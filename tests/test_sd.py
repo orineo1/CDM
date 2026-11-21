@@ -230,3 +230,31 @@ def test_export_results(tmp_path):
     assert not (tmp_path / "res" / "mlgdf_runs.md").exists()
     assert "## full_BalancedTarget_seed1_123: N = 2000" in (tmp_path / "res" / "eval_table.md").read_text()
     assert (tmp_path / "cres" / "A100_7" / "step_cost.md").exists()
+
+
+def test_fairface_scorer_layout_and_age_hist(tmp_path):
+    """FairFace3Task loads a checkpoint with the repository's layout (gender logits (Male, Female),
+    8 ordinal age thresholds) from its weights alone; bracket_hist sums to one."""
+    pytest.importorskip("timm")
+    pytest.importorskip("torchvision")
+    import torch
+    import torch.nn as nn
+    import timm
+    from PIL import Image
+    from cdm.models.sd.extra_scorers import AGE_BRACKETS, FairFace3Task, bracket_hist
+
+    class Student(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.backbone = timm.create_model("convnext_nano.in12k_ft_in1k", pretrained=False, num_classes=0)
+            self.race_head, self.gender_head, self.age_head = nn.Linear(640, 7), nn.Linear(640, 2), nn.Linear(640, 8)
+
+    m = Student()
+    with torch.no_grad():   # make the heads say "male" and "all thresholds passed" (bracket 70+) for every image
+        m.gender_head.weight.zero_(); m.gender_head.bias.copy_(torch.tensor([5.0, -5.0]))
+        m.age_head.weight.zero_(); m.age_head.bias.fill_(3.0)
+    torch.save({"model": m.state_dict(), "selected_ema": False}, tmp_path / "model.pt")
+    pm, age = FairFace3Task(str(tmp_path), "cpu").predict([Image.new("RGB", (80, 80), (i * 50, 90, 60)) for i in range(3)])
+    assert all(p > 0.99 for p in pm) and age == [8, 8, 8]
+    h = bracket_hist([5, 6, 6, 8])
+    assert len(h) == len(AGE_BRACKETS) and abs(sum(h) - 1) < 1e-9 and h[6] == 0.5
