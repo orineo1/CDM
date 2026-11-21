@@ -53,23 +53,34 @@ for d in a.outputs:
 
 order = ["BalancedTarget", "SkewedTarget", "GenderInterpolation", "AgeInterpolation"]
 scen = sorted({s for s, _ in runs}, key=lambda s: order.index(s) if s in order else 99)
+if not a.mlgdf_report:
+    print("# Methods over seeds (Stable Diffusion, base_zeta " + a.zeta + ")\n")
+    print("Each seed is a different source sketch. Per scenario and method: the final MMD and SWD to the target (CLIP")
+    print("embeddings, N = 2,000 evaluation) and their improvement over the source sketch, as mean ± SD over the seeds;")
+    print("and the method's seed with the lowest MMD alone, with its value (the SWD table uses the same seed). Only")
+    print("deterministic runs are used. Written by `experiments/stable_diffusion/seed_deltas.py`.")
 for loss in (() if a.mlgdf_report else ("mmd", "swd")):
     print(f"\n## {loss.upper()}: delta = {loss}(source) - {loss}(method), mean ± SD over seeds (positive = improvement)\n")
-    print("| scenario | method | n seeds | Δ | Δ % | source | method |")
-    print("|---|---|---|---|---|---|---|")
+    print(f"| scenario | method | n seeds | {loss.upper()} (method) | Δ | Δ % | {loss.upper()} (source) "
+          f"| seed selected by MMD | its {loss.upper()} | its Δ % |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
     for s in scen:
         seeds = sorted(k for sc, k in runs if sc == s)
         res = {k: json.load(open(runs[(s, k)][1]))["results"] for k in seeds}
         for meth in a.methods:
-            rows = [(r["source"][loss], r[meth][loss]) for r in res.values() if meth in r and "source" in r]
+            ok = {k: r for k, r in res.items() if meth in r and "source" in r}
+            rows = [(r["source"][loss], r[meth][loss]) for r in ok.values()]
             if not rows:
                 continue
             src, met = [r[0] for r in rows], [r[1] for r in rows]
             d = [x - y for x, y in rows]
             dp = [100 * (x - y) / x for x, y in rows]
             sd = lambda v: st.stdev(v) if len(v) > 1 else float("nan")   # sample SD (n - 1)
-            print(f"| {s} | {meth} | {len(rows)} | {st.mean(d):.4f} ± {sd(d):.4f} | {st.mean(dp):.1f} ± {sd(dp):.1f} "
-                  f"| {st.mean(src):.4f} | {st.mean(met):.4f} |")
+            k = min(ok, key=lambda k: ok[k][meth]["mmd"])   # this method's seed with the lowest MMD (also in the SWD table)
+            v, v0 = ok[k][meth][loss], ok[k]["source"][loss]
+            print(f"| {s} | {meth} | {len(rows)} | {st.mean(met):.4f} ± {sd(met):.4f} | {st.mean(d):.4f} ± {sd(d):.4f} "
+                  f"| {st.mean(dp):.1f} ± {sd(dp):.1f} | {st.mean(src):.4f} ± {sd(src):.4f} "
+                  f"| {k} | {v:.4f} | {100 * (v0 - v) / v0:+.1f} |")
 def mlgdf_table(title, drop=()):
   print(f"\n## {title}\n")
   print("| scenario | n seeds | MMD | Δ MMD % | SWD | Δ SWD % | p(male) | selected seed | its MMD | its Δ MMD % | its SWD | its p(male) |")

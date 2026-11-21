@@ -306,5 +306,40 @@ python3 experiments/stable_diffusion/seed_deltas.py --outputs experiments/stable
     > experiments/stable_diffusion/four_targets/results/mlgdf_10_seeds.md
 ```
 
+`results/methods_10_seeds.md` compares all methods (source sketch, Average prompt, SDEdit Best,
+MLGD-F) over the same ten seeds: mean ± SD of MMD, SWD and their improvement over the source
+sketch, and each method's seed selected by MMD alone. Every run needs its baselines and an eval
+that includes them (`run.sh baselines`, then `run.sh eval`, as for the paper's runs):
+
+```
+python3 experiments/stable_diffusion/seed_deltas.py --outputs experiments/stable_diffusion/four_targets/outputs \
+    --zeta 7.5 > experiments/stable_diffusion/four_targets/results/methods_10_seeds.md
+```
+
+### Scores independent of CLIP
+
+The designs are optimized against CLIP, so the same portraits are also scored with two models that
+take no part in the optimization (`cdm/models/sd/extra_scorers.py`), by passing two flags to the eval:
+
+| flag | what it adds |
+|---|---|
+| `--extra_embedder facebook/dinov2-base` | MMD and SWD to the target in DINOv2 space, and their improvement over the source |
+| `--face_classifier wesjos/fairface-papercarousel-cnano-3task-224` | a FairFace-trained classifier: p(male) with its 95% CI and agreement with the CLIP label (gender scenarios), the age-bracket distribution and its total-variation distance to the target's (age scenario), and its reading of the target groups |
+
+The classifier is a timm ConvNeXt-Nano with race, gender and age heads; `FairFace3Task` rebuilds it
+and loads only its weights (`model.pt`), never the repository's `inference.py`. The paper's four runs,
+with both models pinned to the commits used:
+
+```
+bash experiments/stable_diffusion/four_targets/run.sh eval balanced --run_dir <run> --output_dir <run>/eval_nonclip \
+    --extra_embedder facebook/dinov2-base --extra_embedder_revision f9e44c814b77203eaa57a6bdbbd535f21ede1415 \
+    --face_classifier wesjos/fairface-papercarousel-cnano-3task-224 \
+    --face_classifier_revision 3a54ea3058014d360090b78740693faf5d148de4
+```
+
+The portraits are generated with the same seeds as the main eval, so its CLIP numbers are reproduced
+(within 0.002); `eval_table_nonclip.md` and `eval_results.json` hold the new scores. They are in
+`results/<run>/eval_nonclip/` for the paper's four runs.
+
 `outputs/` is for local runs and ships empty; `export_results.py` is what copies a run
 into `results/`.
