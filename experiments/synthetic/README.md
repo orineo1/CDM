@@ -317,6 +317,7 @@ All of these use the Table 1 networks and flags. The usage line is at the top of
 | `pipeline/diag_trajectories.py` | per-trajectory TV and best-of-k statistics from result JSONs |
 | `pipeline/diag_sampler_at_xstar.py` | a trained sampler at `x*`: TV to `G`, and the loss at `x*` against the loss at the end points |
 | `pipeline/summarize_runs.py` | per-variant summary of `<variant>_s<seed>.json` result files |
+| `pipeline/make_table_2x2.py` | LaTeX rows of the search × gradient estimator table (`reference/search_x_estimator_rerun.tex`) |
 | `pipeline/check_sampler_accuracy.py` | TV of trained samplers to the exact conditional at `x*` and at random `x` (dim Y = 1) |
 | `slurm/slurm_search.sh`, `slurm/slurm_train_sampler.sh` | one search variant over seeds; train one network on fresh mixture draws |
 
@@ -333,6 +334,8 @@ Imported from `orineo1/GlobalConditional` `master` `9ddf570` (`results/`), excep
 | `table1_long.md`, `table1_wide.md` | retrained networks, 50,000 batches / 256 units |
 | `table1_10x1_r100.md` | (10, 1) with 100 restarts |
 | `table1_gbfeso_d256.{json,md,tex}` | MLGD\* against GB-FESO (KL, MMD) on the retrained samplers: `tab:sim_gbfeso` and the MLGD\* / GB-FESO (KL) columns of `tab:sim_main` (section "GB-FESO on the retrained samplers") |
+| `search_x_estimator.md` | search × gradient estimator (2 × 2) on the retrained samplers: MLGD\* and GB-FESO (MMD), each with FiniteDiff and Backprop (Or's runs) |
+| `search_x_estimator_rerun.{md,tex}` | an independent rerun of the same 2 × 2, all four columns over all nine cells; `.tex` written by `pipeline/make_table_2x2.py` |
 | `checks/table1_*.json`, `checks/{long,wide}_*.json` | `check_models.py` output of the Table 1 / long / wide networks (the four large cells) |
 | `smc/fig_smc_hard.{json,npz}` | twisted-SMC populations and TVs of Figure 1(d), published configuration |
 | `smc/fig_smc_hard_cpu.json` | an earlier CPU run of 2,000 particles, from before the script recorded `--n-repeats` and `--max-shift` |
